@@ -1,0 +1,48 @@
+from contextlib import asynccontextmanager
+
+import uvicorn
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.db import init_db
+from app.routers import accounts, categories, contacts, dashboard, rules, settings, statements, transactions
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+
+
+app = FastAPI(title="SG Expenditure Tracker", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+app.include_router(statements.router)
+app.include_router(accounts.router)
+app.include_router(transactions.router)
+app.include_router(contacts.router)
+app.include_router(rules.router)
+app.include_router(categories.router)
+app.include_router(settings.router)
+app.include_router(dashboard.router)
+
+
+@app.get("/api/health")
+def health():
+    return {"status": "ok"}
+
+
+def run():
+    """Entry point for `expenditure-tracker` / `uvx expenditure-tracker`."""
+    uvicorn.run("app.main:app", host="127.0.0.1", port=8000)
+
+
+if __name__ == "__main__":
+    run()

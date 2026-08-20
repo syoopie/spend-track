@@ -1,0 +1,59 @@
+# SG Expenditure Tracker
+
+A local-only personal finance tool: upload DBS/OCBC/UOB bank statement PDFs, get transactions auto-categorized via a rules engine, refunds netted against their originals, and a post-mortem spending dashboard. Nothing leaves the machine — SQLite on disk, no external services.
+
+Currently: **UOB PDF parsing is fully implemented** (Account Statements + Card Statements) and tested against real sample statements. DBS/OCBC are detected but not yet parsed (no sample statements were available to build against — see `CLAUDE.md`).
+
+## Stack
+
+- **Backend**: Python 3.12, FastAPI, SQLite (stdlib `sqlite3`), `pdfplumber` for PDF parsing, `pypdf` for encrypted-PDF handling. Managed with [`uv`](https://docs.astral.sh/uv/).
+- **Frontend**: React + TypeScript, Vite, Tailwind CSS v4, TanStack Query, React Router.
+
+## Running it
+
+Two dev servers, run in separate terminals.
+
+**Backend** (from `backend/`):
+
+```bash
+uv sync
+uv run uvicorn app.main:app --reload
+```
+
+Serves on `http://127.0.0.1:8000`. The SQLite DB defaults to `~/.sg-expenditure-tracker/data.db` (override with the `SG_TRACKER_DB_PATH` env var).
+
+**Frontend** (from `frontend/`):
+
+```bash
+npm install
+npm run dev
+```
+
+Serves on `http://localhost:5173` and proxies `/api/*` to the backend.
+
+Open `http://localhost:5173` and drop in a UOB e-statement PDF to try it end to end.
+
+## Testing
+
+```bash
+cd backend && uv run pytest
+```
+
+123 tests, including parser regression tests run against every sample PDF in `PDF Examples/UOB/` (cross-validated against each statement's own printed totals) and full API integration tests via FastAPI's `TestClient`.
+
+The frontend has no test suite yet — verified manually in-browser; `npx tsc -b` and `npm run build` for type/build checks.
+
+## Layout
+
+```text
+backend/src/app/
+  parsing/       per-bank statement parsers (uob/, dbs/, ocbc/) behind a shared registry
+  engine/        fingerprinting, rules engine, refund pairing, in-memory staging store
+  routers/       FastAPI routes, one file per resource
+frontend/src/
+  api/           fetch client + typed React Query hooks
+  pages/         one file per screen (mirrors the UI mockup)
+  components/    shared UI (charts, modals, sidebar)
+```
+
+`TECHNICAL_SPEC.md` and `UX.md` are the original design docs. `UI mockup/` is the visual reference the frontend was built to match. `PDF Examples/UOB/` are the real sample statements the parsers are tested against.
