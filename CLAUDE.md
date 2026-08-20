@@ -11,6 +11,14 @@ Non-obvious stuff learned while building this. Don't re-derive these the hard wa
 - Account statement dates have no year (`"05 May"`) — derived from the `Period: ... to ...` line. Card statement dates have no year either (`"10 JUN"`) — derived from `Statement Date`, with `year -= 1` when a transaction's month is later than the statement's month (Dec/Jan wraparound).
 - `BALANCE B/F`, `Total` (account statements) and `PREVIOUS BALANCE`, `SUB TOTAL`, `TOTAL BALANCE FOR ...` (card statements) are not transactions — they're excluded by exact-prefix text match, not by column heuristics.
 
+## Sanitized sample PDFs (`backend/scripts/generate_sample_pdfs.py`)
+
+- `PDF Examples/` (real statements) is gitignored - a fresh clone has none. `PDF Examples (Sanitized)/` is synthetic and committed; `tests/test_sanitized_sample_parsers.py` runs against it unconditionally so `uv run pytest` always exercises the parsers even without real statements.
+- The generator draws text with `reportlab.pdfgen.canvas` at the **exact same column x-positions** the parser's `Column` definitions expect (kept in sync manually - there's a comment pointing back at each parser file). That's what makes the output round-trip through the real parser correctly; it's not just a lookalike, it's parseable.
+- Coordinate systems differ: pdfplumber's `top` is distance-from-page-top (what the parser's column ranges are calibrated against), reportlab's `y` is distance-from-page-bottom, ascending. The conversion used is `y = PAGE_H - top - font_size * 0.8` (approximates baseline offset) - exact pixel alignment doesn't matter, only that words on the same logical row land within 3pt of each other (the parser's line-grouping tolerance) and each column's x falls inside the right bucket.
+- The multi-card statement fixture (`SampleCardStatement_MultiCard_Mar2024.pdf`) exercises a code path **no real sample ever covered** - two cards in one statement - and is what caught that the identity-line-vs-Summary-table backward-search fix actually works for a genuine multi-card case, not just the single-card real samples.
+- Regenerate with `uv run python scripts/generate_sample_pdfs.py` (`reportlab` is a dev dependency). If you change a parser's column x-ranges, the generator's constants (`ACC_*`/`CARD_*` at the top of the script) need to move with them or the round-trip test breaks.
+
 ## Schema quirk
 
 `rules.target_category` is `NOT NULL` in the spec's schema even though exclusion rules don't logically use it. Creating an exclusion rule without a category will hit an `IntegrityError` unless you default it (the API defaults to `"Others"` — see `routers/rules.py::create_rule`).
