@@ -1,0 +1,36 @@
+# Real bank statements with personal/financial info - never commit these
+PDF Examples/
+
+# Python
+__pycache__/
+*.py[oc]
+.venv/
+.pytest_cache/
+*.egg-info/
+backend/dist/
+
+# Node / frontend
+node_modules/
+frontend/dist/
+frontend/dist-ssr/
+*.local
+
+# SQLite data
+*.db
+*.db-wal
+*.db-shm
+
+# Editors / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Logs
+*.log
+npm-debug.log*

@@ -1,0 +1,194 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { api } from './client'
+import type {
+  Account,
+  CommitResult,
+  Contact,
+  ContactCreateRequest,
+  ContactImportResult,
+  ContactUpdateRequest,
+  DashboardSummary,
+  RefundPairing,
+  Rule,
+  RuleCreateRequest,
+  Settings,
+  StagingBatch,
+  StagingRowUpdateRequest,
+  Transaction,
+  Category,
+} from './types'
+
+// --- accounts -----------------------------------------------------------
+
+export function useAccounts() {
+  return useQuery({ queryKey: ['accounts'], queryFn: () => api.get<Account[]>('/accounts') })
+}
+
+// --- transactions ---------------------------------------------------------
+
+export function useTransactions(params: { month?: string; account_id?: string; include_excluded?: boolean }) {
+  return useQuery({
+    queryKey: ['transactions', params],
+    queryFn: () => api.get<Transaction[]>('/transactions', params),
+  })
+}
+
+export function useRefundPairing(transactionId: number | null) {
+  return useQuery({
+    queryKey: ['refund-pairing', transactionId],
+    queryFn: () => api.get<RefundPairing>(`/transactions/${transactionId}/refund-pairing`),
+    enabled: transactionId != null,
+  })
+}
+
+// --- dashboard --------------------------------------------------------------
+
+export function useDashboardSummary(params: { month?: string; account_id?: string }) {
+  return useQuery({
+    queryKey: ['dashboard-summary', params],
+    queryFn: () => api.get<DashboardSummary>('/dashboard/summary', params),
+  })
+}
+
+// --- statements / staging ------------------------------------------------------
+
+export function useUploadStatement() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ file, password }: { file: File; password?: string }) =>
+      api.upload<StagingBatch>('/statements/upload', file, password ? { password } : undefined),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['accounts'] }),
+  })
+}
+
+export function useStagingBatch(batchId: string | undefined) {
+  return useQuery({
+    queryKey: ['staging-batch', batchId],
+    queryFn: () => api.get<StagingBatch>(`/statements/staging/${batchId}`),
+    enabled: !!batchId,
+  })
+}
+
+export function useUpdateStagingRow(batchId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ index, body }: { index: number; body: StagingRowUpdateRequest }) =>
+      api.patch<StagingBatch>(`/statements/staging/${batchId}/rows/${index}`, body),
+    onSuccess: (data) => qc.setQueryData(['staging-batch', batchId], data),
+  })
+}
+
+export function useCommitBatch() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (batchId: string) => api.post<CommitResult>(`/statements/staging/${batchId}/commit`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['accounts'] })
+      qc.invalidateQueries({ queryKey: ['transactions'] })
+      qc.invalidateQueries({ queryKey: ['dashboard-summary'] })
+    },
+  })
+}
+
+export function useDiscardBatch() {
+  return useMutation({
+    mutationFn: (batchId: string) => api.delete(`/statements/staging/${batchId}`),
+  })
+}
+
+// --- contacts -----------------------------------------------------------------
+
+export function useContacts() {
+  return useQuery({ queryKey: ['contacts'], queryFn: () => api.get<Contact[]>('/contacts') })
+}
+
+export function useCreateContact() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: ContactCreateRequest) => api.post<Contact>('/contacts', body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['contacts'] }),
+  })
+}
+
+export function useUpdateContact() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, body }: { id: number; body: ContactUpdateRequest }) =>
+      api.patch<Contact>(`/contacts/${id}`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['contacts'] }),
+  })
+}
+
+export function useDeleteContact() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => api.delete(`/contacts/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['contacts'] }),
+  })
+}
+
+export function useImportContactsCsv() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (file: File) => api.upload<ContactImportResult>('/contacts/import', file),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['contacts'] }),
+  })
+}
+
+// --- rules ----------------------------------------------------------------------
+
+export function useRules() {
+  return useQuery({ queryKey: ['rules'], queryFn: () => api.get<Rule[]>('/rules') })
+}
+
+export function useCreateRule() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: RuleCreateRequest) => api.post<Rule>('/rules', body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['rules'] }),
+  })
+}
+
+export function useDeleteRule() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => api.delete(`/rules/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['rules'] }),
+  })
+}
+
+export function useReorderRules() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (orderedIds: number[]) => api.post<Rule[]>('/rules/reorder', { ordered_ids: orderedIds }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['rules'] }),
+  })
+}
+
+// --- categories -----------------------------------------------------------------
+
+export function useCategories() {
+  return useQuery({ queryKey: ['categories'], queryFn: () => api.get<Category[]>('/categories') })
+}
+
+// --- settings ---------------------------------------------------------------------
+
+export function useSettings() {
+  return useQuery({ queryKey: ['settings'], queryFn: () => api.get<Settings>('/settings') })
+}
+
+export function useRelocateDb() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (newPath: string) => api.post<Settings>('/settings/relocate', { new_path: newPath }),
+    onSuccess: (data) => qc.setQueryData(['settings'], data),
+  })
+}
+
+export function useResetDb() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (confirm: string) => api.post('/settings/reset', { confirm }),
+    onSuccess: () => qc.invalidateQueries(),
+  })
+}

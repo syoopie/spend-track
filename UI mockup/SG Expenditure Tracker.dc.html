@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+  body { margin: 0; background: #15161c; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: #33343f; border-radius: 4px; }
+  a { color: #e35fd0; }
+  a:hover { color: #ef8bdf; }
+  input::placeholder { color: #5c5d6a; }
+</style>
+</helmet>
+<div style="display:flex; height:100vh; width:100%; font-family: Helvetica Neue, Helvetica, Arial, sans-serif; color:#f3f3f6; background:#15161c; overflow:hidden;">
+
+  <!-- SIDEBAR -->
+  <sc-if value="{{ showSidebar }}">
+    <div style="width:224px; flex-shrink:0; background:#0d0e12; color:#9b9ba8; display:flex; flex-direction:column; padding:20px 14px; border-right:1px solid #24252e;">
+      <div onClick="{{ goOnboarding }}" style="display:flex; align-items:center; gap:10px; padding:6px 8px 22px 8px; cursor:pointer;">
+        <div style="width:26px; height:26px; border-radius:6px; background:#e35fd0; flex-shrink:0;"></div>
+        <div style="font-size:14px; font-weight:600; color:#fff; line-height:1.25;">Expenditure<br>Tracker</div>
+      </div>
+
+      <div onClick="{{ goDashboard }}" style="{{ navItemStyleDashboard }}">
+        <svg width="16" height="16" viewBox="0 0 16 16" style="flex-shrink:0;"><rect x="1" y="1" width="6" height="6" fill="none" stroke="currentColor" stroke-width="1.3"></rect><rect x="9" y="1" width="6" height="6" fill="none" stroke="currentColor" stroke-width="1.3"></rect><rect x="1" y="9" width="6" height="6" fill="none" stroke="currentColor" stroke-width="1.3"></rect><rect x="9" y="9" width="6" height="6" fill="none" stroke="currentColor" stroke-width="1.3"></rect></svg>
+        Dashboard
+      </div>
+      <div onClick="{{ goStaging }}" style="{{ navItemStyleStaging }}">
+        <svg width="16" height="16" viewBox="0 0 16 16" style="flex-shrink:0;"><path d="M8 1 V9" stroke="currentColor" stroke-width="1.3" fill="none"></path><polygon points="5,7 11,7 8,10.5" fill="currentColor"></polygon><rect x="1.5" y="12" width="13" height="2.5" fill="none" stroke="currentColor" stroke-width="1.3"></rect></svg>
+        Staging Review
+      </div>
+      <div onClick="{{ goContacts }}" style="{{ navItemStyleContacts }}">
+        <svg width="16" height="16" viewBox="0 0 16 16" style="flex-shrink:0;"><circle cx="8" cy="5" r="3" fill="none" stroke="currentColor" stroke-width="1.3"></circle><rect x="2.5" y="10" width="11" height="5" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.3"></rect></svg>
+        Contacts
+      </div>
+      <div onClick="{{ goRules }}" style="{{ navItemStyleRules }}">
+        <svg width="16" height="16" viewBox="0 0 16 16" style="flex-shrink:0;"><line x1="5" y1="3" x2="15" y2="3" stroke="currentColor" stroke-width="1.3"></line><circle cx="2" cy="3" r="1.4" fill="currentColor"></circle><line x1="1" y1="8" x2="11" y2="8" stroke="currentColor" stroke-width="1.3"></line><circle cx="14" cy="8" r="1.4" fill="currentColor"></circle><line x1="5" y1="13" x2="15" y2="13" stroke="currentColor" stroke-width="1.3"></line><circle cx="2" cy="13" r="1.4" fill="currentColor"></circle></svg>
+        Rules
+      </div>
+      <div onClick="{{ goSettings }}" style="{{ navItemStyleSettings }}">
+        <svg width="16" height="16" viewBox="0 0 16 16" style="flex-shrink:0;"><circle cx="8" cy="8" r="4" fill="none" stroke="currentColor" stroke-width="1.3"></circle><line x1="8" y1="0.5" x2="8" y2="2.3" stroke="currentColor" stroke-width="1.3"></line><line x1="8" y1="13.7" x2="8" y2="15.5" stroke="currentColor" stroke-width="1.3"></line><line x1="0.5" y1="8" x2="2.3" y2="8" stroke="currentColor" stroke-width="1.3"></line><line x1="13.7" y1="8" x2="15.5" y2="8" stroke="currentColor" stroke-width="1.3"></line></svg>
+        Settings
+      </div>
+
+      <div style="flex:1;"></div>
+      <div style="font-size:11px; color:#5c5d6a; padding:10px 8px; border-top:1px solid #24252e; line-height:1.5;">
+        <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:oklch(72% 0.17 150); margin-right:6px;"></span>
+        Local-only · no data leaves this device
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- MAIN -->
+  <div style="flex:1; overflow-y:auto; min-width:0;">
+
+    <!-- SCREEN Z: ONBOARDING -->
+    <sc-if value="{{ isOnboarding }}" hint-placeholder-val="{{ true }}">
+      <div style="min-height:100%; display:flex; align-items:center; justify-content:center; padding:40px;">
+        <div style="width:100%; max-width:640px;">
+          <div style="display:flex; align-items:center; gap:10px; margin-bottom:36px; justify-content:center;">
+            <div style="width:28px; height:28px; border-radius:7px; background:#e35fd0;"></div>
+            <div style="font-size:15px; font-weight:600; color:#fff;">Expenditure Tracker</div>
+          </div>
+          <div onClick="{{ simulateUpload }}" style="border:2px dashed #33343f; border-radius:16px; padding:56px 32px; text-align:center; cursor:pointer; background:#191a21; transition:border-color .15s;">
+            <div style="width:52px; height:52px; border-radius:12px; background:rgba(227,95,208,0.12); margin:0 auto 20px; display:flex; align-items:center; justify-content:center;">
+              <svg width="22" height="22" viewBox="0 0 16 16"><path d="M8 11 V2" stroke="#e35fd0" stroke-width="1.6" fill="none"></path><polygon points="4.5,5.5 11.5,5.5 8,1.5" fill="#e35fd0"></polygon><rect x="2" y="12.5" width="12" height="2" fill="none" stroke="#e35fd0" stroke-width="1.6"></rect></svg>
+            </div>
+            <div style="font-size:20px; font-weight:600; color:#f3f3f6; margin-bottom:10px;">Drag &amp; Drop DBS, OCBC, or UOB<br>Statements to Start</div>
+            <div style="font-size:13px; color:#9b9ba8; margin-bottom:22px;">PDF or CSV e-statements · processed locally, never uploaded</div>
+            <div style="display:flex; gap:8px; justify-content:center; margin-bottom:22px;">
+              <span style="font-size:11px; font-weight:600; padding:5px 10px; border-radius:6px; background:#22232c; color:#9b9ba8; border:1px solid #2c2d38;">DBS</span>
+              <span style="font-size:11px; font-weight:600; padding:5px 10px; border-radius:6px; background:#22232c; color:#9b9ba8; border:1px solid #2c2d38;">OCBC</span>
+              <span style="font-size:11px; font-weight:600; padding:5px 10px; border-radius:6px; background:#22232c; color:#9b9ba8; border:1px solid #2c2d38;">UOB</span>
+            </div>
+            <button style="font-size:13px; font-weight:600; padding:10px 20px; border-radius:8px; border:none; background:#e35fd0; color:#1a0e18; cursor:pointer;">Simulate Upload →</button>
+          </div>
+          <div style="text-align:center; font-size:12px; color:#5c5d6a; margin-top:18px;">Account details are detected automatically from statement headers — no manual setup.</div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- SCREEN A: DASHBOARD -->
+    <sc-if value="{{ isDashboard }}">
+      <div style="padding:28px 36px 60px;">
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:22px;">
+          <div>
+            <div style="font-size:22px; font-weight:700;">Dashboard</div>
+            <div style="font-size:13px; color:#9b9ba8; margin-top:2px;">Post-mortem view of where the money went</div>
+          </div>
+          <div style="display:flex; gap:10px;">
+            <select style="font-size:13px; padding:8px 12px; border-radius:8px; border:1px solid #2c2d38; background:#1c1d25; color:#f3f3f6;">
+              <option>Past Month</option>
+              <option>Past 3 Months</option>
+              <option>Past Year</option>
+            </select>
+            <select style="font-size:13px; padding:8px 12px; border-radius:8px; border:1px solid #2c2d38; background:#1c1d25; color:#f3f3f6;">
+              <option>All Accounts</option>
+              <option>DBS ••4821</option>
+              <option>OCBC ••7702</option>
+              <option>UOB ••1190</option>
+            </select>
+            <button style="font-size:13px; font-weight:600; padding:8px 16px; border-radius:8px; border:none; background:#e35fd0; color:#1a0e18; cursor:pointer;">+ Upload Statement</button>
+          </div>
+        </div>
+
+        <!-- Metric cards -->
+        <div style="display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; margin-bottom:20px;">
+          <div style="background:#1c1d25; border:1px solid #2c2d38; border-radius:12px; padding:18px;">
+            <div style="font-size:12px; color:#9b9ba8; margin-bottom:8px;">Net Expenditure</div>
+            <div style="font-size:26px; font-weight:700; font-family:ui-monospace, monospace;">-$2,340.85</div>
+            <div style="font-size:12px; color:oklch(68% 0.2 25); margin-top:4px;">▲ 12% vs June</div>
+          </div>
+          <div style="background:#1c1d25; border:1px solid #2c2d38; border-radius:12px; padding:18px;">
+            <div style="font-size:12px; color:#9b9ba8; margin-bottom:8px;">Total Inflow</div>
+            <div style="font-size:26px; font-weight:700; font-family:ui-monospace, monospace; color:oklch(72% 0.17 150);">$6,200.00</div>
+            <div style="font-size:12px; color:#6d6d7a; margin-top:4px;">1 salary credit</div>
+          </div>
+          <div style="background:#1c1d25; border:1px solid #2c2d38; border-radius:12px; padding:18px;">
+            <div style="font-size:12px; color:#9b9ba8; margin-bottom:8px;">Total Outflow</div>
+            <div style="font-size:26px; font-weight:700; font-family:ui-monospace, monospace;">$8,540.85</div>
+            <div style="font-size:12px; color:#6d6d7a; margin-top:4px;">across 3 accounts</div>
+          </div>
+          <div style="background:#1c1d25; border:1px solid #2c2d38; border-radius:12px; padding:18px;">
+            <div style="font-size:12px; color:#9b9ba8; margin-bottom:10px;">PayNow vs Card Spend</div>
+            <div style="display:flex; height:8px; border-radius:4px; overflow:hidden; margin-bottom:8px;">
+              <div style="width:54%; background:oklch(72% 0.14 20);"></div>
+              <div style="width:46%; background:oklch(72% 0.14 230);"></div>
+            </div>
+            <div style="display:flex; flex-wrap:wrap; justify-content:space-between; gap:4px; font-size:12px; color:#9b9ba8;">
+              <span style="white-space:nowrap;"><span style="color:oklch(72% 0.14 20); font-weight:600;">●</span> PayNow 54%</span>
+              <span style="white-space:nowrap;"><span style="color:oklch(72% 0.14 230); font-weight:600;">●</span> Card 46%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Charts row -->
+        <div style="display:grid; grid-template-columns:1.3fr 1fr; gap:14px; margin-bottom:14px;">
+          <div style="background:#1c1d25; border:1px solid #2c2d38; border-radius:12px; padding:20px;">
+            <div style="font-size:13px; font-weight:600; margin-bottom:16px;">Cash Flow — Inflow vs Outflow</div>
+            <div style="display:flex; align-items:flex-end; gap:22px; height:150px; padding:0 6px;">
+              <sc-for list="{{ cashFlowMonths }}" as="m" hint-placeholder-count="6">
+                <div style="display:flex; flex-direction:column; align-items:center; gap:6px; flex:1;">
+                  <div style="display:flex; align-items:flex-end; gap:4px; height:120px;">
+                    <div style="width:14px; border-radius:3px 3px 0 0; background:oklch(72% 0.17 150); height:{{ m.inHeight }}px;"></div>
+                    <div style="width:14px; border-radius:3px 3px 0 0; background:#3a3b48; height:{{ m.outHeight }}px;"></div>
+                  </div>
+                  <div style="font-size:11px; color:#6d6d7a;">{{ m.label }}</div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="display:flex; gap:16px; font-size:11px; color:#9b9ba8; margin-top:6px;">
+              <span><span style="color:oklch(72% 0.17 150);">■</span> Inflow</span>
+              <span><span style="color:#3a3b48;">■</span> Outflow</span>
+            </div>
+          </div>
+
+          <div style="background:#1c1d25; border:1px solid #2c2d38; border-radius:12px; padding:20px;">
+            <div style="font-size:13px; font-weight:600; margin-bottom:14px;">Category Breakdown — July</div>
+            <div style="display:flex; align-items:center; gap:18px;">
+              <div style="width:110px; height:110px; border-radius:50%; background:conic-gradient(oklch(72% 0.14 230) 0% 22%, oklch(72% 0.14 340) 22% 40%, oklch(72% 0.14 190) 40% 50%, oklch(72% 0.14 280) 50% 65%, oklch(72% 0.14 60) 65% 85%, oklch(72% 0.14 20) 85% 95%, #3a3b48 95% 100%); flex-shrink:0; position:relative;">
+                <div style="position:absolute; inset:20px; background:#1c1d25; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; font-family:ui-monospace, monospace;">$8.5K</div>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:6px; font-size:12px;">
+                <sc-for list="{{ categoryBreakdown }}" as="c" hint-placeholder-count="7">
+                  <div style="display:flex; align-items:center; gap:6px; color:#c6c6cf;">
+                    <span style="width:8px; height:8px; border-radius:50%; background:{{ c.color }}; flex-shrink:0;"></span>
+                    {{ c.name }} <span style="color:#6d6d7a;">{{ c.pct }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1.3fr 1fr; gap:14px; margin-bottom:20px;">
+          <div style="background:#1c1d25; border:1px solid #2c2d38; border-radius:12px; padding:20px;">
+            <div style="font-size:13px; font-weight:600; margin-bottom:14px;">Spend Velocity — Cumulative Pace</div>
+            <svg width="100%" height="150" viewBox="0 0 480 150" preserveAspectRatio="none">
+              <line x1="0" y1="149" x2="480" y2="149" stroke="#2c2d38" stroke-width="1"></line>
+              <polyline points="0,140 60,120 120,105 180,95 240,80 300,60 360,45 420,25 480,10" fill="none" stroke="#3a3b48" stroke-width="2"></polyline>
+              <polyline points="0,142 60,128 120,118 180,100 240,90 300,78 360,55 420,40 480,20" fill="none" stroke="#e35fd0" stroke-width="2.5"></polyline>
+            </svg>
+            <div style="display:flex; gap:16px; font-size:11px; color:#9b9ba8; margin-top:6px;">
+              <span><span style="color:#e35fd0;">━</span> July (current)</span>
+              <span><span style="color:#3a3b48;">━</span> June</span>
+            </div>
+          </div>
+
+          <div style="background:#1c1d25; border:1px solid #2c2d38; border-radius:12px; padding:20px;">
+            <div style="font-size:13px; font-weight:600; margin-bottom:12px;">Top Merchants &amp; PayNow Contacts</div>
+            <div style="font-size:11px; color:#6d6d7a; margin-bottom:6px; text-transform:uppercase; letter-spacing:.03em;">Merchants</div>
+            <sc-for list="{{ topMerchants }}" as="mm" hint-placeholder-count="5">
+              <div style="display:flex; justify-content:space-between; font-size:13px; padding:5px 0; border-bottom:1px solid #24252e;">
+                <span>{{ mm.name }}</span><span style="font-family:ui-monospace, monospace; color:#c6c6cf;">{{ mm.amount }}</span>
+              </div>
+            </sc-for>
+            <div style="font-size:11px; color:#6d6d7a; margin:14px 0 6px; text-transform:uppercase; letter-spacing:.03em;">PayNow Contacts</div>
+            <sc-for list="{{ topPaynow }}" as="pp" hint-placeholder-count="5">
+              <div style="display:flex; justify-content:space-between; font-size:13px; padding:5px 0; border-bottom:1px solid #24252e;">
+                <span>{{ pp.name }}</span><span style="font-family:ui-monospace, monospace; color:#c6c6cf;">{{ pp.amount }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <!-- Transaction feed -->
+        <div style="background:#1c1d25; border:1px solid #2c2d38; border-radius:12px; overflow:hidden;">
+          <div style="display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid #2c2d38;">
+            <div style="font-size:13px; font-weight:600;">Transaction Feed</div>
+            <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:#9b9ba8; cursor:pointer;">
+              <input type="checkbox" checked="{{ excludedVisible }}" onChange="{{ toggleExcluded }}">
+              Show excluded transactions
+            </label>
+          </div>
+          <div style="display:grid; grid-template-columns:80px 1fr 140px 130px 110px 30px; padding:10px 20px; font-size:11px; color:#6d6d7a; text-transform:uppercase; letter-spacing:.03em; border-bottom:1px solid #24252e;">
+            <div>Date</div><div>Description</div><div>Category</div><div>Account</div><div style="text-align:right;">Amount</div><div></div>
+          </div>
+          <sc-for list="{{ visibleTransactions }}" as="tx" hint-placeholder-count="8">
+            <div style="display:grid; grid-template-columns:80px 1fr 140px 130px 110px 30px; align-items:center; padding:12px 20px; font-size:13px; border-bottom:1px solid #24252e; opacity:{{ tx.rowOpacity }};">
+              <div style="color:#9b9ba8; font-family:ui-monospace, monospace; font-size:12px;">{{ tx.date }}</div>
+              <div>{{ tx.desc }} <sc-if value="{{ tx.excluded }}"><span style="font-size:10px; color:#6d6d7a; border:1px solid #2c2d38; border-radius:4px; padding:1px 5px; margin-left:6px;">excluded</span></sc-if></div>
+              <div><span style="font-size:11px; padding:3px 8px; border-radius:5px; background:{{ tx.categoryBg }}; color:{{ tx.categoryColor }};">{{ tx.category }}</span></div>
+              <div style="color:#9b9ba8; font-size:12px;">{{ tx.account }}</div>
+              <div style="text-align:right; font-family:ui-monospace, monospace; color:{{ tx.amountColor }};">{{ tx.amount }}</div>
+              <div style="text-align:center;">
+                <sc-if value="{{ tx.hasRefundLink }}">
+                  <button onClick="{{ tx.openDrawer }}" title="View refund pairing" style="border:none; background:none; cursor:pointer; color:#e35fd0; font-size:15px;">⇄</button>
+                </sc-if>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- SCREEN B: STAGING REVIEW -->
+    <sc-if value="{{ isStaging }}">
+      <div style="padding:28px 36px 60px;">
+        <div style="font-size:22px; font-weight:700; margin-bottom:2px;">Staging &amp; Pre-Commit Review</div>
+        <div style="font-size:13px; color:#9b9ba8; margin-bottom:20px;">OCBC_Aug2026_Statement.pdf — parsed, awaiting commit</div>
+
+        <div style="display:flex; gap:12px; margin-bottom:20px;">
+          <div style="background:#1c1d25; border:1px solid #2c2d38; border-radius:10px; padding:12px 18px;">
+            <div style="font-size:11px; color:#6d6d7a;">New Extracted</div>
+            <div style="font-size:20px; font-weight:700; font-family:ui-monospace, monospace;">38</div>
+          </div>
+          <div style="background:#1c1d25; border:1px solid #2c2d38; border-radius:10px; padding:12px 18px;">
+            <div style="font-size:11px; color:#6d6d7a;">Duplicates Skipped</div>
+            <div style="font-size:20px; font-weight:700; font-family:ui-monospace, monospace; color:#6d6d7a;">4</div>
+          </div>
+          <div style="background:#1c1d25; border:1px solid #2c2d38; border-radius:10px; padding:12px 18px;">
+            <div style="font-size:11px; color:#6d6d7a;">New Accounts Provisioned</div>
+            <div style="font-size:20px; font-weight:700; font-family:ui-monospace, monospace;">0</div>
+          </div>
+          <div style="background:oklch(24% 0.05 70); border:1px solid oklch(40% 0.08 70); border-radius:10px; padding:12px 18px;">
+            <div style="font-size:11px; color:oklch(80% 0.12 70);">Needs Category (Others &gt; PayNow)</div>
+            <div style="font-size:20px; font-weight:700; font-family:ui-monospace, monospace; color:oklch(85% 0.12 70);">3</div>
+          </div>
+        </div>
+
+        <div style="background:#1c1d25; border:1px solid #2c2d38; border-radius:12px; overflow:hidden; margin-bottom:20px;">
+          <div style="display:grid; grid-template-columns:80px 1fr 180px 110px; padding:10px 20px; font-size:11px; color:#6d6d7a; text-transform:uppercase; letter-spacing:.03em; border-bottom:1px solid #24252e;">
+            <div>Date</div><div>Description</div><div>Category</div><div style="text-align:right;">Amount</div>
+          </div>
+          <sc-for list="{{ stagingRows }}" as="row" hint-placeholder-count="9">
+            <div>
+              <div onClick="{{ row.toggle }}" style="display:grid; grid-template-columns:80px 1fr 180px 110px; align-items:center; padding:12px 20px; font-size:13px; border-bottom:1px solid #24252e; cursor:{{ row.cursor }}; background:{{ row.rowBg }};">
+                <div style="color:#9b9ba8; font-family:ui-monospace, monospace; font-size:12px;">{{ row.date }}</div>
+                <div>{{ row.desc }}</div>
+                <div><span style="font-size:11px; padding:3px 8px; border-radius:5px; background:{{ row.categoryBg }}; color:{{ row.categoryColor }};">{{ row.category }}</span></div>
+                <div style="text-align:right; font-family:ui-monospace, monospace; color:{{ row.amountColor }};">{{ row.amount }}</div>
+              </div>
+              <sc-if value="{{ row.expanded }}">
+                <div style="padding:16px 20px; background:oklch(20% 0.02 70); border-bottom:1px solid #24252e; display:flex; align-items:flex-end; gap:12px;">
+                  <div style="flex:1;">
+                    <div style="font-size:11px; color:#9b9ba8; margin-bottom:4px;">Assign category</div>
+                    <select style="width:100%; font-size:13px; padding:7px 10px; border-radius:7px; border:1px solid #2c2d38; background:#22232c; color:#f3f3f6;">
+                      <option>PayNow Transfers</option>
+                      <option>Groceries</option>
+                      <option>Transport</option>
+                      <option>Shopping</option>
+                      <option>Bills &amp; Utilities</option>
+                      <option>Dining</option>
+                    </select>
+                  </div>
+                  <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:#c6c6cf; padding-bottom:9px;">
+                    <input type="checkbox"> Save as rule
+                  </label>
+                  <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:#c6c6cf; padding-bottom:9px;">
+                    <input type="checkbox"> Save as contact mapping
+                  </label>
+                  <button onClick="{{ row.toggle }}" style="font-size:12px; font-weight:600; padding:8px 14px; border-radius:7px; border:none; background:#e35fd0; color:#1a0e18; cursor:pointer;">Apply</button>
+                </div>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display:flex; justify-content:flex-end; gap:12px; position:sticky; bottom:20px;">
+          <button style="font-size:13px; font-weight:600; padding:11px 18px; border-radius:8px; border:1px solid oklch(45% 0.15 25); background:#1c1d25; color:oklch(70% 0.18 25); cursor:pointer;">Discard Batch</button>
+          <button style="font-size:13px; font-weight:600; padding:11px 20px; border-radius:8px; border:none; background:#e35fd0; color:#1a0e18; cursor:pointer;">Commit 38 Transactions</button>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- SCREEN C: CONTACTS -->
+    <sc-if value="{{ isContacts }}">
+      <div style="padding:28px 36px 60px;">
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:20px;">
+          <div>
+            <div style="font-size:22px; font-weight:700;">Contacts &amp; PayNow Directory</div>
+            <div style="font-size:13px; color:#9b9ba8; margin-top:2px;">Map phone numbers and UENs to people, so transfers categorize themselves</div>
+          </div>
+          <div style="display:flex; gap:10px;">
+            <button style="font-size:13px; font-weight:600; padding:9px 16px; border-radius:8px; border:1px solid #2c2d38; background:#1c1d25; color:#f3f3f6; cursor:pointer;">Import CSV</button>
+            <button onClick="{{ openContactModal }}" style="font-size:13px; font-weight:600; padding:9px 16px; border-radius:8px; border:none; background:#e35fd0; color:#1a0e18; cursor:pointer;">+ Add Contact</button>
+          </div>
+        </div>
+
+        <div style="background:#1c1d25; border:1px solid #2c2d38; border-radius:12px; overflow:hidden;">
+          <div style="display:grid; grid-template-columns:1fr 1.6fr 160px 140px; padding:10px 20px; font-size:11px; color:#6d6d7a; text-transform:uppercase; letter-spacing:.03em; border-bottom:1px solid #24252e;">
+            <div>Contact</div><div>Linked Identifiers</div><div>Default Category</div><div style="text-align:right;">Historical Spend</div>
+          </div>
+          <sc-for list="{{ contactsDirectory }}" as="ct" hint-placeholder-count="6">
+            <div style="display:grid; grid-template-columns:1fr 1.6fr 160px 140px; align-items:center; padding:14px 20px; font-size:13px; border-bottom:1px solid #24252e;">
+              <div style="font-weight:600;">{{ ct.name }}</div>
+              <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                <sc-for list="{{ ct.identifiers }}" as="id_" hint-placeholder-count="2">
+                  <span style="font-size:11px; font-family:ui-monospace, monospace; padding:3px 8px; border-radius:5px; background:#22232c; color:#c6c6cf;">{{ id_ }}</span>
+                </sc-for>
+              </div>
+              <div style="color:#9b9ba8;">{{ ct.category }}</div>
+              <div style="text-align:right; font-family:ui-monospace, monospace;">{{ ct.spend }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- SCREEN D: RULES -->
+    <sc-if value="{{ isRules }}">
+      <div style="padding:28px 36px 60px;">
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:20px;">
+          <div>
+            <div style="font-size:22px; font-weight:700;">Categorization &amp; Exclusion Rules</div>
+            <div style="font-size:13px; color:#9b9ba8; margin-top:2px;">Evaluated top to bottom — the first match wins</div>
+          </div>
+          <button onClick="{{ openRuleModal }}" style="font-size:13px; font-weight:600; padding:9px 16px; border-radius:8px; border:none; background:#e35fd0; color:#1a0e18; cursor:pointer; align-self:flex-start;">+ New Rule</button>
+        </div>
+
+        <div style="background:#1c1d25; border:1px solid #2c2d38; border-radius:12px; overflow:hidden;">
+          <sc-for list="{{ rules }}" as="r" hint-placeholder-count="6">
+            <div style="display:flex; align-items:center; gap:14px; padding:14px 20px; border-bottom:1px solid #24252e;">
+              <span style="color:#3a3b48; font-size:14px; cursor:grab; letter-spacing:2px;">⠿</span>
+              <div style="width:26px; height:26px; border-radius:6px; background:#22232c; color:#9b9ba8; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ r.priority }}</div>
+              <div style="flex:1; font-size:13px;">
+                <span style="color:#6d6d7a;">IF</span> Raw Description <span style="color:#6d6d7a;">CONTAINS</span> <span style="font-family:ui-monospace, monospace; background:#22232c; padding:2px 6px; border-radius:4px;">{{ r.pattern }}</span>
+                <span style="color:#6d6d7a;">THEN</span>
+                <sc-if value="{{ r.isExclusion }}">
+                  <span style="font-size:11px; font-weight:600; padding:2px 8px; border-radius:5px; background:oklch(28% 0.06 25); color:oklch(75% 0.15 25);">EXCLUDE</span>
+                  <span style="color:#6d6d7a; font-size:12px;"> — {{ r.reason }}</span>
+                </sc-if>
+                <sc-if value="{{ r.showCategory }}">
+                  <span style="font-size:11px; padding:2px 8px; border-radius:5px; background:{{ r.categoryBg }}; color:{{ r.categoryColor }};">{{ r.category }}</span>
+                </sc-if>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- SCREEN E: SETTINGS -->
+    <sc-if value="{{ isSettings }}">
+      <div style="padding:28px 36px 60px; max-width:640px;">
+        <div style="font-size:22px; font-weight:700; margin-bottom:20px;">Settings &amp; Storage</div>
+
+        <div style="background:#1c1d25; border:1px solid #2c2d38; border-radius:12px; padding:20px; margin-bottom:16px;">
+          <div style="font-size:13px; font-weight:600; margin-bottom:14px;">Database</div>
+          <div style="font-size:12px; color:#6d6d7a; margin-bottom:3px;">Path</div>
+          <div style="font-size:13px; font-family:ui-monospace, monospace; margin-bottom:12px; word-break:break-all;">/Users/wei/.sg-expenditure-tracker/data.db</div>
+          <div style="display:flex; gap:24px; margin-bottom:16px;">
+            <div><div style="font-size:12px; color:#6d6d7a;">Size</div><div style="font-size:13px; font-family:ui-monospace, monospace;">18.4 MB</div></div>
+            <div><div style="font-size:12px; color:#6d6d7a;">Schema version</div><div style="font-size:13px; font-family:ui-monospace, monospace;">2</div></div>
+          </div>
+          <button onClick="{{ openRelocate }}" style="font-size:13px; font-weight:600; padding:9px 16px; border-radius:8px; border:1px solid #2c2d38; background:#22232c; color:#f3f3f6; cursor:pointer;">Change Database Path</button>
+        </div>
+
+        <div style="background:#1c1d25; border:1px solid oklch(40% 0.08 25); border-radius:12px; padding:20px;">
+          <div style="font-size:13px; font-weight:600; margin-bottom:6px; color:oklch(72% 0.16 25);">Danger Zone</div>
+          <div style="font-size:13px; color:#9b9ba8; margin-bottom:14px; line-height:1.5;">Nuclear Reset permanently deletes all transactions, rules, contacts and accounts from the local database. This cannot be undone.</div>
+          <button onClick="{{ openReset }}" style="font-size:13px; font-weight:600; padding:9px 16px; border-radius:8px; border:none; background:oklch(55% 0.19 25); color:#fff; cursor:pointer;">Nuclear Reset</button>
+        </div>
+      </div>
+    </sc-if>
+  </div>
+
+  <!-- REFUND DRAWER -->
+  <sc-if value="{{ drawerOpen }}">
+    <div onClick="{{ closeDrawer }}" style="position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:40;"></div>
+    <div style="position:fixed; top:0; right:0; height:100%; width:380px; background:#1c1d25; box-shadow:-8px 0 24px rgba(0,0,0,0.3); z-index:41; padding:24px; overflow-y:auto; border-left:1px solid #2c2d38;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
+        <div style="font-size:15px; font-weight:700;">Refund Pairing</div>
+        <button onClick="{{ closeDrawer }}" style="border:none; background:none; font-size:18px; cursor:pointer; color:#6d6d7a;">×</button>
+      </div>
+      <div style="font-size:12px; color:#6d6d7a; margin-bottom:8px;">ORIGINAL TRANSACTION</div>
+      <div style="border:1px solid #2c2d38; border-radius:10px; padding:14px; margin-bottom:12px;">
+        <div style="font-size:13px; font-weight:600;">Zalora</div>
+        <div style="font-size:12px; color:#9b9ba8; margin:4px 0;">Jul 3, 2026 · Shopping · DBS ••4821</div>
+        <div style="font-family:ui-monospace, monospace; font-size:15px;">-$89.90</div>
+      </div>
+      <div style="text-align:center; color:#3a3b48; font-size:16px; margin-bottom:12px;">↓ netted against ↓</div>
+      <div style="border:1px solid #2c2d38; border-radius:10px; padding:14px;">
+        <div style="font-size:13px; font-weight:600;">Zalora Refund</div>
+        <div style="font-size:12px; color:#9b9ba8; margin:4px 0;">Jul 9, 2026 · Shopping · DBS ••4821</div>
+        <div style="font-family:ui-monospace, monospace; font-size:15px; color:oklch(72% 0.17 150);">+$89.90</div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ADD CONTACT MODAL -->
+  <sc-if value="{{ contactModalOpen }}">
+    <div onClick="{{ closeContactModal }}" style="position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:50; display:flex; align-items:center; justify-content:center;">
+      <div onClick="{{ stop }}" style="background:#1c1d25; border:1px solid #2c2d38; border-radius:14px; padding:26px; width:440px;">
+        <div style="font-size:16px; font-weight:700; margin-bottom:16px;">Add Contact</div>
+        <div style="font-size:12px; color:#9b9ba8; margin-bottom:4px;">Name</div>
+        <input placeholder="e.g. Auntie Mei" style="width:100%; box-sizing:border-box; padding:9px 12px; border-radius:8px; border:1px solid #2c2d38; background:#22232c; color:#f3f3f6; font-size:13px; margin-bottom:14px;">
+        <div style="font-size:12px; color:#9b9ba8; margin-bottom:4px;">Default Category</div>
+        <select style="width:100%; box-sizing:border-box; padding:9px 12px; border-radius:8px; border:1px solid #2c2d38; background:#22232c; color:#f3f3f6; font-size:13px; margin-bottom:14px;">
+          <option>PayNow Transfers</option><option>Groceries</option><option>Bills &amp; Utilities</option>
+        </select>
+        <div style="font-size:12px; color:#9b9ba8; margin-bottom:6px;">Linked Identifiers</div>
+        <div style="display:flex; gap:8px; margin-bottom:8px;">
+          <select style="padding:9px 10px; border-radius:8px; border:1px solid #2c2d38; background:#22232c; color:#f3f3f6; font-size:12px;"><option>Phone</option><option>UEN</option><option>Account</option></select>
+          <input placeholder="+65 9xxx xxxx" style="flex:1; box-sizing:border-box; padding:9px 12px; border-radius:8px; border:1px solid #2c2d38; background:#22232c; color:#f3f3f6; font-size:13px;">
+        </div>
+        <button style="font-size:12px; color:#e35fd0; background:none; border:none; cursor:pointer; padding:0; margin-bottom:18px;">+ Add another identifier</button>
+        <div style="display:flex; justify-content:flex-end; gap:10px;">
+          <button onClick="{{ closeContactModal }}" style="font-size:13px; padding:9px 16px; border-radius:8px; border:1px solid #2c2d38; background:#22232c; color:#f3f3f6; cursor:pointer;">Cancel</button>
+          <button onClick="{{ closeContactModal }}" style="font-size:13px; font-weight:600; padding:9px 16px; border-radius:8px; border:none; background:#e35fd0; color:#1a0e18; cursor:pointer;">Save Contact</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- RULE BUILDER MODAL -->
+  <sc-if value="{{ ruleModalOpen }}">
+    <div onClick="{{ closeRuleModal }}" style="position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:50; display:flex; align-items:center; justify-content:center;">
+      <div onClick="{{ stop }}" style="background:#1c1d25; border:1px solid #2c2d38; border-radius:14px; padding:26px; width:460px;">
+        <div style="font-size:16px; font-weight:700; margin-bottom:16px;">New Rule</div>
+        <div style="font-size:13px; color:#c6c6cf; display:flex; flex-direction:column; gap:12px; margin-bottom:14px;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="color:#6d6d7a; width:70px;">IF</span>
+            <span style="width:110px;">Raw Description</span>
+            <span style="color:#6d6d7a;">CONTAINS</span>
+            <input placeholder="e.g. NETFLIX" style="flex:1; box-sizing:border-box; padding:8px 10px; border-radius:7px; border:1px solid #2c2d38; background:#22232c; color:#f3f3f6; font-size:13px;">
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="color:#6d6d7a; width:70px;">THEN SET</span>
+            <select style="flex:1; padding:8px 10px; border-radius:7px; border:1px solid #2c2d38; background:#22232c; color:#f3f3f6; font-size:13px;">
+              <option>Groceries</option><option>Dining</option><option>Transport</option><option>Shopping</option><option>Bills &amp; Utilities</option><option>PayNow Transfers</option>
+            </select>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="color:#6d6d7a; width:70px;">PRIORITY</span>
+            <input type="number" value="7" style="width:70px; box-sizing:border-box; padding:8px 10px; border-radius:7px; border:1px solid #2c2d38; background:#22232c; color:#f3f3f6; font-size:13px;">
+          </div>
+          <label style="display:flex; align-items:center; gap:8px;">
+            <input type="checkbox"> This is an exclusion rule
+          </label>
+          <div>
+            <div style="font-size:12px; color:#6d6d7a; margin-bottom:4px;">Exclusion Reason</div>
+            <input placeholder="e.g. Self-transfer between own accounts" style="width:100%; box-sizing:border-box; padding:8px 10px; border-radius:7px; border:1px solid #2c2d38; background:#22232c; color:#f3f3f6; font-size:13px;">
+          </div>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:10px;">
+          <button onClick="{{ closeRuleModal }}" style="font-size:13px; padding:9px 16px; border-radius:8px; border:1px solid #2c2d38; background:#22232c; color:#f3f3f6; cursor:pointer;">Cancel</button>
+          <button onClick="{{ closeRuleModal }}" style="font-size:13px; font-weight:600; padding:9px 16px; border-radius:8px; border:none; background:#e35fd0; color:#1a0e18; cursor:pointer;">Save Rule</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- RELOCATE DIALOG -->
+  <sc-if value="{{ relocateOpen }}">
+    <div onClick="{{ closeRelocate }}" style="position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:50; display:flex; align-items:center; justify-content:center;">
+      <div onClick="{{ stop }}" style="background:#1c1d25; border:1px solid #2c2d38; border-radius:14px; padding:26px; width:420px;">
+        <div style="font-size:16px; font-weight:700; margin-bottom:10px;">Change Database Path</div>
+        <div style="font-size:13px; color:#9b9ba8; line-height:1.5; margin-bottom:16px;">This migrates an <strong style="color:#f3f3f6;">18.4 MB</strong> database file to the new location. Active connections will be closed during the move, then reopened at the new path.</div>
+        <div style="font-size:12px; color:#9b9ba8; margin-bottom:4px;">New location</div>
+        <input value="/Users/wei/Documents/sg-tracker-data.db" style="width:100%; box-sizing:border-box; padding:9px 12px; border-radius:8px; border:1px solid #2c2d38; background:#22232c; color:#f3f3f6; font-size:13px; font-family:ui-monospace, monospace; margin-bottom:18px;">
+        <div style="display:flex; justify-content:flex-end; gap:10px;">
+          <button onClick="{{ closeRelocate }}" style="font-size:13px; padding:9px 16px; border-radius:8px; border:1px solid #2c2d38; background:#22232c; color:#f3f3f6; cursor:pointer;">Cancel</button>
+          <button onClick="{{ closeRelocate }}" style="font-size:13px; font-weight:600; padding:9px 16px; border-radius:8px; border:none; background:#e35fd0; color:#1a0e18; cursor:pointer;">Migrate Database</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- NUCLEAR RESET DIALOG -->
+  <sc-if value="{{ resetOpen }}">
+    <div onClick="{{ closeReset }}" style="position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:50; display:flex; align-items:center; justify-content:center;">
+      <div onClick="{{ stop }}" style="background:#1c1d25; border:1px solid #2c2d38; border-radius:14px; padding:26px; width:420px;">
+        <div style="font-size:16px; font-weight:700; margin-bottom:10px; color:oklch(72% 0.16 25);">Nuclear Reset</div>
+        <div style="font-size:13px; color:#9b9ba8; line-height:1.5; margin-bottom:16px;">This permanently deletes all accounts, transactions, contacts and rules. Type <strong style="font-family:ui-monospace, monospace; color:#f3f3f6;">DELETE</strong> to confirm.</div>
+        <input value="{{ resetConfirm }}" onChange="{{ onResetConfirmChange }}" placeholder="DELETE" style="width:100%; box-sizing:border-box; padding:9px 12px; border-radius:8px; border:1px solid #2c2d38; background:#22232c; color:#f3f3f6; font-size:13px; font-family:ui-monospace, monospace; margin-bottom:18px;">
+        <div style="display:flex; justify-content:flex-end; gap:10px;">
+          <button onClick="{{ closeReset }}" style="font-size:13px; padding:9px 16px; border-radius:8px; border:1px solid #2c2d38; background:#22232c; color:#f3f3f6; cursor:pointer;">Cancel</button>
+          <button onClick="{{ closeReset }}" disabled="{{ resetDisabled }}" style="font-size:13px; font-weight:600; padding:9px 16px; border-radius:8px; border:none; background:{{ resetBtnBg }}; color:{{ resetBtnFg }}; cursor:{{ resetBtnCursor }};">Purge Everything</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const CAT_COLORS = {
+  'Groceries': [230], 'Dining': [340], 'Transport': [190], 'Shopping': [280],
+  'Bills & Utilities': [60], 'PayNow Transfers': [20], 'Others': [null]
+};
+function catColor(cat) {
+  const hue = CAT_COLORS[cat] ? CAT_COLORS[cat][0] : null;
+  if (hue === null) return { bg: '#22232c', fg: '#9b9ba8' };
+  return { bg: `oklch(26% 0.05 ${hue})`, fg: `oklch(78% 0.15 ${hue})` };
+}
+
+class Component extends DCLogic {
+  state = {
+    screen: 'onboarding',
+    drawerOpen: false,
+    stagingOpenRow: null,
+    contactModalOpen: false,
+    ruleModalOpen: false,
+    relocateOpen: false,
+    resetOpen: false,
+    resetConfirm: '',
+    excludedVisible: true,
+  };
+
+  transactions = [
+    { date:'Jul 18', desc:'NTUC FairPrice', category:'Groceries', account:'DBS ••4821', amount:-86.40 },
+    { date:'Jul 17', desc:'PayNow - Auntie Mei', category:'PayNow Transfers', account:'UOB ••1190', amount:-150.00 },
+    { date:'Jul 16', desc:'Grab', category:'Transport', account:'DBS ••4821', amount:-24.80 },
+    { date:'Jul 15', desc:'Salary - Acme Pte Ltd', category:'Others', account:'OCBC ••7702', amount:5200.00 },
+    { date:'Jul 12', desc:'Starbucks', category:'Dining', account:'DBS ••4821', amount:-7.80 },
+    { date:'Jul 09', desc:'Zalora Refund', category:'Shopping', account:'DBS ••4821', amount:89.90, hasRefundLink:true },
+    { date:'Jul 07', desc:'Internal Transfer - Savings', category:'Others', account:'OCBC ••7702', amount:-1000.00, excluded:true },
+    { date:'Jul 03', desc:'Zalora', category:'Shopping', account:'DBS ••4821', amount:-89.90, hasRefundLink:true },
+    { date:'Jul 02', desc:'SP Group Utilities', category:'Bills & Utilities', account:'OCBC ••7702', amount:-164.20 },
+    { date:'Jun 30', desc:'PayNow - Landlord Tan', category:'PayNow Transfers', account:'UOB ••1190', amount:-2400.00 },
+    { date:'Jun 28', desc:'Cold Storage', category:'Groceries', account:'DBS ••4821', amount:-52.60 },
+    { date:'Jun 27', desc:'Shopee', category:'Shopping', account:'OCBC ••7702', amount:-78.30 },
+  ];
+
+  stagingData = [
+    { date:'Aug 01', desc:'NTUC FairPrice', category:'Groceries', amount:-64.20, amber:false },
+    { date:'Aug 02', desc:'PayNow Transfer to 9123xxxx', category:'Others > PayNow', amount:-200.00, amber:true },
+    { date:'Aug 02', desc:'Grab', category:'Transport', amount:-18.90, amber:false },
+    { date:'Aug 03', desc:'PayNow Transfer to UEN20211234A', category:'Others > PayNow', amount:-45.00, amber:true },
+    { date:'Aug 04', desc:'Starbucks', category:'Dining', amount:-6.90, amber:false },
+    { date:'Aug 05', desc:'Shopee', category:'Shopping', amount:-132.00, amber:false },
+    { date:'Aug 06', desc:'PayNow Transfer to 8765xxxx', category:'Others > PayNow', amount:-680.00, amber:true },
+    { date:'Aug 07', desc:'Salary - Acme Pte Ltd', category:'Others', amount:5200.00, amber:false },
+    { date:'Aug 08', desc:'SP Group Utilities', category:'Bills & Utilities', amount:-171.40, amber:false },
+  ];
+
+  contactsDirectory = [
+    { name:'Auntie Mei', identifiers:['+65 9123 4567'], category:'PayNow Transfers', spend:'$1,840.00' },
+    { name:'Landlord - Tan', identifiers:['+65 8765 4321','UEN53331234A'], category:'PayNow Transfers', spend:'$28,800.00' },
+    { name:'Jia Wei (roommate)', identifiers:['+65 9234 5678'], category:'PayNow Transfers', spend:'$5,400.00' },
+    { name:'Mum', identifiers:['+65 9345 1234'], category:'PayNow Transfers', spend:'$3,600.00' },
+    { name:'Coach Wei Tuition', identifiers:['UEN20211234A'], category:'Bills & Utilities', spend:'$3,360.00' },
+    { name:'Grab Driver Tips', identifiers:['+65 8123 9988'], category:'Transport', spend:'$120.00' },
+  ];
+
+  rulesData = [
+    { priority:1, pattern:'SP GROUP', category:'Bills & Utilities' },
+    { priority:2, pattern:'GRAB', category:'Transport' },
+    { priority:3, pattern:'NTUC FAIRPRICE', category:'Groceries' },
+    { priority:4, pattern:'INTERNAL TRANSFER', isExclusion:true, reason:'Self-transfer between own accounts' },
+    { priority:5, pattern:'SHOPEE', category:'Shopping' },
+    { priority:6, pattern:'COACH WEI', isExclusion:true, reason:'Tuition reimbursed by parents' },
+  ];
+
+  topMerchants = [
+    { name:'NTUC FairPrice', amount:'$412.30' }, { name:'Grab', amount:'$298.10' },
+    { name:'Shopee', amount:'$265.00' }, { name:'Starbucks', amount:'$142.50' }, { name:'Cold Storage', amount:'$138.90' },
+  ];
+  topPaynow = [
+    { name:'Landlord - Tan', amount:'$2,400.00' }, { name:'Auntie Mei', amount:'$600.00' },
+    { name:'Jia Wei (roommate)', amount:'$450.00' }, { name:'Mum', amount:'$300.00' }, { name:'Coach Wei Tuition', amount:'$280.00' },
+  ];
+  categoryBreakdownData = [
+    { name:'Groceries', pct:'22%', hue:230 }, { name:'Dining', pct:'18%', hue:340 },
+    { name:'Transport', pct:'10%', hue:190 }, { name:'Shopping', pct:'15%', hue:280 },
+    { name:'Bills & Utilities', pct:'20%', hue:60 }, { name:'PayNow Transfers', pct:'10%', hue:20 },
+    { name:'Others', pct:'5%', hue:null },
+  ];
+  cashFlowData = [
+    { label:'Feb', in:5800, out:7200 }, { label:'Mar', in:6100, out:6900 }, { label:'Apr', in:5950, out:8100 },
+    { label:'May', in:6300, out:7550 }, { label:'Jun', in:6000, out:9200 }, { label:'Jul', in:6200, out:8540 },
+  ];
+
+  fmt(n) {
+    const abs = Math.abs(n).toLocaleString('en-US', { minimumFractionDigits:2, maximumFractionDigits:2 });
+    return (n < 0 ? '-$' : '+$') + abs;
+  }
+
+  navStyle(active) {
+    return `display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:8px; font-size:13px; font-weight:500; cursor:pointer; margin-bottom:2px; color:${active ? '#fff' : '#8a8a97'}; background:${active ? 'rgba(227,95,208,0.12)' : 'transparent'};`;
+  }
+
+  renderVals() {
+    const s = this.state;
+    const maxFlow = Math.max(...this.cashFlowData.map(m => Math.max(m.in, m.out)));
+
+    const visibleTransactions = this.transactions
+      .filter(tx => s.excludedVisible || !tx.excluded)
+      .map(tx => {
+        const cc = catColor(tx.category);
+        return {
+          ...tx,
+          amount: this.fmt(tx.amount),
+          amountColor: tx.amount > 0 ? 'oklch(72% 0.17 150)' : '#f3f3f6',
+          categoryBg: cc.bg, categoryColor: cc.fg,
+          rowOpacity: tx.excluded ? 0.5 : 1,
+          openDrawer: () => this.setState({ drawerOpen: true }),
+        };
+      });
+
+    const stagingRows = this.stagingData.map((row, i) => {
+      const cc = catColor(row.amber ? 'Others' : row.category);
+      return {
+        ...row,
+        amount: this.fmt(row.amount),
+        amountColor: row.amount > 0 ? 'oklch(72% 0.17 150)' : '#f3f3f6',
+        categoryBg: row.amber ? 'oklch(30% 0.07 70)' : cc.bg,
+        categoryColor: row.amber ? 'oklch(82% 0.13 70)' : cc.fg,
+        rowBg: row.amber ? 'oklch(20% 0.02 70)' : (s.stagingOpenRow === i ? '#22232c' : '#1c1d25'),
+        cursor: row.amber ? 'pointer' : 'default',
+        expanded: s.stagingOpenRow === i,
+        toggle: row.amber ? () => this.setState({ stagingOpenRow: s.stagingOpenRow === i ? null : i }) : () => {},
+      };
+    });
+
+    const rules = this.rulesData.map(r => {
+      const cc = r.category ? catColor(r.category) : { bg:'', fg:'' };
+      return { ...r, showCategory: !r.isExclusion, categoryBg: cc.bg, categoryColor: cc.fg };
+    });
+
+    return {
+      showSidebar: s.screen !== 'onboarding',
+      isOnboarding: s.screen === 'onboarding',
+      isDashboard: s.screen === 'dashboard', isStaging: s.screen === 'staging',
+      isContacts: s.screen === 'contacts', isRules: s.screen === 'rules', isSettings: s.screen === 'settings',
+      navItemStyleDashboard: this.navStyle(s.screen === 'dashboard'),
+      navItemStyleStaging: this.navStyle(s.screen === 'staging'),
+      navItemStyleContacts: this.navStyle(s.screen === 'contacts'),
+      navItemStyleRules: this.navStyle(s.screen === 'rules'),
+      navItemStyleSettings: this.navStyle(s.screen === 'settings'),
+      goOnboarding: () => this.setState({ screen: 'onboarding' }),
+      goDashboard: () => this.setState({ screen: 'dashboard' }),
+      goStaging: () => this.setState({ screen: 'staging' }),
+      goContacts: () => this.setState({ screen: 'contacts' }),
+      goRules: () => this.setState({ screen: 'rules' }),
+      goSettings: () => this.setState({ screen: 'settings' }),
+      simulateUpload: () => this.setState({ screen: 'staging' }),
+
+      cashFlowMonths: this.cashFlowData.map(m => ({ label: m.label, inHeight: Math.round((m.in / maxFlow) * 120), outHeight: Math.round((m.out / maxFlow) * 120) })),
+      categoryBreakdown: this.categoryBreakdownData.map(c => ({ name: c.name, pct: c.pct, color: c.hue === null ? '#3a3b48' : `oklch(72% 0.14 ${c.hue})` })),
+      topMerchants: this.topMerchants, topPaynow: this.topPaynow,
+
+      visibleTransactions, excludedVisible: s.excludedVisible,
+      toggleExcluded: () => this.setState({ excludedVisible: !s.excludedVisible }),
+
+      drawerOpen: s.drawerOpen, closeDrawer: () => this.setState({ drawerOpen: false }),
+
+      stagingRows,
+
+      contactsDirectory: this.contactsDirectory,
+      contactModalOpen: s.contactModalOpen,
+      openContactModal: () => this.setState({ contactModalOpen: true }),
+      closeContactModal: () => this.setState({ contactModalOpen: false }),
+
+      rules,
+      ruleModalOpen: s.ruleModalOpen,
+      openRuleModal: () => this.setState({ ruleModalOpen: true }),
+      closeRuleModal: () => this.setState({ ruleModalOpen: false }),
+
+      relocateOpen: s.relocateOpen,
+      openRelocate: () => this.setState({ relocateOpen: true }),
+      closeRelocate: () => this.setState({ relocateOpen: false }),
+
+      resetOpen: s.resetOpen,
+      openReset: () => this.setState({ resetOpen: true, resetConfirm: '' }),
+      closeReset: () => this.setState({ resetOpen: false }),
+      resetConfirm: s.resetConfirm,
+      onResetConfirmChange: (e) => this.setState({ resetConfirm: e.target.value }),
+      resetDisabled: s.resetConfirm !== 'DELETE',
+      resetBtnBg: s.resetConfirm === 'DELETE' ? 'oklch(55% 0.19 25)' : '#2c2d38',
+      resetBtnFg: s.resetConfirm === 'DELETE' ? '#fff' : '#6d6d7a',
+      resetBtnCursor: s.resetConfirm === 'DELETE' ? 'pointer' : 'not-allowed',
+
+      stop: (e) => e.stopPropagation(),
+    };
+  }
+}
+</script>
+</body>
+</html>
