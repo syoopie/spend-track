@@ -11,7 +11,9 @@ Currently: **UOB PDF parsing is fully implemented** (Account Statements + Card S
 
 ## Running it
 
-Two dev servers, run in separate terminals.
+**Easiest**: double-click `start.bat` (or run `powershell -ExecutionPolicy Bypass -File start.ps1`) from the repo root. It installs dependencies if needed, launches the backend and frontend each in their own window, waits for both to come up, and opens your browser. Safe to re-run - it detects servers that are already up and won't start duplicates.
+
+**Manual**: two dev servers, run in separate terminals.
 
 **Backend** (from `backend/`):
 
