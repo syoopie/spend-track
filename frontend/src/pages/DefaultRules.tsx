@@ -83,7 +83,7 @@ export function DefaultRules() {
     <div className="px-9 pt-7 pb-15">
       <div className="flex items-start justify-between mb-5 gap-4 flex-wrap">
         <div>
-          <div className="text-[22px] font-bold">Default Categorization Rules</div>
+          <div className="text-[22px] font-bold font-display">Default Categorization Rules</div>
           <div className="text-[13px] text-muted mt-0.5">
             Built-in word bank used to auto-categorize transactions — read-only, and always evaluated after your own
             rules so anything you set up takes precedence

@@ -22,6 +22,7 @@
   --color-danger-text: oklch(72% 0.16 25);
   --color-success: oklch(72% 0.17 150);
   --font-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  --font-display: 'Space Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif;
 }
 
 body {

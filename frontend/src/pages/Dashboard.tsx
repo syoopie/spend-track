@@ -148,7 +148,7 @@ export function Dashboard() {
       <div className="sticky top-0 z-20 -mx-9 px-9 bg-bg pt-7 pb-5.5">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <div className="text-[22px] font-bold">Dashboard</div>
+            <div className="text-[22px] font-bold font-display">Dashboard</div>
             <div className="text-[13px] text-muted mt-0.5">Post-mortem view of where the money went</div>
           </div>
           <div className="flex gap-2.5 items-center">

@@ -42,7 +42,7 @@ export function Sidebar() {
     <div className="w-56 shrink-0 bg-sidebar text-muted flex flex-col p-3.5 border-r border-border">
       <NavLink to="/" end className="flex items-center gap-2.5 px-2 pt-1.5 pb-5.5">
         <div className="w-6.5 h-6.5 rounded-md bg-accent shrink-0" />
-        <div className="text-sm font-semibold text-text leading-tight">
+        <div className="text-sm font-semibold font-display text-text leading-tight">
           Expenditure
           <br />
           Tracker
