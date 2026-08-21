@@ -2,7 +2,7 @@
 -- migrations are driven by db.py's _add_column_if_missing column-existence
 -- checks, not by gating on this number. Bump it as a human-readable trail
 -- of schema changes, but don't wire new migration logic to it.
-PRAGMA user_version = 4;
+PRAGMA user_version = 5;
 
 CREATE TABLE IF NOT EXISTS accounts (
     id TEXT PRIMARY KEY,
@@ -76,7 +76,10 @@ CREATE TABLE IF NOT EXISTS categories (
     hue INTEGER,
     icon TEXT,
     is_hidden BOOLEAN DEFAULT 0,
-    sort_order INTEGER DEFAULT 0
+    sort_order INTEGER DEFAULT 0,
+    -- 'inflow' or 'outflow' - a category is locked to one direction, never
+    -- both. See engine/rules.py::categorize() for how this is enforced.
+    direction TEXT NOT NULL DEFAULT 'outflow'
 );
 
 CREATE INDEX IF NOT EXISTS idx_tx_date ON transactions(transaction_date);

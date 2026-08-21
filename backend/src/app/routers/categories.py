@@ -19,8 +19,8 @@ def create_category(body: CategoryCreateRequest):
     with get_conn() as conn:
         max_sort = conn.execute("SELECT MAX(sort_order) FROM categories").fetchone()[0]
         cur = conn.execute(
-            "INSERT INTO categories (name, hue, icon, sort_order) VALUES (?, ?, ?, ?)",
-            (body.name, body.hue, body.icon, (max_sort or 0) + 1),
+            "INSERT INTO categories (name, hue, icon, sort_order, direction) VALUES (?, ?, ?, ?, ?)",
+            (body.name, body.hue, body.icon, (max_sort or 0) + 1, body.direction),
         )
         row = conn.execute("SELECT * FROM categories WHERE id = ?", (cur.lastrowid,)).fetchone()
         return CategoryOut(**dict(row))

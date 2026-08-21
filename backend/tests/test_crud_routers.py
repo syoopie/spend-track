@@ -30,11 +30,17 @@ def _upload_and_commit(client, path=ACCOUNT_SAMPLE):
 
 def test_categories_seeded_with_defaults(client):
     resp = client.get("/api/categories")
-    names = [c["name"] for c in resp.json()]
+    cats = resp.json()
+    names = [c["name"] for c in cats]
     assert names == [
         "Sports & Hobbies", "Beauty", "Food & Drink", "Shopping", "Transport", "Home", "Bills & Fees",
-        "Entertainment", "Healthcare", "Education", "Groceries", "Salary", "Investing", "Paynow",
+        "Entertainment", "Healthcare", "Education", "Groceries", "Investing", "Paynow",
+        "Salary", "Refunds & Reimbursements", "Investment Income", "Paynow Received",
     ]
+    by_name = {c["name"]: c for c in cats}
+    assert by_name["Transport"]["direction"] == "outflow"
+    assert by_name["Salary"]["direction"] == "inflow"
+    assert by_name["Refunds & Reimbursements"]["direction"] == "inflow"
 
 
 def test_categories_hidden_others_excluded_unless_requested(client):
@@ -44,7 +50,8 @@ def test_categories_hidden_others_excluded_unless_requested(client):
     resp_all = client.get("/api/categories", params={"include_hidden": True})
     names = [c["name"] for c in resp_all.json()]
     assert "Others" in names
-    assert len(names) == 15
+    assert "Other Income" in names
+    assert len(names) == 19
 
 
 def test_create_category(client):
@@ -290,7 +297,7 @@ def test_exclusion_rule_create_and_update(client):
 def test_get_settings_reports_path_and_size(client):
     _upload_and_commit(client)
     resp = client.get("/api/settings").json()
-    assert resp["schema_version"] == 4
+    assert resp["schema_version"] == 5
     assert resp["size_bytes"] > 0
 
 
@@ -311,7 +318,7 @@ def test_reset_wipes_data_and_reinitializes_schema(client):
     assert client.get("/api/transactions").json() == []
     assert client.get("/api/accounts").json() == []
     cats = client.get("/api/categories").json()
-    assert len(cats) == 14  # default categories re-seeded (Others is hidden)
+    assert len(cats) == 17  # default categories re-seeded (Others/Other Income are hidden)
 
 
 def test_delete_rules_requires_confirmation_and_only_removes_user_rules(client):

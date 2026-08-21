@@ -6,10 +6,18 @@ Coverage comes from two tiers: (1) real merchant strings pulled from the
 user's own historical UOB transactions, and (2) common Singapore
 merchant/keyword knowledge for categories the real data didn't cover
 (Beauty, Sports & Hobbies, Home, Healthcare, Education). This bank never
-targets "Others" or "Paynow" - those are pure fallback outcomes
-produced by the categorization engine itself (engine/rules.py), not rule
-matches. DEFAULT_PAYNOW_RULE_BANK is a separate, lower-precedence tier for
-matching PayNow recipient names (see its own docstring below).
+targets "Others"/"Other Income" or "Paynow"/"Paynow Received" - those are
+pure fallback outcomes produced by the categorization engine itself
+(engine/rules.py, engine/paynow.py), not rule matches. DEFAULT_PAYNOW_RULE_BANK
+is a separate, lower-precedence tier for matching PayNow recipient names
+(see its own docstring below).
+
+Most entries below target an outflow category, but a handful (currently
+"Refunds & Reimbursements" and "Investment Income") target an inflow one -
+which category a pattern is allowed to fire for is entirely a property of
+that category's `direction` in the categories table (see migrations.py),
+not of which list it lives in here. engine/rules.py::categorize() enforces
+the actual direction check at match time.
 """
 
 DEFAULT_RULE_BANK: dict[str, list[tuple[str, str]]] = {
@@ -181,7 +189,6 @@ DEFAULT_RULE_BANK: dict[str, list[tuple[str, str]]] = {
         ("ROAD TAX", "Road Tax"),
     ],
     "Investing": [
-        ("INTEREST CREDIT", "Bank Interest"),
         ("INTERACTIVE BROKERS", "Interactive Brokers"),
         ("TIGER BROKERS", "Tiger Brokers"),
         ("MOOMOO", "moomoo"),
@@ -290,6 +297,18 @@ DEFAULT_RULE_BANK: dict[str, list[tuple[str, str]]] = {
         ("PAYROLL", "Payroll"),
         ("GIRO SALARY", "Salary"),
         ("MONTHLY SALARY", "Salary"),
+    ],
+    # Inflow-direction categories - see this file's module docstring.
+    "Refunds & Reimbursements": [
+        ("REFUND", "Refund"),
+        ("REVERSAL", "Reversal"),
+        ("REIMBURSEMENT", "Reimbursement"),
+        ("CASHBACK", "Cashback"),
+        ("CASH BACK", "Cashback"),
+    ],
+    "Investment Income": [
+        ("INTEREST CREDIT", "Bank Interest"),
+        ("DIVIDEND", "Dividend"),
     ],
     "Education": [
         ("SKILLSFUTURE", "SkillsFuture"),

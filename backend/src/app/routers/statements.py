@@ -102,6 +102,7 @@ async def upload_statement(files: list[UploadFile] = File(...), password: str | 
     with get_conn() as conn:
         rules = repo.fetch_active_rules(conn)
         contact_identifiers = repo.fetch_contact_identifiers(conn)
+        category_directions = repo.fetch_category_directions(conn)
         # Any card account already committed, or parsed anywhere in this same
         # multi-file batch, is enough to treat a "pay my card bill" line on a
         # bank account as already counted elsewhere - see engine/card_payments.py.
@@ -149,6 +150,7 @@ async def upload_statement(files: list[UploadFile] = File(...), password: str | 
                         rules,
                         contact_identifiers,
                         amount=tx.amount,
+                        category_directions=category_directions,
                         has_card_account=has_card_account,
                         posting_account_is_card=parsed_account.is_card,
                     )
