@@ -62,7 +62,10 @@ export function TransactionEditPopover({
               const Icon = categoryIcon(categoryOptions, c.name)
               return (
                 <option key={c.id} value={c.name}>
-                  <Icon size={12} className="shrink-0" /> {c.name}
+                  <span className="inline-flex items-center gap-1.5">
+                    <Icon size={12} className="shrink-0" />
+                    {c.name}
+                  </span>
                 </option>
               )
             })}
