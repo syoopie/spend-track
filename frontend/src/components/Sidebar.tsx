@@ -39,46 +39,68 @@ export function Sidebar() {
   const { openDialog, hasPendingBatch } = useUploadDialog()
 
   return (
-    <div className="w-56 shrink-0 bg-sidebar text-muted flex flex-col p-3.5 border-r border-border">
-      <NavLink to="/" end className="flex items-center gap-2.5 px-2 pt-1.5 pb-5.5">
-        <div className="w-6.5 h-6.5 rounded-md bg-accent shrink-0" />
-        <div className="text-sm font-semibold font-display text-text leading-tight">
-          Expenditure
-          <br />
-          Tracker
-        </div>
-      </NavLink>
-
-      <button
-        onClick={openDialog}
-        disabled={hasPendingBatch}
-        title={hasPendingBatch ? 'Review the pending statement before uploading another' : undefined}
-        className="flex items-center justify-center gap-1.5 px-2.5 py-2.5 rounded-lg text-sm font-semibold mb-3.5 border-none bg-accent text-accent-fg cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+    // The rail reserves a fixed 64px in the layout so the main content
+    // never reflows; the actual panel is absolutely positioned over it and
+    // only grows to full width on hover, so expanding never shifts anything
+    // to its right.
+    <div className="w-16 shrink-0 relative group">
+      <div
+        className="absolute inset-y-0 left-0 z-30 w-16 group-hover:w-56 bg-sidebar text-muted flex flex-col p-3.5
+          border-r border-border overflow-hidden transition-[width] duration-200 ease-out"
       >
-        <Upload size={15} className="shrink-0" />
-        Upload Bank Statement
-      </button>
-
-      {NAV_ITEMS.map((item) => (
-        <NavLink
-          key={item.to}
-          to={item.to}
-          end={item.to === '/'}
-          className={({ isActive }) =>
-            `flex items-center gap-2.5 px-2.5 py-2.5 rounded-lg text-sm font-medium mb-0.5 ${
-              isActive ? 'text-text bg-accent/12' : 'text-nav hover:bg-nav-hover'
-            }`
-          }
-        >
-          {item.icon}
-          {item.label}
+        <NavLink to="/" end className="flex items-center gap-2.5 px-2 pt-1.5 pb-5.5">
+          <div className="w-6.5 h-6.5 rounded-md bg-accent shrink-0" />
+          <div className="text-sm font-semibold font-display text-text leading-tight whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+            Expenditure
+            <br />
+            Tracker
+          </div>
         </NavLink>
-      ))}
 
-      <div className="flex-1" />
-      <div className="text-[11px] text-muted-2 px-2 pt-2.5 border-t border-border leading-relaxed">
-        <span className="inline-block w-1.5 h-1.5 rounded-full bg-success mr-1.5" />
-        Local-only · no data leaves this device
+        <button
+          onClick={openDialog}
+          disabled={hasPendingBatch}
+          title={
+            hasPendingBatch
+              ? 'Review the pending statement before uploading another'
+              : 'Upload a bank statement PDF - or drag & drop one anywhere in the app, anytime'
+          }
+          className="flex items-center justify-start group-hover:justify-center gap-1.5 px-2.5 py-2.5 rounded-lg text-sm font-semibold border-none bg-accent text-accent-fg cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Upload size={15} className="shrink-0" />
+          <span className="whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+            Upload Bank Statement
+          </span>
+        </button>
+        <div className="text-[11px] text-muted-2 text-center mt-1.5 mb-3.5 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+          or drag &amp; drop a PDF — anytime, anywhere
+        </div>
+
+        {NAV_ITEMS.map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            end={item.to === '/'}
+            className={({ isActive }) =>
+              `flex items-center gap-2.5 px-2.5 py-2.5 rounded-lg text-sm font-medium mb-0.5 ${
+                isActive ? 'text-text bg-accent/12' : 'text-nav hover:bg-nav-hover'
+              }`
+            }
+          >
+            {item.icon}
+            <span className="whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+              {item.label}
+            </span>
+          </NavLink>
+        ))}
+
+        <div className="flex-1" />
+        <div className="text-[11px] text-muted-2 px-2 pt-2.5 border-t border-border leading-relaxed whitespace-nowrap">
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-success mr-1.5 shrink-0" />
+          <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+            Local-only · no data leaves this device
+          </span>
+        </div>
       </div>
     </div>
   )
