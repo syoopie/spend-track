@@ -299,6 +299,11 @@ def test_get_settings_reports_path_and_size(client):
     resp = client.get("/api/settings").json()
     assert resp["schema_version"] == 5
     assert resp["size_bytes"] > 0
+    assert resp["country_code"] == "SG"
+    assert resp["currency_code"] == "SGD"
+    assert resp["currency_symbol"] == "$"
+    assert resp["transfer_scheme_name"] == "PayNow"
+    assert "UOB" in resp["supported_banks"]
 
 
 def test_reset_requires_delete_confirmation(client):

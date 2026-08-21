@@ -264,6 +264,33 @@ export function Settings() {
       <AppearanceSection />
 
       <div className="bg-card border border-border rounded-xl p-5 mb-4">
+        <div className="text-[13px] font-semibold mb-1">Region</div>
+        <div className="text-xs text-muted mb-3.5">
+          Statement parsing, currency formatting, and the default rule bank are all specific to this region.
+        </div>
+        <div className="flex gap-6 flex-wrap">
+          <div>
+            <div className="text-xs text-muted">Country</div>
+            <div className="text-[13px] font-mono">{settingsQ.data?.country_name ?? '—'}</div>
+          </div>
+          <div>
+            <div className="text-xs text-muted">Currency</div>
+            <div className="text-[13px] font-mono">
+              {settingsQ.data ? `${settingsQ.data.currency_code} (${settingsQ.data.currency_symbol})` : '—'}
+            </div>
+          </div>
+          <div>
+            <div className="text-xs text-muted">Transfer scheme</div>
+            <div className="text-[13px] font-mono">{settingsQ.data?.transfer_scheme_name ?? '—'}</div>
+          </div>
+          <div>
+            <div className="text-xs text-muted">Supported banks</div>
+            <div className="text-[13px] font-mono">{settingsQ.data?.supported_banks.join(', ') ?? '—'}</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-card border border-border rounded-xl p-5 mb-4">
         <div className="text-[13px] font-semibold mb-3.5">Database</div>
         <div className="text-xs text-muted mb-0.5">Path</div>
         <div className="text-[13px] font-mono mb-3 break-all">{settingsQ.data?.db_path ?? '—'}</div>

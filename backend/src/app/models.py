@@ -193,6 +193,12 @@ class SettingsOut(BaseModel):
     db_path: str
     size_bytes: int
     schema_version: int
+    country_code: str
+    country_name: str
+    currency_code: str
+    currency_symbol: str
+    transfer_scheme_name: str
+    supported_banks: list[str]
 
 
 class RelocateRequest(BaseModel):

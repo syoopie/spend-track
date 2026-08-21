@@ -166,6 +166,12 @@ export interface Settings {
   db_path: string
   size_bytes: number
   schema_version: number
+  country_code: string
+  country_name: string
+  currency_code: string
+  currency_symbol: string
+  transfer_scheme_name: string
+  supported_banks: string[]
 }
 
 export interface DeleteScopeResult {
