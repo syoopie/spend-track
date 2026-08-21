@@ -135,6 +135,7 @@ export function useCommitBatch() {
       qc.invalidateQueries({ queryKey: ['accounts'] })
       qc.invalidateQueries({ queryKey: ['transactions'] })
       qc.invalidateQueries({ queryKey: ['dashboard-summary'] })
+      qc.invalidateQueries({ queryKey: ['monthly-totals'] })
       qc.invalidateQueries({ queryKey: ['staging-batch'] })
     },
   })
