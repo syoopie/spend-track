@@ -1,6 +1,6 @@
 import { ChevronDown } from 'lucide-react'
 import { Children, isValidElement, useEffect, useRef, useState } from 'react'
-import type { OptionHTMLAttributes, ReactNode } from 'react'
+import type { KeyboardEvent as ReactKeyboardEvent, OptionHTMLAttributes, ReactNode } from 'react'
 
 interface SelectOption {
   value: string
@@ -39,7 +39,13 @@ export function Select({
     })
 
   const [open, setOpen] = useState(false)
+  // Focus deliberately never leaves the trigger button while the panel is
+  // open (same model a native <select> uses) - arrow keys move this instead
+  // of DOM focus. That's what lets Escape/Tab/selecting an option all just
+  // work without any explicit "return focus to the trigger" step.
+  const [activeIndex, setActiveIndex] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -47,20 +53,66 @@ export function Select({
     function onPointerDown(e: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false)
     }
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') setOpen(false)
-    }
     window.addEventListener('mousedown', onPointerDown)
-    window.addEventListener('keydown', onKeyDown)
-    return () => {
-      window.removeEventListener('mousedown', onPointerDown)
-      window.removeEventListener('keydown', onKeyDown)
-    }
+    return () => window.removeEventListener('mousedown', onPointerDown)
   }, [open])
 
   useEffect(() => {
-    if (open) listRef.current?.querySelector<HTMLElement>('[data-selected="true"]')?.scrollIntoView({ block: 'nearest' })
-  }, [open])
+    if (open) listRef.current?.querySelector<HTMLElement>('[data-active="true"]')?.scrollIntoView({ block: 'nearest' })
+  }, [open, activeIndex])
+
+  function openAt(index: number) {
+    setActiveIndex(Math.max(0, Math.min(options.length - 1, index)))
+    setOpen(true)
+  }
+
+  function commit(index: number) {
+    const opt = options[index]
+    if (!opt || opt.disabled) return
+    onChange({ target: { value: opt.value } })
+    setOpen(false)
+  }
+
+  function handleKeyDown(e: ReactKeyboardEvent<HTMLButtonElement>) {
+    if (!open) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault()
+        const currentIdx = options.findIndex((o) => o.value === value)
+        openAt(currentIdx >= 0 ? currentIdx : 0)
+      }
+      return
+    }
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault()
+        setActiveIndex((i) => Math.min(options.length - 1, i + 1))
+        break
+      case 'ArrowUp':
+        e.preventDefault()
+        setActiveIndex((i) => Math.max(0, i - 1))
+        break
+      case 'Home':
+        e.preventDefault()
+        setActiveIndex(0)
+        break
+      case 'End':
+        e.preventDefault()
+        setActiveIndex(options.length - 1)
+        break
+      case 'Enter':
+      case ' ':
+        e.preventDefault()
+        commit(activeIndex)
+        break
+      case 'Escape':
+        e.preventDefault()
+        setOpen(false)
+        break
+      case 'Tab':
+        setOpen(false)
+        break
+    }
+  }
 
   const selected = options.find((o) => o.value === value)
   const padding = uiSize === 'sm' ? 'pl-2.5 pr-7 py-1.5 text-[13px]' : 'pl-3 pr-8 py-2 text-[13px]'
@@ -69,9 +121,11 @@ export function Select({
   return (
     <div className={`relative inline-block ${className}`} ref={containerRef}>
       <button
+        ref={triggerRef}
         type="button"
         disabled={disabled}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => (open ? setOpen(false) : openAt(options.findIndex((o) => o.value === value)))}
+        onKeyDown={handleKeyDown}
         aria-haspopup="listbox"
         aria-expanded={open}
         className={`w-full flex items-center gap-1.5 text-left appearance-none ${padding} ${bgClass} rounded-lg border border-border text-text cursor-pointer
@@ -91,20 +145,20 @@ export function Select({
           role="listbox"
           className="absolute left-0 top-[calc(100%+4px)] z-40 min-w-full w-max max-w-[320px] max-h-64 overflow-y-auto bg-card border border-border rounded-lg shadow-xl py-1"
         >
-          {options.map((o) => (
+          {options.map((o, i) => (
             <button
               key={o.value}
               type="button"
               role="option"
+              tabIndex={-1}
               aria-selected={o.value === value}
-              data-selected={o.value === value}
+              data-active={i === activeIndex}
               disabled={o.disabled}
-              onClick={() => {
-                onChange({ target: { value: o.value } })
-                setOpen(false)
-              }}
+              onMouseEnter={() => setActiveIndex(i)}
+              onClick={() => commit(i)}
               className={`w-full flex items-center gap-1.5 text-left px-3 py-1.5 text-[13px] whitespace-nowrap cursor-pointer border-0 bg-transparent
-                hover:bg-input disabled:opacity-40 disabled:cursor-not-allowed
+                disabled:opacity-40 disabled:cursor-not-allowed
+                ${i === activeIndex ? 'bg-accent/12' : ''}
                 ${o.value === value ? 'text-accent font-semibold' : 'text-text'}`}
             >
               {o.label}

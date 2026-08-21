@@ -135,8 +135,12 @@ function ScopedDeleteModal({
 
   async function handleDelete() {
     if (!canDelete) return
-    await mutation.mutateAsync(confirm)
-    onClose()
+    try {
+      await mutation.mutateAsync(confirm)
+      onClose()
+    } catch {
+      // swallow - mutation.isError below renders the failure, modal stays open so the user can retry
+    }
   }
 
   return (
@@ -153,6 +157,9 @@ function ScopedDeleteModal({
         placeholder="DELETE"
         className="w-full box-border px-3 py-2.5 rounded-lg border border-border bg-input text-text text-[13px] font-mono mb-4.5"
       />
+      {mutation.isError && (
+        <div className="text-[12px] text-danger-text mb-3">Could not complete the deletion. Please try again.</div>
+      )}
       <div className="flex justify-end gap-2.5">
         <button
           onClick={onClose}
@@ -185,9 +192,13 @@ function NuclearResetModal({ onClose }: { onClose: () => void }) {
 
   async function handleReset() {
     if (!canReset) return
-    await reset.mutateAsync(confirm)
-    onClose()
-    navigate('/')
+    try {
+      await reset.mutateAsync(confirm)
+      onClose()
+      navigate('/')
+    } catch {
+      // swallow - reset.isError below renders the failure, modal stays open so the user can retry
+    }
   }
 
   return (
@@ -205,6 +216,9 @@ function NuclearResetModal({ onClose }: { onClose: () => void }) {
         placeholder="DELETE"
         className="w-full box-border px-3 py-2.5 rounded-lg border border-border bg-input text-text text-[13px] font-mono mb-4.5"
       />
+      {reset.isError && (
+        <div className="text-[12px] text-danger-text mb-3">Could not complete the reset. Please try again.</div>
+      )}
       <div className="flex justify-end gap-2.5">
         <button
           onClick={onClose}
