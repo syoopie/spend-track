@@ -12,13 +12,13 @@ const CIRCUMFERENCE = 2 * Math.PI * R
 export function CategoryDonut({
   data,
   categories,
-  rangeLabel,
   bare = false,
+  onCategoryClick,
 }: {
   data: CategoryBreakdownSlice[]
   categories: Category[] | undefined
-  rangeLabel: string
   bare?: boolean
+  onCategoryClick?: (category: string) => void
 }) {
   const [hovered, setHovered] = useState<string | null>(null)
 
@@ -34,7 +34,7 @@ export function CategoryDonut({
 
   const content = (
     <>
-      <div className="text-[13px] font-semibold mb-3.5">Category Breakdown — {rangeLabel}</div>
+      <div className="text-[13px] font-semibold mb-3.5">Category Breakdown</div>
       <div className="flex items-center gap-4.5">
         <div className="w-[110px] h-[110px] relative shrink-0">
           {segments.length === 0 ? (
@@ -58,7 +58,8 @@ export function CategoryDonut({
                     opacity={hovered && hovered !== seg.category ? 0.4 : 1}
                     onMouseEnter={() => setHovered(seg.category)}
                     onMouseLeave={() => setHovered(null)}
-                    className="cursor-pointer transition-all"
+                    onClick={() => onCategoryClick?.(seg.category)}
+                    className={onCategoryClick ? 'cursor-pointer transition-all' : 'transition-all'}
                   />
                 ))}
               </g>
@@ -85,9 +86,10 @@ export function CategoryDonut({
                 key={s.category}
                 onMouseEnter={() => setHovered(s.category)}
                 onMouseLeave={() => setHovered(null)}
-                className={`flex items-center gap-1.5 rounded-md px-1 -mx-1 cursor-pointer transition-colors ${
-                  isHovered ? 'bg-input text-text' : 'text-text-2'
-                } ${hovered && !isHovered ? 'opacity-50' : ''}`}
+                onClick={() => onCategoryClick?.(s.category)}
+                className={`flex items-center gap-1.5 rounded-md px-1 -mx-1 transition-colors ${
+                  onCategoryClick ? 'cursor-pointer' : ''
+                } ${isHovered ? 'bg-input text-text' : 'text-text-2'} ${hovered && !isHovered ? 'opacity-50' : ''}`}
               >
                 <Icon size={12} color={categoryDotColor(categories, s.category)} className="shrink-0" />
                 {s.category} <span className="text-muted-2">{s.pct}%</span>
