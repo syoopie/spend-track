@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useCategories, useUpdateTransaction } from '../api/hooks'
 import type { Transaction } from '../api/types'
+import { Checkbox } from './Checkbox'
 
 export function TransactionEditPopover({
   transaction,
@@ -63,7 +64,7 @@ export function TransactionEditPopover({
         </div>
       </div>
       <label className="flex items-center gap-2 text-[12px] text-text cursor-pointer">
-        <input type="checkbox" checked={isExcluded} onChange={(e) => setIsExcluded(e.target.checked)} />
+        <Checkbox checked={isExcluded} onChange={setIsExcluded} />
         Exclude from totals
       </label>
       {isExcluded && (

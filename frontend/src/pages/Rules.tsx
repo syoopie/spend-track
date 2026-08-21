@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useCategories, useCreateRule, useDeleteRule, useReorderRules, useRules } from '../api/hooks'
+import { Checkbox } from '../components/Checkbox'
 import { Modal } from '../components/Modal'
 import { categoryColor } from '../lib/categoryColor'
 import type { Rule } from '../api/types'
@@ -68,7 +69,7 @@ function RuleBuilderModal({ onClose }: { onClose: () => void }) {
           />
         </div>
         <label className="flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" checked={isExclusion} onChange={(e) => setIsExclusion(e.target.checked)} />
+          <Checkbox checked={isExclusion} onChange={setIsExclusion} />
           This is an exclusion rule
         </label>
         {isExclusion && (
