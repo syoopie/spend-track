@@ -111,11 +111,25 @@ def recategorize_transactions(body: RecategorizeRequest):
     with get_conn() as conn:
         rules = _fetch_active_rules(conn)
         contact_identifiers = _fetch_contact_identifiers(conn)
-        rows = conn.execute(f"SELECT * FROM transactions WHERE {where}", params).fetchall()
+        has_card_account = conn.execute("SELECT 1 FROM accounts WHERE is_card = 1 LIMIT 1").fetchone() is not None
+        rows = conn.execute(
+            f"""
+            SELECT t.*, a.is_card AS account_is_card FROM transactions t
+            JOIN accounts a ON a.id = t.account_id
+            WHERE {where}
+            """,
+            params,
+        ).fetchall()
 
         changed = 0
         for row in rows:
-            result = categorize(row["raw_description"], rules, contact_identifiers)
+            result = categorize(
+                row["raw_description"],
+                rules,
+                contact_identifiers,
+                has_card_account=has_card_account,
+                posting_account_is_card=bool(row["account_is_card"]),
+            )
             before = (
                 row["category"],
                 row["subcategory"],

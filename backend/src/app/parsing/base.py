@@ -17,6 +17,7 @@ class ParsedAccount:
     account_number_masked: str
     account_type: str
     transactions: list[ParsedTransaction] = field(default_factory=list)
+    is_card: bool = False  # True for credit card statements, False for deposit/current accounts
 
 
 @dataclass

@@ -15,9 +15,14 @@ a phone/UEN identifier alone can't tell us who was paid or why.
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
+from app.engine.card_payments import looks_like_card_bill_payment
 from app.engine.naming import extract_display_name
 
 PAYNOW_MARKERS = ("PAYNOW", "PIB")
+
+CARD_PAYMENT_EXCLUSION_REASON = (
+    "Credit card bill payment - the actual spending is already counted on the card's own statement"
+)
 
 
 @dataclass
@@ -56,7 +61,15 @@ def categorize(
     raw_description: str,
     rules: Sequence[Mapping[str, Any]],
     contact_identifiers: Sequence[Mapping[str, Any]],
+    *,
+    has_card_account: bool = False,
+    posting_account_is_card: bool = False,
 ) -> Categorization:
+    """has_card_account: True if any credit card account is known - already
+    committed, or parsed in the same upload batch. posting_account_is_card:
+    True if the transaction being categorized itself lives on a card
+    account (never auto-excluded as a "pay my card bill" transfer - a card
+    can't pay itself)."""
     desc_upper = raw_description.upper()
 
     for rule in rules:  # must already be sorted by priority ASC
@@ -85,6 +98,17 @@ def categorize(
                 needs_review=False,
                 matched_label=label,
             )
+
+    if has_card_account and not posting_account_is_card and looks_like_card_bill_payment(desc_upper):
+        return Categorization(
+            category="Others",
+            subcategory=None,
+            contact_id=None,
+            is_excluded=True,
+            exclusion_reason=CARD_PAYMENT_EXCLUSION_REASON,
+            needs_review=False,
+            matched_label="Credit Card Payment",
+        )
 
     contact = find_matching_contact(raw_description, contact_identifiers)
     if contact is not None:

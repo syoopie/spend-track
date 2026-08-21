@@ -6,6 +6,7 @@ class StagingAccountOut(BaseModel):
     account_number_masked: str
     account_type: str
     is_new: bool
+    is_card: bool
 
 
 class StagingRowOut(BaseModel):
@@ -64,6 +65,7 @@ class AccountOut(BaseModel):
     bank_name: str
     account_number_masked: str
     account_type: str
+    is_card: bool
 
 
 class TransactionOut(BaseModel):

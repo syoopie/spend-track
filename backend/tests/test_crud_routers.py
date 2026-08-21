@@ -33,7 +33,7 @@ def test_categories_seeded_with_defaults(client):
     names = [c["name"] for c in resp.json()]
     assert names == [
         "Sports & Hobbies", "Beauty", "Food & Drink", "Shopping", "Transport", "Home", "Bills & Fees",
-        "Entertainment", "Healthcare", "Education", "Groceries", "Salary", "PayNow Transfers",
+        "Entertainment", "Healthcare", "Education", "Groceries", "Salary", "Investing", "PayNow Transfers",
     ]
 
 
@@ -44,7 +44,7 @@ def test_categories_hidden_others_excluded_unless_requested(client):
     resp_all = client.get("/api/categories", params={"include_hidden": True})
     names = [c["name"] for c in resp_all.json()]
     assert "Others" in names
-    assert len(names) == 14
+    assert len(names) == 15
 
 
 def test_create_category(client):
@@ -274,7 +274,7 @@ def test_exclusion_rule_create_and_update(client):
 def test_get_settings_reports_path_and_size(client):
     _upload_and_commit(client)
     resp = client.get("/api/settings").json()
-    assert resp["schema_version"] == 3
+    assert resp["schema_version"] == 4
     assert resp["size_bytes"] > 0
 
 
@@ -295,7 +295,7 @@ def test_reset_wipes_data_and_reinitializes_schema(client):
     assert client.get("/api/transactions").json() == []
     assert client.get("/api/accounts").json() == []
     cats = client.get("/api/categories").json()
-    assert len(cats) == 13  # default categories re-seeded (Others is hidden)
+    assert len(cats) == 14  # default categories re-seeded (Others is hidden)
 
 
 def test_relocate_moves_db_file_and_updates_config(tmp_path, monkeypatch):

@@ -1,4 +1,6 @@
-"""Curated default categorization word bank - seeded once as immutable rules.
+"""Curated default categorization word bank - reconciled fresh into `rules`
+on every app startup (see db.py::_reconcile_default_rules), so adding an
+entry here reaches every existing DB without a one-off migration script.
 
 Coverage comes from two tiers: (1) real merchant strings pulled from the
 user's own historical UOB transactions, and (2) common Singapore
@@ -6,7 +8,8 @@ merchant/keyword knowledge for categories the real data didn't cover
 (Beauty, Sports & Hobbies, Home, Healthcare, Education). This bank never
 targets "Others" or "PayNow Transfers" - those are pure fallback outcomes
 produced by the categorization engine itself (engine/rules.py), not rule
-matches.
+matches. DEFAULT_PAYNOW_RULE_BANK is a separate, lower-precedence tier for
+matching PayNow recipient names (see its own docstring below).
 """
 
 DEFAULT_RULE_BANK: dict[str, list[tuple[str, str]]] = {
@@ -128,9 +131,39 @@ DEFAULT_RULE_BANK: dict[str, list[tuple[str, str]]] = {
         ("PRUDENTIAL", "Prudential"),
         ("GREAT EASTERN", "Great Eastern"),
         ("NTUC INCOME", "NTUC Income"),
+        ("INCOME INSURANCE", "Income Insurance"),
         ("MSIG", "MSIG"),
         ("AIA", "AIA"),
         ("M1 ", "M1"),
+        # Insurance - general SG knowledge
+        ("TOKIO MARINE", "Tokio Marine"),
+        ("MANULIFE", "Manulife"),
+        ("FWD SINGAPORE", "FWD"),
+        ("ETIQA", "Etiqa"),
+        ("HSBC LIFE", "HSBC Life"),
+        ("SINGLIFE", "Singlife"),
+        ("ALLIANZ", "Allianz"),
+        ("INSURANCE", "Insurance"),
+        # Taxes - from the user's real transaction history + general SG knowledge
+        ("IRAS", "IRAS"),
+        ("INCOME TAX", "Income Tax"),
+        ("PROPERTY TAX", "Property Tax"),
+        ("ROAD TAX", "Road Tax"),
+    ],
+    "Investing": [
+        ("INTERACTIVE BROKERS", "Interactive Brokers"),
+        ("TIGER BROKERS", "Tiger Brokers"),
+        ("MOOMOO", "moomoo"),
+        ("SAXO MARKETS", "Saxo Markets"),
+        ("FSMONE", "FSMOne"),
+        ("ENDOWUS", "Endowus"),
+        ("STASHAWAY", "StashAway"),
+        ("SYFE", "Syfe"),
+        ("DBS VICKERS", "DBS Vickers"),
+        ("UOB KAY HIAN", "UOB Kay Hian"),
+        ("PHILLIP SECURITIES", "Phillip Securities"),
+        ("CPF CASH TOP-UP", "CPF Cash Top-up"),
+        ("SRS CONTRIBUTION", "SRS Contribution"),
     ],
     "Entertainment": [
         # From the user's real transaction history
@@ -241,17 +274,30 @@ DEFAULT_RULE_BANK: dict[str, list[tuple[str, str]]] = {
     ],
 }
 
+# PayNow-transfer recipient names, kept separate from DEFAULT_RULE_BANK and
+# always sorted after it (see iter_default_rules) - a PayNow line's "match
+# text" is a free-text payee name off a person/company's PayNow registration
+# rather than an established merchant brand, so it's inherently a shakier
+# signal and must yield to every other default rule before it gets a turn.
+DEFAULT_PAYNOW_RULE_BANK: list[tuple[str, str, str]] = [
+    ("INTERACTIVE BR SG", "Investing", "Interactive Brokers"),
+]
+
+
+def _flatten_sorted(bank: dict[str, list[tuple[str, str]]] | list[tuple[str, str, str]]) -> list[tuple[str, str, str]]:
+    if isinstance(bank, dict):
+        flat = [(pattern, category, label) for category, entries in bank.items() for pattern, label in entries]
+    else:
+        flat = list(bank)
+    flat.sort(key=lambda t: -len(t[0]))
+    return flat
+
 
 def iter_default_rules() -> list[tuple[str, str, str]]:
     """Flatten DEFAULT_RULE_BANK into (match_pattern, target_category,
     display_label) tuples, longest match_pattern first so specific
     multi-word merchant names are checked before short generic keywords
     that could otherwise shadow them (e.g. "FINEST PAYA LEBAR QUARTER"
-    before a hypothetical bare "FINEST")."""
-    flat = [
-        (pattern, category, label)
-        for category, entries in DEFAULT_RULE_BANK.items()
-        for pattern, label in entries
-    ]
-    flat.sort(key=lambda t: -len(t[0]))
-    return flat
+    before a hypothetical bare "FINEST"). DEFAULT_PAYNOW_RULE_BANK entries
+    are appended after all of those, regardless of pattern length."""
+    return _flatten_sorted(DEFAULT_RULE_BANK) + _flatten_sorted(DEFAULT_PAYNOW_RULE_BANK)
