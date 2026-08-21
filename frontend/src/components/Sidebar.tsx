@@ -72,7 +72,11 @@ export function Sidebar() {
             Upload Bank Statement
           </span>
         </button>
-        <div className="text-[11px] text-muted-2 text-center leading-snug mt-1.5 mb-3.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+        {/* Fixed width (independent of the rail's own collapsed/expanded
+            width) so this always wraps the same way - otherwise, while
+            collapsed, it wraps word-by-word against the 64px rail and the
+            (invisible but still laid-out) text balloons into many lines. */}
+        <div className="w-[190px] mx-auto text-[11px] text-muted-2 text-center leading-snug mt-1.5 mb-3.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
           or drag &amp; drop a PDF — anytime, anywhere in the app
         </div>
 
