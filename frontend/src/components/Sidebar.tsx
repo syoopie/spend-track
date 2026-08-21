@@ -45,7 +45,7 @@ export function Sidebar() {
     // to its right.
     <div className="w-16 shrink-0 relative group">
       <div
-        className="absolute inset-y-0 left-0 z-30 w-16 group-hover:w-56 bg-sidebar text-muted flex flex-col p-3.5
+        className="absolute inset-y-0 left-0 z-30 w-16 group-hover:w-[240px] bg-sidebar text-muted flex flex-col p-3.5
           border-r border-border overflow-hidden transition-[width] duration-200 ease-out"
       >
         {/* Labels sit in a w-0 (collapsed) / group-hover:w-auto (expanded)
@@ -60,7 +60,7 @@ export function Sidebar() {
             resting state's leak, not the transition. */}
         <NavLink to="/" end className="flex items-center gap-2.5 px-2 pt-1.5 pb-5.5">
           <div className="w-6.5 h-6.5 rounded-md bg-accent shrink-0" />
-          <div className="w-0 group-hover:w-auto overflow-hidden">
+          <div className="w-0 group-hover:w-auto overflow-hidden shrink-0">
             <div className="text-sm font-semibold font-display text-text leading-tight whitespace-nowrap">
               Expenditure
               <br />
@@ -80,7 +80,7 @@ export function Sidebar() {
           className="flex items-center justify-start gap-1.5 px-2.5 py-2.5 rounded-lg text-sm font-semibold border-none bg-accent text-accent-fg cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Upload size={15} className="shrink-0" />
-          <span className="w-0 group-hover:w-auto overflow-hidden whitespace-nowrap">Upload Bank Statement</span>
+          <span className="w-0 group-hover:w-auto overflow-hidden shrink-0 whitespace-nowrap">Upload Bank Statement</span>
         </button>
         {/* Outer wrapper is what's actually 0-width at rest (and centered
             via mx-auto) - the inner div keeps its own fixed 190px so
@@ -108,7 +108,7 @@ export function Sidebar() {
             }
           >
             {item.icon}
-            <span className="w-0 group-hover:w-auto overflow-hidden whitespace-nowrap">{item.label}</span>
+            <span className="w-0 group-hover:w-auto overflow-hidden shrink-0 whitespace-nowrap">{item.label}</span>
           </NavLink>
         ))}
 
