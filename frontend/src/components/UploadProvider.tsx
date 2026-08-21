@@ -231,7 +231,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
               <FileUp size={18} className="text-accent" />
             </div>
             <div className="text-sm font-semibold text-text mb-1.5">
-              Drag &amp; drop one or more PDFs anywhere in the app
+              Drag &amp; drop one or more PDFs <span className="text-accent">anywhere</span> in the app
             </div>
             <div className="text-[12px] text-muted mb-4">Processed locally, never uploaded</div>
             <button
