@@ -1,4 +1,4 @@
-import { LayoutGrid, ListChecks, Settings as SettingsIcon, SlidersHorizontal, Upload, Users } from 'lucide-react'
+import { BookOpen, LayoutGrid, ListChecks, Settings as SettingsIcon, SlidersHorizontal, Upload, Users } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { useUploadDialog } from './UploadProvider'
 
@@ -22,6 +22,11 @@ const NAV_ITEMS = [
     to: '/default-rules',
     label: 'Default Rules',
     icon: <ListChecks size={16} className="shrink-0" />,
+  },
+  {
+    to: '/guide',
+    label: 'User Guide',
+    icon: <BookOpen size={16} className="shrink-0" />,
   },
   {
     to: '/settings',
