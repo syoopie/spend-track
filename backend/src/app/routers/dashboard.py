@@ -1,9 +1,10 @@
 import calendar
+import re
 import sqlite3
 from collections import defaultdict
 from datetime import date, timedelta
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from app.db import get_conn
 from app.engine.refunds import normalize_merchant
@@ -18,6 +19,23 @@ from app.models import (
 )
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
+
+_MONTH_KEY_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
+
+
+def _validate_month_key(value: str, param_name: str) -> None:
+    """date_from/date_to are month keys ("YYYY-MM"), not full dates. Every
+    downstream helper (_shift_month's int() split, date.fromisoformat with a
+    day appended) assumes this shape and raises an unhandled ValueError -> 500
+    on anything else, so reject bad input here with a clean 422 instead."""
+    if not _MONTH_KEY_RE.match(value):
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "INVALID_MONTH_FORMAT",
+                "message": f"{param_name} must be in YYYY-MM format, got {value!r}.",
+            },
+        )
 
 
 def _shift_month(month: str, delta: int) -> str:
@@ -34,18 +52,6 @@ def _months_between(date_from: str, date_to: str) -> list[str]:
         months.append(m)
         m = _shift_month(m, 1)
     return months
-
-
-def _fetch_month_transactions(
-    conn: sqlite3.Connection, month: str, account_id: str | None
-) -> list[sqlite3.Row]:
-    clauses = ["transaction_date LIKE ?", "is_excluded = 0"]
-    params: list = [f"{month}%"]
-    if account_id:
-        clauses.append("account_id = ?")
-        params.append(account_id)
-    where = " AND ".join(clauses)
-    return conn.execute(f"SELECT * FROM transactions WHERE {where}", params).fetchall()
 
 
 def _fetch_range_transactions(
@@ -208,6 +214,11 @@ def get_monthly_totals(account_id: str | None = None):
 
 @router.get("/summary", response_model=DashboardSummaryOut)
 def get_dashboard_summary(date_from: str | None = None, date_to: str | None = None, account_id: str | None = None):
+    if date_from:
+        _validate_month_key(date_from, "date_from")
+    if date_to:
+        _validate_month_key(date_to, "date_to")
+
     with get_conn() as conn:
         if not date_from and not date_to:
             date_from = date_to = _latest_month(conn, account_id)
@@ -221,12 +232,19 @@ def get_dashboard_summary(date_from: str | None = None, date_to: str | None = No
         txs = _fetch_range_transactions(conn, date_from, date_to, account_id)
 
         months_in_range = _months_between(date_from, date_to)
-        cash_flow = []
-        for m in months_in_range:
-            m_txs = _fetch_month_transactions(conn, m, account_id)
-            inflow = sum(t["amount"] for t in m_txs if t["amount"] > 0)
-            outflow = sum(-t["amount"] for t in m_txs if t["amount"] < 0)
-            cash_flow.append(CashFlowMonth(month=m, inflow=round(inflow, 2), outflow=round(outflow, 2)))
+        # Bucketed from the txs already fetched above, rather than a separate
+        # query per month (was an N+1 for wide ranges).
+        month_totals: dict[str, list[float]] = defaultdict(lambda: [0.0, 0.0])
+        for t in txs:
+            bucket = month_totals[t["transaction_date"][:7]]
+            if t["amount"] > 0:
+                bucket[0] += t["amount"]
+            else:
+                bucket[1] += -t["amount"]
+        cash_flow = [
+            CashFlowMonth(month=m, inflow=round(month_totals[m][0], 2), outflow=round(month_totals[m][1], 2))
+            for m in months_in_range
+        ]
 
         months_count = len(months_in_range)
         prev_date_from = _shift_month(date_from, -months_count)

@@ -1,6 +1,7 @@
 import csv
 import io
 import sqlite3
+from collections import defaultdict
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
@@ -41,9 +42,33 @@ def _fetch_contact(conn: sqlite3.Connection, contact_id: int) -> ContactOut:
 
 @router.get("", response_model=list[ContactOut])
 def list_contacts():
+    """Bulk-fetches identifiers/spend in 2 queries instead of _fetch_contact's
+    3-per-contact - listing N contacts used to be 1+3N queries."""
     with get_conn() as conn:
-        ids = [r["id"] for r in conn.execute("SELECT id FROM contacts ORDER BY name").fetchall()]
-        return [_fetch_contact(conn, cid) for cid in ids]
+        contacts = conn.execute("SELECT * FROM contacts ORDER BY name").fetchall()
+
+        identifiers_by_contact: dict[int, list[str]] = defaultdict(list)
+        for r in conn.execute("SELECT contact_id, identifier FROM contact_identifiers").fetchall():
+            identifiers_by_contact[r["contact_id"]].append(r["identifier"])
+
+        spend_by_contact: dict[int, float] = defaultdict(float)
+        for r in conn.execute(
+            "SELECT contact_id, COALESCE(SUM(-amount), 0) AS spend FROM transactions "
+            "WHERE contact_id IS NOT NULL AND amount < 0 AND is_excluded = 0 GROUP BY contact_id"
+        ).fetchall():
+            spend_by_contact[r["contact_id"]] = r["spend"]
+
+        return [
+            ContactOut(
+                id=c["id"],
+                name=c["name"],
+                default_category=c["default_category"],
+                default_subcategory=c["default_subcategory"],
+                identifiers=identifiers_by_contact.get(c["id"], []),
+                historical_spend=spend_by_contact.get(c["id"], 0.0),
+            )
+            for c in contacts
+        ]
 
 
 @router.post("", response_model=ContactOut)

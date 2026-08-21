@@ -239,6 +239,22 @@ def test_create_list_reorder_delete_rules(client):
     assert len(remaining) == 1
 
 
+def test_reorder_rejects_a_partial_or_unknown_id_list(client):
+    r1 = client.post("/api/rules", json={"match_pattern": "SP GROUP", "target_category": "Bills & Fees"}).json()
+    r2 = client.post("/api/rules", json={"match_pattern": "GRAB", "target_category": "Transport"}).json()
+
+    # partial: omits r2 entirely, which would otherwise keep its old
+    # priority and could collide with the freshly-assigned 1..N block
+    resp = client.post("/api/rules/reorder", json={"ordered_ids": [r1["id"]]})
+    assert resp.status_code == 400
+    assert resp.json()["detail"]["code"] == "REORDER_ID_MISMATCH"
+
+    # unknown id mixed in with a real one
+    resp = client.post("/api/rules/reorder", json={"ordered_ids": [r1["id"], r2["id"], 999999]})
+    assert resp.status_code == 400
+    assert resp.json()["detail"]["code"] == "REORDER_ID_MISMATCH"
+
+
 def test_default_rules_hidden_and_immutable(client):
     visible = client.get("/api/rules").json()
     assert all(not r["is_default"] for r in visible)
@@ -324,6 +340,14 @@ def test_relocate_moves_db_file_and_updates_config(tmp_path, monkeypatch):
         assert len(txs) == 39
 
 
+def test_relocate_to_the_same_path_is_rejected(client):
+    _upload_and_commit(client)
+    current_path = client.get("/api/settings").json()["db_path"]
+    resp = client.post("/api/settings/relocate", json={"new_path": current_path})
+    assert resp.status_code == 400
+    assert resp.json()["detail"]["code"] == "RELOCATE_SAME_PATH"
+
+
 # --- dashboard ---------------------------------------------------------------
 
 
@@ -385,6 +409,16 @@ def test_dashboard_empty_database_does_not_error(client):
     resp = client.get("/api/dashboard/summary")
     assert resp.status_code == 200
     assert resp.json()["metrics"]["total_outflow"] == 0
+
+
+def test_dashboard_summary_rejects_malformed_month_with_clean_422(client):
+    resp = client.get("/api/dashboard/summary", params={"date_from": "2024-13"})
+    assert resp.status_code == 422
+    assert resp.json()["detail"]["code"] == "INVALID_MONTH_FORMAT"
+
+    resp = client.get("/api/dashboard/summary", params={"date_to": "not-a-month"})
+    assert resp.status_code == 422
+    assert resp.json()["detail"]["code"] == "INVALID_MONTH_FORMAT"
 
 
 def test_dashboard_top_paynow_contacts_shows_display_name_not_raw_description(client):

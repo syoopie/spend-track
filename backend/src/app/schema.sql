@@ -1,3 +1,7 @@
+-- Informational only, surfaced read-only via GET /api/settings - actual
+-- migrations are driven by db.py's _add_column_if_missing column-existence
+-- checks, not by gating on this number. Bump it as a human-readable trail
+-- of schema changes, but don't wire new migration logic to it.
 PRAGMA user_version = 4;
 
 CREATE TABLE IF NOT EXISTS accounts (

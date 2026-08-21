@@ -33,6 +33,11 @@ def relocate_database(body: RelocateRequest):
         )
 
     new_path = Path(body.new_path)
+    if new_path.resolve() == old_path.resolve():
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "RELOCATE_SAME_PATH", "message": "New path is the same as the current database path."},
+        )
     new_path.parent.mkdir(parents=True, exist_ok=True)
 
     with get_conn() as conn:
