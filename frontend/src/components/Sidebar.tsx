@@ -108,13 +108,18 @@ export function Sidebar() {
         ))}
 
         <div className="flex-1" />
-        <div className="flex items-center text-[11px] text-muted-2 pt-2.5 border-t border-border leading-relaxed whitespace-nowrap">
-          <div className="w-9 flex items-center justify-center shrink-0">
+        <div className="flex items-start text-[11px] text-muted-2 pt-2.5 border-t border-border">
+          <div className="w-9 h-4 flex items-center justify-center shrink-0">
             <span className="w-1.5 h-1.5 rounded-full bg-success" />
           </div>
-          <span className="w-0 group-hover:w-auto overflow-hidden shrink-0">
-            Local-only · no data leaves this device
-          </span>
+          {/* Fixed width so it wraps onto two lines instead of rendering as
+              one long line that crowds (or overflows past) the rail's right
+              edge - "w-auto" alone would size to the text's full one-line
+              width, same trap the old caption had before it got a fixed
+              width too. */}
+          <div className="w-0 group-hover:w-auto overflow-hidden shrink-0">
+            <div className="w-[160px] leading-snug">Local-only · no data leaves this device</div>
+          </div>
         </div>
       </div>
     </div>
