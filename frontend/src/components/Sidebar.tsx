@@ -72,8 +72,8 @@ export function Sidebar() {
             Upload Bank Statement
           </span>
         </button>
-        <div className="text-[11px] text-muted-2 text-center mt-1.5 mb-3.5 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-          or drag &amp; drop a PDF — anytime, anywhere
+        <div className="text-[11px] text-muted-2 text-center leading-snug mt-1.5 mb-3.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+          or drag &amp; drop a PDF — anytime, anywhere in the app
         </div>
 
         {NAV_ITEMS.map((item) => (

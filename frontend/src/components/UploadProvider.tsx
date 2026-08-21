@@ -233,7 +233,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
             <div className="text-sm font-semibold text-text mb-1.5">
               Drag &amp; drop one or more PDFs anywhere in the app
             </div>
-            <div className="text-[12px] text-muted mb-4">DBS, OCBC, or UOB e-statements · processed locally, never uploaded</div>
+            <div className="text-[12px] text-muted mb-4">Processed locally, never uploaded</div>
             <button
               disabled={upload.isPending}
               className="text-[13px] font-semibold px-4 py-2 rounded-lg border-none bg-accent text-accent-fg cursor-pointer disabled:opacity-60"
