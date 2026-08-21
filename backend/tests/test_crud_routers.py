@@ -314,6 +314,44 @@ def test_reset_wipes_data_and_reinitializes_schema(client):
     assert len(cats) == 14  # default categories re-seeded (Others is hidden)
 
 
+def test_delete_rules_requires_confirmation_and_only_removes_user_rules(client):
+    client.post("/api/rules", json={"match_pattern": "SP GROUP", "target_category": "Bills & Fees"})
+    default_count_before = len(client.get("/api/rules", params={"include_default": True}).json())
+
+    resp = client.post("/api/settings/delete-rules", json={"confirm": "nope"})
+    assert resp.status_code == 400
+    assert resp.json()["detail"]["code"] == "RESET_CONFIRMATION_MISMATCH"
+
+    resp = client.post("/api/settings/delete-rules", json={"confirm": "DELETE"})
+    assert resp.status_code == 200
+    assert resp.json()["deleted_count"] == 1
+
+    assert client.get("/api/rules").json() == []
+    # default rules (is_default=1) must survive - only the user-created one was deleted
+    remaining = client.get("/api/rules", params={"include_default": True}).json()
+    assert len(remaining) == default_count_before - 1
+
+
+def test_delete_contacts_removes_all_contacts_and_identifiers(client):
+    client.post(
+        "/api/contacts",
+        json={"name": "Auntie Mei", "default_category": "Paynow", "identifiers": ["+65 9123 4567"]},
+    )
+    resp = client.post("/api/settings/delete-contacts", json={"confirm": "DELETE"})
+    assert resp.status_code == 200
+    assert resp.json()["deleted_count"] == 1
+    assert client.get("/api/contacts").json() == []
+
+
+def test_delete_transactions_clears_transactions_but_keeps_accounts(client):
+    _upload_and_commit(client)
+    resp = client.post("/api/settings/delete-transactions", json={"confirm": "DELETE"})
+    assert resp.status_code == 200
+    assert resp.json()["deleted_count"] == 39
+    assert client.get("/api/transactions").json() == []
+    assert len(client.get("/api/accounts").json()) == 1  # account itself is untouched
+
+
 def test_relocate_moves_db_file_and_updates_config(tmp_path, monkeypatch):
     monkeypatch.setenv("SG_TRACKER_HOME", str(tmp_path / "home"))
     from app.main import app

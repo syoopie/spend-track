@@ -8,6 +8,7 @@ import type {
   ContactImportResult,
   ContactUpdateRequest,
   DashboardSummary,
+  DeleteScopeResult,
   MonthlyTotal,
   RecategorizeRequest,
   RecategorizeResult,
@@ -248,6 +249,30 @@ export function useResetDb() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (confirm: string) => api.post('/settings/reset', { confirm }),
+    onSuccess: () => qc.invalidateQueries(),
+  })
+}
+
+export function useDeleteAllRules() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (confirm: string) => api.post<DeleteScopeResult>('/settings/delete-rules', { confirm }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['rules'] }),
+  })
+}
+
+export function useDeleteAllContacts() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (confirm: string) => api.post<DeleteScopeResult>('/settings/delete-contacts', { confirm }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['contacts'] }),
+  })
+}
+
+export function useDeleteAllTransactions() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (confirm: string) => api.post<DeleteScopeResult>('/settings/delete-transactions', { confirm }),
     onSuccess: () => qc.invalidateQueries(),
   })
 }

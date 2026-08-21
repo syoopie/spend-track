@@ -165,6 +165,10 @@ export interface Settings {
   schema_version: number
 }
 
+export interface DeleteScopeResult {
+  deleted_count: number
+}
+
 export interface MetricCards {
   net_expenditure: number
   total_inflow: number
