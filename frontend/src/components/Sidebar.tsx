@@ -48,18 +48,24 @@ export function Sidebar() {
         className="absolute inset-y-0 left-0 z-30 w-16 group-hover:w-[240px] bg-sidebar text-muted flex flex-col p-3.5
           border-r border-border overflow-hidden transition-[width] duration-200 ease-out"
       >
-        {/* Labels sit in a w-0 (collapsed) / group-hover:w-auto (expanded)
-            wrapper with its own overflow-hidden - explicit zero width at
-            rest, rather than relying on the leftover space after the icon
-            being tight enough to round down to nothing (it wasn't: a few px
-            of slack let a sliver of every label's first letters bleed
-            through while collapsed). The wrapper's width still snaps
-            instantly on hover rather than animating, but the *visible*
-            reveal stays governed entirely by the rail's own animated width
-            and overflow-hidden, same as before - this only fixes the
-            resting state's leak, not the transition. */}
-        <NavLink to="/" end className="flex items-center gap-2.5 px-2.5 pt-1.5 pb-5.5">
-          <div className="w-6.5 h-6.5 rounded-md bg-accent shrink-0" />
+        {/* Every row's icon sits in a fixed-width ICON_SLOT (w-9 = 36px,
+            exactly the rail's collapsed content width: 64px rail - 14px
+            padding on each side) instead of being positioned by the row's
+            own horizontal padding. Centering the icon *within* that slot -
+            rather than left-padding it - is what makes icons of different
+            sizes (the 26px logo square vs. 15-18px nav icons) all land on
+            the rail's true center when collapsed. The slot's width and
+            position never change between collapsed/expanded, so icons don't
+            shift when the rail opens - only the label past it grows.
+            Labels still sit in a w-0 (collapsed) / group-hover:w-auto
+            (expanded) wrapper with its own overflow-hidden - explicit zero
+            width at rest, rather than relying on leftover space rounding
+            down to nothing (it didn't: a few px of slack let a sliver of
+            every label bleed through while collapsed). */}
+        <NavLink to="/" end className="flex items-center gap-2 pt-1.5 pb-5.5">
+          <div className="w-9 flex items-center justify-center shrink-0">
+            <div className="w-6.5 h-6.5 rounded-md bg-accent" />
+          </div>
           <div className="w-0 group-hover:w-auto overflow-hidden shrink-0">
             <div className="text-sm font-semibold font-display text-text leading-tight whitespace-nowrap">
               Expenditure
@@ -77,9 +83,11 @@ export function Sidebar() {
               ? 'Review the pending statement before uploading another'
               : 'Upload a bank statement PDF - or drag & drop one anywhere in the app, anytime'
           }
-          className="flex items-center justify-start gap-1.5 px-2.5 py-2.5 rounded-lg text-sm font-semibold border-none bg-accent text-accent-fg cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center gap-1.5 py-2.5 rounded-lg text-sm font-semibold border-none bg-accent text-accent-fg cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <Upload size={15} className="shrink-0" />
+          <div className="w-9 flex items-center justify-center shrink-0">
+            <Upload size={15} />
+          </div>
           <span className="w-0 group-hover:w-auto overflow-hidden shrink-0 whitespace-nowrap">Upload Bank Statement</span>
         </button>
         {/* Outer wrapper is what's actually 0-width at rest (and centered
@@ -102,20 +110,22 @@ export function Sidebar() {
             to={item.to}
             end={item.to === '/'}
             className={({ isActive }) =>
-              `flex items-center gap-2.5 px-2.5 py-2.5 rounded-lg text-sm font-medium mb-0.5 ${
+              `flex items-center gap-2 py-2.5 rounded-lg text-sm font-medium mb-0.5 ${
                 isActive ? 'text-text bg-accent/12' : 'text-nav hover:bg-nav-hover'
               }`
             }
           >
-            {item.icon}
+            <div className="w-9 flex items-center justify-center shrink-0">{item.icon}</div>
             <span className="w-0 group-hover:w-auto overflow-hidden shrink-0 whitespace-nowrap">{item.label}</span>
           </NavLink>
         ))}
 
         <div className="flex-1" />
-        <div className="text-[11px] text-muted-2 px-2.5 pt-2.5 border-t border-border leading-relaxed whitespace-nowrap">
-          <span className="inline-block w-1.5 h-1.5 rounded-full bg-success mr-1.5 shrink-0" />
-          <span className="w-0 group-hover:w-auto overflow-hidden inline-block align-middle">
+        <div className="flex items-center text-[11px] text-muted-2 pt-2.5 border-t border-border leading-relaxed whitespace-nowrap">
+          <div className="w-9 flex items-center justify-center shrink-0">
+            <span className="w-1.5 h-1.5 rounded-full bg-success" />
+          </div>
+          <span className="w-0 group-hover:w-auto overflow-hidden shrink-0">
             Local-only · no data leaves this device
           </span>
         </div>
