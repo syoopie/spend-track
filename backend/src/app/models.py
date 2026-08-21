@@ -201,6 +201,10 @@ class ResetRequest(BaseModel):
     confirm: str
 
 
+class DeleteScopeResult(BaseModel):
+    deleted_count: int
+
+
 class MetricCards(BaseModel):
     net_expenditure: float
     total_inflow: float

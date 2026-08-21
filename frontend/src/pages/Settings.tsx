@@ -1,6 +1,13 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useRelocateDb, useResetDb, useSettings } from '../api/hooks'
+import {
+  useDeleteAllContacts,
+  useDeleteAllRules,
+  useDeleteAllTransactions,
+  useRelocateDb,
+  useResetDb,
+  useSettings,
+} from '../api/hooks'
 import { Modal } from '../components/Modal'
 import { fmtBytes } from '../lib/format'
 import { ACCENT_PRESETS, DEFAULT_ACCENT, loadStoredAccentColor, resetAccentColor, saveAccentColor } from '../lib/accentColor'
@@ -110,6 +117,66 @@ function RelocateModal({ dbSize, onClose }: { dbSize: string; onClose: () => voi
   )
 }
 
+function ScopedDeleteModal({
+  title,
+  description,
+  confirmLabel,
+  mutation,
+  onClose,
+}: {
+  title: string
+  description: string
+  confirmLabel: string
+  mutation: ReturnType<typeof useDeleteAllRules> | ReturnType<typeof useDeleteAllContacts> | ReturnType<typeof useDeleteAllTransactions>
+  onClose: () => void
+}) {
+  const [confirm, setConfirm] = useState('')
+  const canDelete = confirm === 'DELETE'
+
+  async function handleDelete() {
+    if (!canDelete) return
+    await mutation.mutateAsync(confirm)
+    onClose()
+  }
+
+  return (
+    <Modal onClose={onClose} width={420}>
+      <div className="text-base font-bold mb-2.5" style={{ color: 'oklch(72% 0.16 25)' }}>
+        {title}
+      </div>
+      <div className="text-[13px] text-muted leading-relaxed mb-4">
+        {description} Type <strong className="font-mono text-text">DELETE</strong> to confirm.
+      </div>
+      <input
+        value={confirm}
+        onChange={(e) => setConfirm(e.target.value)}
+        placeholder="DELETE"
+        className="w-full box-border px-3 py-2.5 rounded-lg border border-border bg-input text-text text-[13px] font-mono mb-4.5"
+      />
+      <div className="flex justify-end gap-2.5">
+        <button
+          onClick={onClose}
+          className="text-[13px] px-4 py-2.5 rounded-lg border border-border bg-input text-text cursor-pointer"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleDelete}
+          disabled={!canDelete || mutation.isPending}
+          className="text-[13px] font-semibold px-4 py-2.5 rounded-lg border-none cursor-pointer"
+          style={{
+            background: canDelete ? 'var(--color-danger)' : 'var(--color-border)',
+            color: canDelete ? 'var(--color-danger-fg)' : 'var(--color-muted-2)',
+            cursor: canDelete ? 'pointer' : 'not-allowed',
+          }}
+        >
+          {confirmLabel}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
 function NuclearResetModal({ onClose }: { onClose: () => void }) {
   const reset = useResetDb()
   const navigate = useNavigate()
@@ -162,10 +229,17 @@ function NuclearResetModal({ onClose }: { onClose: () => void }) {
   )
 }
 
+type DeleteScope = 'rules' | 'contacts' | 'transactions' | null
+
 export function Settings() {
   const settingsQ = useSettings()
   const [relocateOpen, setRelocateOpen] = useState(false)
   const [resetOpen, setResetOpen] = useState(false)
+  const [deleteScope, setDeleteScope] = useState<DeleteScope>(null)
+
+  const deleteRules = useDeleteAllRules()
+  const deleteContacts = useDeleteAllContacts()
+  const deleteTransactions = useDeleteAllTransactions()
 
   const dbSize = settingsQ.data ? fmtBytes(settingsQ.data.size_bytes) : '—'
 
@@ -202,9 +276,33 @@ export function Settings() {
           Danger Zone
         </div>
         <div className="text-[13px] text-muted mb-3.5 leading-relaxed">
-          Nuclear Reset permanently deletes all transactions, rules, contacts and accounts from the local database.
-          This cannot be undone.
+          Selectively clear one part of the local database, or permanently delete everything. None of this can be
+          undone.
         </div>
+        <div className="flex gap-2.5 flex-wrap mb-4">
+          <button
+            onClick={() => setDeleteScope('rules')}
+            className="text-[13px] font-semibold px-4 py-2.5 rounded-lg cursor-pointer bg-input"
+            style={{ border: '1px solid oklch(45% 0.15 25)', color: 'oklch(70% 0.18 25)' }}
+          >
+            Delete All Rules
+          </button>
+          <button
+            onClick={() => setDeleteScope('contacts')}
+            className="text-[13px] font-semibold px-4 py-2.5 rounded-lg cursor-pointer bg-input"
+            style={{ border: '1px solid oklch(45% 0.15 25)', color: 'oklch(70% 0.18 25)' }}
+          >
+            Delete All Contacts
+          </button>
+          <button
+            onClick={() => setDeleteScope('transactions')}
+            className="text-[13px] font-semibold px-4 py-2.5 rounded-lg cursor-pointer bg-input"
+            style={{ border: '1px solid oklch(45% 0.15 25)', color: 'oklch(70% 0.18 25)' }}
+          >
+            Delete All Transactions
+          </button>
+        </div>
+        <div className="h-px bg-border/70 mb-4" />
         <button
           onClick={() => setResetOpen(true)}
           className="text-[13px] font-semibold px-4 py-2.5 rounded-lg border-none cursor-pointer text-white"
@@ -216,6 +314,33 @@ export function Settings() {
 
       {relocateOpen && <RelocateModal dbSize={dbSize} onClose={() => setRelocateOpen(false)} />}
       {resetOpen && <NuclearResetModal onClose={() => setResetOpen(false)} />}
+      {deleteScope === 'rules' && (
+        <ScopedDeleteModal
+          title="Delete All Rules"
+          description="This permanently deletes every rule you've created. Built-in default rules are not affected."
+          confirmLabel="Delete Rules"
+          mutation={deleteRules}
+          onClose={() => setDeleteScope(null)}
+        />
+      )}
+      {deleteScope === 'contacts' && (
+        <ScopedDeleteModal
+          title="Delete All Contacts"
+          description="This permanently deletes every contact and their linked identifiers."
+          confirmLabel="Delete Contacts"
+          mutation={deleteContacts}
+          onClose={() => setDeleteScope(null)}
+        />
+      )}
+      {deleteScope === 'transactions' && (
+        <ScopedDeleteModal
+          title="Delete All Transactions"
+          description="This permanently deletes every committed transaction. Accounts themselves are kept, so you can re-upload statements without losing account setup."
+          confirmLabel="Delete Transactions"
+          mutation={deleteTransactions}
+          onClose={() => setDeleteScope(null)}
+        />
+      )}
     </div>
   )
 }
