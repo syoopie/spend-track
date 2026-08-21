@@ -1,4 +1,4 @@
-import { ListChecks } from 'lucide-react'
+import { LayoutGrid, ListChecks, Settings as SettingsIcon, SlidersHorizontal, Users } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { useUploadDialog } from './UploadProvider'
 
@@ -6,38 +6,17 @@ const NAV_ITEMS = [
   {
     to: '/',
     label: 'Dashboard',
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 16 16" className="shrink-0">
-        <rect x="1" y="1" width="6" height="6" fill="none" stroke="currentColor" strokeWidth="1.3" />
-        <rect x="9" y="1" width="6" height="6" fill="none" stroke="currentColor" strokeWidth="1.3" />
-        <rect x="1" y="9" width="6" height="6" fill="none" stroke="currentColor" strokeWidth="1.3" />
-        <rect x="9" y="9" width="6" height="6" fill="none" stroke="currentColor" strokeWidth="1.3" />
-      </svg>
-    ),
+    icon: <LayoutGrid size={16} className="shrink-0" />,
   },
   {
     to: '/contacts',
     label: 'Contacts',
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 16 16" className="shrink-0">
-        <circle cx="8" cy="5" r="3" fill="none" stroke="currentColor" strokeWidth="1.3" />
-        <rect x="2.5" y="10" width="11" height="5" rx="2.5" fill="none" stroke="currentColor" strokeWidth="1.3" />
-      </svg>
-    ),
+    icon: <Users size={16} className="shrink-0" />,
   },
   {
     to: '/rules',
     label: 'Rules',
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 16 16" className="shrink-0">
-        <line x1="5" y1="3" x2="15" y2="3" stroke="currentColor" strokeWidth="1.3" />
-        <circle cx="2" cy="3" r="1.4" fill="currentColor" />
-        <line x1="1" y1="8" x2="11" y2="8" stroke="currentColor" strokeWidth="1.3" />
-        <circle cx="14" cy="8" r="1.4" fill="currentColor" />
-        <line x1="5" y1="13" x2="15" y2="13" stroke="currentColor" strokeWidth="1.3" />
-        <circle cx="2" cy="13" r="1.4" fill="currentColor" />
-      </svg>
-    ),
+    icon: <SlidersHorizontal size={16} className="shrink-0" />,
   },
   {
     to: '/default-rules',
@@ -47,15 +26,7 @@ const NAV_ITEMS = [
   {
     to: '/settings',
     label: 'Settings',
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 16 16" className="shrink-0">
-        <circle cx="8" cy="8" r="4" fill="none" stroke="currentColor" strokeWidth="1.3" />
-        <line x1="8" y1="0.5" x2="8" y2="2.3" stroke="currentColor" strokeWidth="1.3" />
-        <line x1="8" y1="13.7" x2="8" y2="15.5" stroke="currentColor" strokeWidth="1.3" />
-        <line x1="0.5" y1="8" x2="2.3" y2="8" stroke="currentColor" strokeWidth="1.3" />
-        <line x1="13.7" y1="8" x2="15.5" y2="8" stroke="currentColor" strokeWidth="1.3" />
-      </svg>
-    ),
+    icon: <SettingsIcon size={16} className="shrink-0" />,
   },
 ]
 
