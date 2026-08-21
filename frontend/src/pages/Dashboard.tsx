@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useAccounts, useCategories, useDashboardSummary, useTransactions } from '../api/hooks'
 import { categoryColor } from '../lib/categoryColor'
 import { fmtDate, fmtMonthYearLabel, fmtPlain, fmtSigned } from '../lib/format'
@@ -7,6 +6,7 @@ import { CashFlowChart } from '../components/CashFlowChart'
 import { CategoryDonut } from '../components/CategoryDonut'
 import { VelocityChart } from '../components/VelocityChart'
 import { RefundDrawer } from '../components/RefundDrawer'
+import { useUploadDialog } from '../components/UploadProvider'
 
 function MetricCard({
   label,
@@ -29,7 +29,7 @@ function MetricCard({
 }
 
 export function Dashboard() {
-  const navigate = useNavigate()
+  const { openDialog } = useUploadDialog()
   const [month, setMonth] = useState<string | undefined>(undefined)
   const [accountId, setAccountId] = useState<string | undefined>(undefined)
   const [excludedVisible, setExcludedVisible] = useState(true)
@@ -55,9 +55,36 @@ export function Dashboard() {
   const inflowCount = (txQ.data ?? []).filter((t) => t.amount > 0).length
   const distinctAccounts = new Set((txQ.data ?? []).map((t) => t.account_id)).size
 
-  if (summaryQ.isLoading || !summaryQ.data) {
+  if (summaryQ.isLoading || !summaryQ.data || accountsQ.isLoading) {
     return <div className="p-9 text-muted">Loading dashboard…</div>
   }
+
+  if ((accountsQ.data ?? []).length === 0) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-10">
+        <div className="text-center max-w-md">
+          <div className="w-13 h-13 rounded-xl bg-accent/12 mx-auto mb-5 flex items-center justify-center">
+            <svg width="22" height="22" viewBox="0 0 16 16">
+              <path d="M8 11 V2" stroke="#e35fd0" strokeWidth="1.6" fill="none" />
+              <polygon points="4.5,5.5 11.5,5.5 8,1.5" fill="#e35fd0" />
+              <rect x="2" y="12.5" width="12" height="2" fill="none" stroke="#e35fd0" strokeWidth="1.6" />
+            </svg>
+          </div>
+          <div className="text-xl font-semibold text-text mb-2.5">No statements yet</div>
+          <div className="text-[13px] text-muted mb-5.5">
+            Upload a DBS, OCBC, or UOB e-statement PDF to see your spending here - or drag one in anywhere.
+          </div>
+          <button
+            onClick={openDialog}
+            className="text-[13px] font-semibold px-5 py-2.5 rounded-lg border-none bg-accent text-accent-fg cursor-pointer"
+          >
+            + Upload Statement
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   const s = summaryQ.data
   const monthLabel = fmtMonthYearLabel(s.month)
   const prevMonthLabel = prevCashFlow ? fmtMonthYearLabel(prevCashFlow.month) : 'previous month'
@@ -89,7 +116,7 @@ export function Dashboard() {
             ))}
           </select>
           <button
-            onClick={() => navigate('/')}
+            onClick={openDialog}
             className="text-[13px] font-semibold px-4 py-2 rounded-lg border-none bg-accent text-accent-fg cursor-pointer"
           >
             + Upload Statement

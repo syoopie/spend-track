@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useCategories, useCommitBatch, useDiscardBatch, useStagingBatch, useUpdateStagingRow } from '../api/hooks'
 import { categoryColor } from '../lib/categoryColor'
 import { fmtDate, fmtSigned } from '../lib/format'
+import { useUploadDialog } from '../components/UploadProvider'
 import type { StagingRow } from '../api/types'
 
 const AMBER_BG = 'oklch(20% 0.02 70)'
@@ -73,6 +74,7 @@ function StagingRowPopover({
 export function Staging() {
   const { batchId } = useParams<{ batchId: string }>()
   const navigate = useNavigate()
+  const { openDialog } = useUploadDialog()
   const batchQ = useStagingBatch(batchId)
   const categoriesQ = useCategories()
   const commit = useCommitBatch()
@@ -83,9 +85,9 @@ export function Staging() {
     return (
       <div className="p-9 text-center text-muted">
         No statement is currently staged.{' '}
-        <Link to="/" className="text-accent hover:text-accent-hover">
+        <button onClick={openDialog} className="text-accent hover:text-accent-hover cursor-pointer border-none bg-transparent underline">
           Upload one to get started.
-        </Link>
+        </button>
       </div>
     )
   }
@@ -95,9 +97,9 @@ export function Staging() {
     return (
       <div className="p-9 text-center text-muted">
         This staging batch is no longer available.{' '}
-        <Link to="/" className="text-accent hover:text-accent-hover">
+        <button onClick={openDialog} className="text-accent hover:text-accent-hover cursor-pointer border-none bg-transparent underline">
           Upload a statement.
-        </Link>
+        </button>
       </div>
     )
   }
@@ -107,7 +109,7 @@ export function Staging() {
 
   async function handleCommit() {
     await commit.mutateAsync(batchId!)
-    navigate('/dashboard')
+    navigate('/')
   }
 
   async function handleDiscard() {
