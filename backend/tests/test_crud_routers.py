@@ -93,6 +93,45 @@ def test_refund_pairing_404_when_none_exists(client):
     assert resp.json()["detail"]["code"] == "NO_REFUND_PAIRING"
 
 
+def test_update_committed_transaction_category_and_label(client):
+    _upload_and_commit(client)
+    tx = client.get("/api/transactions").json()[0]
+
+    updated = client.patch(
+        f"/api/transactions/{tx['id']}",
+        json={"category": "Groceries", "matched_label": "Corrected Name"},
+    ).json()
+    assert updated["category"] == "Groceries"
+    assert updated["matched_label"] == "Corrected Name"
+    # untouched fields survive the partial update
+    assert updated["raw_description"] == tx["raw_description"]
+    assert updated["amount"] == tx["amount"]
+
+
+def test_excluding_a_transaction_via_patch_hides_it_by_default(client):
+    _upload_and_commit(client)
+    tx = client.get("/api/transactions").json()[0]
+
+    excluded = client.patch(
+        f"/api/transactions/{tx['id']}",
+        json={"is_excluded": True, "exclusion_reason": "Self-transfer"},
+    ).json()
+    assert excluded["is_excluded"] is True
+    assert excluded["exclusion_reason"] == "Self-transfer"
+    assert all(t["id"] != tx["id"] for t in client.get("/api/transactions").json())
+
+    unexcluded = client.patch(f"/api/transactions/{tx['id']}", json={"is_excluded": False}).json()
+    assert unexcluded["is_excluded"] is False
+    assert unexcluded["exclusion_reason"] is None  # stale reason cleared
+    assert any(t["id"] == tx["id"] for t in client.get("/api/transactions").json())
+
+
+def test_update_missing_transaction_404s(client):
+    resp = client.patch("/api/transactions/999999", json={"category": "Groceries"})
+    assert resp.status_code == 404
+    assert resp.json()["detail"]["code"] == "TRANSACTION_NOT_FOUND"
+
+
 # --- contacts -----------------------------------------------------------
 
 

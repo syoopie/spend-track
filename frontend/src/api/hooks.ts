@@ -16,6 +16,7 @@ import type {
   StagingBatch,
   StagingRowUpdateRequest,
   Transaction,
+  TransactionUpdateRequest,
   Category,
 } from './types'
 
@@ -36,6 +37,18 @@ export function useTransactions(params: {
   return useQuery({
     queryKey: ['transactions', params],
     queryFn: () => api.get<Transaction[]>('/transactions', params),
+  })
+}
+
+export function useUpdateTransaction() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, body }: { id: number; body: TransactionUpdateRequest }) =>
+      api.patch<Transaction>(`/transactions/${id}`, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['transactions'] })
+      qc.invalidateQueries({ queryKey: ['dashboard-summary'] })
+    },
   })
 }
 

@@ -1,3 +1,4 @@
+import { Pencil } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useAccounts, useCategories, useDashboardSummary, useMonthlyTotals, useTransactions } from '../api/hooks'
 import { categoryColor } from '../lib/categoryColor'
@@ -7,6 +8,7 @@ import { CategoryDonut } from '../components/CategoryDonut'
 import { VelocityChart } from '../components/VelocityChart'
 import { RefundDrawer } from '../components/RefundDrawer'
 import { DateRangePicker } from '../components/DateRangePicker'
+import { TransactionEditPopover } from '../components/TransactionEditPopover'
 import { useUploadDialog } from '../components/UploadProvider'
 
 function MetricCard({
@@ -37,6 +39,7 @@ export function Dashboard() {
   const [searchText, setSearchText] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
   const [refundTxId, setRefundTxId] = useState<number | null>(null)
+  const [editingTxId, setEditingTxId] = useState<number | null>(null)
 
   const accountsQ = useAccounts()
   const categoriesQ = useCategories()
@@ -261,12 +264,13 @@ export function Dashboard() {
             </label>
           </div>
         </div>
-        <div className="grid grid-cols-[80px_1fr_140px_130px_110px_30px] px-5 py-2.5 text-[11px] text-muted-2 uppercase tracking-wide border-b border-[#24252e]">
+        <div className="grid grid-cols-[80px_1fr_140px_130px_110px_30px_30px] px-5 py-2.5 text-[11px] text-muted-2 uppercase tracking-wide border-b border-[#24252e]">
           <div>Date</div>
           <div>Description</div>
           <div>Category</div>
           <div>Account</div>
           <div className="text-right">Amount</div>
+          <div />
           <div />
         </div>
         {txQ.isLoading && <div className="p-5 text-muted text-sm">Loading transactions…</div>}
@@ -278,42 +282,55 @@ export function Dashboard() {
         {filteredTransactions.map((tx) => {
           const cc = categoryColor(categoriesQ.data, tx.category)
           return (
-            <div
-              key={tx.id}
-              className="grid grid-cols-[80px_1fr_140px_130px_110px_30px] items-center px-5 py-3 text-[13px] border-b border-[#24252e]"
-              style={{ opacity: tx.is_excluded ? 0.5 : 1 }}
-            >
-              <div className="text-muted font-mono text-xs">{fmtDate(tx.transaction_date)}</div>
-              <div className="truncate pr-2" title={tx.raw_description}>
-                {tx.matched_label ?? tx.raw_description}
-                {tx.is_excluded && (
-                  <span className="text-[10px] text-muted-2 border border-border rounded px-1.5 py-0.5 ml-1.5">
-                    excluded
+            <div key={tx.id}>
+              <div
+                className="grid grid-cols-[80px_1fr_140px_130px_110px_30px_30px] items-center px-5 py-3 text-[13px] border-b border-[#24252e] group"
+                style={{ opacity: tx.is_excluded ? 0.5 : 1 }}
+              >
+                <div className="text-muted font-mono text-xs">{fmtDate(tx.transaction_date)}</div>
+                <div className="truncate pr-2" title={tx.raw_description}>
+                  {tx.matched_label ?? tx.raw_description}
+                  {tx.is_excluded && (
+                    <span className="text-[10px] text-muted-2 border border-border rounded px-1.5 py-0.5 ml-1.5">
+                      excluded
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <span className="text-[11px] px-2 py-0.5 rounded-md" style={{ background: cc.bg, color: cc.fg }}>
+                    {tx.category}
                   </span>
-                )}
-              </div>
-              <div>
-                <span className="text-[11px] px-2 py-0.5 rounded-md" style={{ background: cc.bg, color: cc.fg }}>
-                  {tx.category}
-                </span>
-              </div>
-              <div className="text-muted text-xs">
-                {tx.bank_name} {tx.account_number_masked}
-              </div>
-              <div className={`text-right font-mono ${tx.amount > 0 ? 'text-success' : 'text-text'}`}>
-                {fmtSigned(tx.amount)}
-              </div>
-              <div className="text-center">
-                {tx.has_refund_link && (
+                </div>
+                <div className="text-muted text-xs">
+                  {tx.bank_name} {tx.account_number_masked}
+                </div>
+                <div className={`text-right font-mono ${tx.amount > 0 ? 'text-success' : 'text-text'}`}>
+                  {fmtSigned(tx.amount)}
+                </div>
+                <div className="text-center">
+                  {tx.has_refund_link && (
+                    <button
+                      onClick={() => setRefundTxId(tx.id)}
+                      title="View refund pairing"
+                      className="border-none bg-transparent cursor-pointer text-accent text-base"
+                    >
+                      ⇄
+                    </button>
+                  )}
+                </div>
+                <div className="text-center">
                   <button
-                    onClick={() => setRefundTxId(tx.id)}
-                    title="View refund pairing"
-                    className="border-none bg-transparent cursor-pointer text-accent text-base"
+                    onClick={() => setEditingTxId(editingTxId === tx.id ? null : tx.id)}
+                    title="Edit transaction"
+                    className="border-none bg-transparent cursor-pointer text-muted-2 hover:text-text opacity-0 group-hover:opacity-100"
                   >
-                    ⇄
+                    <Pencil size={14} />
                   </button>
-                )}
+                </div>
               </div>
+              {editingTxId === tx.id && (
+                <TransactionEditPopover transaction={tx} onClose={() => setEditingTxId(null)} />
+              )}
             </div>
           )
         })}
