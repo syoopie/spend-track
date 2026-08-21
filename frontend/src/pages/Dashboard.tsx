@@ -53,8 +53,18 @@ export function Dashboard() {
   const [chartsTab, setChartsTab] = useState<'cashflow' | 'velocity'>('cashflow')
   const [breakdownTab, setBreakdownTab] = useState<'category' | 'merchants' | 'paynow'>('category')
 
+  // Clicking the same category again clears the filter instead of being a
+  // no-op re-select - lets the donut/legend double as a toggle.
+  function selectCategoryFilter(category: string) {
+    setCategoryFilter((prev) => (prev === category ? '' : category))
+  }
+
   const accountsQ = useAccounts()
-  const categoriesQ = useCategories()
+  // Hidden categories included (unlike rule/contact pickers) - "Others" and
+  // "Other Income" are real fallback categories transactions can land in,
+  // so they need to be searchable/filterable here even though they're not
+  // offered as an assignment target.
+  const categoriesQ = useCategories(true)
   const monthlyTotalsQ = useMonthlyTotals(accountId)
 
   // No stored range (a first-ever visit, or the user never picked one) -
@@ -272,7 +282,12 @@ export function Dashboard() {
             onChange={setBreakdownTab}
           />
           {breakdownTab === 'category' && (
-            <CategoryDonut data={s.category_breakdown} categories={categoriesQ.data} rangeLabel={rangeLabel} bare />
+            <CategoryDonut
+              data={s.category_breakdown}
+              categories={categoriesQ.data}
+              onCategoryClick={selectCategoryFilter}
+              bare
+            />
           )}
           {breakdownTab === 'merchants' && (
             <>
