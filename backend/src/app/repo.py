@@ -18,6 +18,10 @@ def fetch_active_rules(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     return conn.execute("SELECT * FROM rules ORDER BY priority ASC").fetchall()
 
 
+def fetch_category_directions(conn: sqlite3.Connection) -> dict[str, str]:
+    return {row["name"]: row["direction"] for row in conn.execute("SELECT name, direction FROM categories").fetchall()}
+
+
 def fetch_contact_identifiers(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     return conn.execute(
         """

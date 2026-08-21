@@ -170,3 +170,93 @@ def test_explicit_rule_overrides_card_bill_payment_heuristic():
     assert not result.is_excluded
     assert result.category == "Bills & Fees"
     assert result.matched_label == "UOB Card Bill"
+
+
+def test_card_bill_payment_heuristic_never_fires_for_inflow():
+    """The heuristic is conceptually outflow-only (paying your own bill is
+    money leaving), so the direction check is explicit rather than assumed
+    from the description alone."""
+    result = categorize(
+        "Bill Payment mBK-UOB Cards 4265884081509100",
+        [],
+        [],
+        amount=150.00,
+        has_card_account=True,
+        posting_account_is_card=False,
+    )
+    assert not result.is_excluded
+
+
+# --- direction-locked categories (inflow vs outflow) ------------------------
+
+DIRECTIONS = {
+    "Transport": "outflow",
+    "Refunds & Reimbursements": "inflow",
+    "Investment Income": "inflow",
+    "Salary": "inflow",
+}
+
+
+def test_outflow_rule_is_skipped_for_an_inflow_transaction():
+    """The exact bug report this feature exists to fix: a credit card
+    refund for a prior Grab ride shares "GRAB" in its description with real
+    Grab spending, but the refund is money in - it must not land under the
+    outflow-only "Transport" category just because the text matches."""
+    rules = [rule(1, "GRAB", "Transport")]
+    result = categorize("GRAB REFUND SINGAPORE", rules, [], amount=12.50, category_directions=DIRECTIONS)
+    assert result.category != "Transport"
+
+
+def test_inflow_transaction_falls_through_a_wrong_direction_rule_to_the_next_match():
+    rules = [
+        rule(1, "GRAB", "Transport"),  # wrong direction - must be skipped, not just stop the whole match
+        rule(2, "REFUND", "Refunds & Reimbursements"),
+    ]
+    result = categorize("GRAB REFUND SINGAPORE", rules, [], amount=12.50, category_directions=DIRECTIONS)
+    assert result.category == "Refunds & Reimbursements"
+
+
+def test_inflow_with_no_matching_rule_falls_back_to_other_income_not_others():
+    result = categorize("SOME RANDOM CREDIT XYZ", [], [], amount=12.50, category_directions=DIRECTIONS)
+    assert result.category == "Other Income"
+    assert result.subcategory == "Unparsable"
+
+
+def test_outflow_unmatched_still_falls_back_to_others():
+    result = categorize("SOME RANDOM MERCHANT XYZ", [], [], amount=-12.50, category_directions=DIRECTIONS)
+    assert result.category == "Others"
+
+
+def test_contact_category_direction_mismatch_falls_through_instead_of_forcing_it():
+    """A contact's default_category is a fixed outflow category unrelated to
+    PayNow. An inflow transaction identified as being from that contact
+    must not be force-categorized under an outflow-only bucket."""
+    contacts = [
+        {
+            "contact_id": 3,
+            "name": "Some Vendor",
+            "identifier": "VENDOR123",
+            "default_category": "Transport",
+            "default_subcategory": None,
+        }
+    ]
+    result = categorize("VENDOR123 CREDIT", [], contacts, amount=50.00, category_directions=DIRECTIONS)
+    assert result.category != "Transport"
+    assert result.contact_id is None  # the mismatched contact match wasn't used at all
+
+
+def test_contact_default_paynow_redirects_to_paynow_received_for_inflow():
+    contacts = [
+        {
+            "contact_id": 7,
+            "name": "Auntie Mei",
+            "identifier": "+65 9123 4567",
+            "default_category": "Paynow",
+            "default_subcategory": None,
+        }
+    ]
+    result = categorize(
+        "PAYNOW-FAST PAYNOW OTHR +65 9123 4567", [], contacts, amount=25.00, category_directions=DIRECTIONS
+    )
+    assert result.category == "Paynow Received"
+    assert result.contact_id == 7

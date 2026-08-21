@@ -176,6 +176,7 @@ class CategoryCreateRequest(BaseModel):
     name: str
     hue: int | None = None
     icon: str | None = None
+    direction: str = "outflow"  # 'inflow' or 'outflow' - see schema.sql's categories.direction
 
 
 class CategoryOut(BaseModel):
@@ -185,6 +186,7 @@ class CategoryOut(BaseModel):
     icon: str | None
     is_hidden: bool
     sort_order: int
+    direction: str
 
 
 class SettingsOut(BaseModel):

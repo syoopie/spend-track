@@ -99,6 +99,7 @@ def recategorize_transactions(body: RecategorizeRequest):
     with get_conn() as conn:
         rules = repo.fetch_active_rules(conn)
         contact_identifiers = repo.fetch_contact_identifiers(conn)
+        category_directions = repo.fetch_category_directions(conn)
         has_card_account = conn.execute("SELECT 1 FROM accounts WHERE is_card = 1 LIMIT 1").fetchone() is not None
         rows = conn.execute(
             f"""
@@ -116,6 +117,7 @@ def recategorize_transactions(body: RecategorizeRequest):
                 rules,
                 contact_identifiers,
                 amount=row["amount"],
+                category_directions=category_directions,
                 has_card_account=has_card_account,
                 posting_account_is_card=bool(row["account_is_card"]),
             )
