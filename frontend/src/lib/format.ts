@@ -1,11 +1,13 @@
+import { CURRENCY_SYMBOL } from './localization'
+
 export function fmtSigned(n: number): string {
   const abs = Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-  return (n < 0 ? '-$' : '+$') + abs
+  return (n < 0 ? `-${CURRENCY_SYMBOL}` : `+${CURRENCY_SYMBOL}`) + abs
 }
 
 export function fmtPlain(n: number): string {
   const abs = Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-  return (n < 0 ? '-$' : '$') + abs
+  return (n < 0 ? `-${CURRENCY_SYMBOL}` : CURRENCY_SYMBOL) + abs
 }
 
 export function fmtDate(iso: string): string {
@@ -56,8 +58,8 @@ export function amountIntensityColor(amount: number, maxAbs: number): string {
 export function fmtCompact(n: number): string {
   const abs = Math.abs(n)
   const sign = n < 0 ? '-' : ''
-  if (abs >= 1000) return `${sign}$${(abs / 1000).toFixed(1)}K`
-  return `${sign}$${abs.toFixed(0)}`
+  if (abs >= 1000) return `${sign}${CURRENCY_SYMBOL}${(abs / 1000).toFixed(1)}K`
+  return `${sign}${CURRENCY_SYMBOL}${abs.toFixed(0)}`
 }
 
 export function fmtBytes(bytes: number): string {

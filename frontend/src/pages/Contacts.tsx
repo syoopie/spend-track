@@ -10,6 +10,7 @@ import { categoryOptionElements } from '../components/CategoryOptions'
 import { Modal } from '../components/Modal'
 import { Select } from '../components/Select'
 import { fmtPlain } from '../lib/format'
+import { CONTACT_IDENTIFIER_HINT } from '../lib/localization'
 
 function AddContactModal({ onClose }: { onClose: () => void }) {
   const categoriesQ = useCategories()
@@ -56,7 +57,7 @@ function AddContactModal({ onClose }: { onClose: () => void }) {
           <input
             value={identifier}
             onChange={(e) => updateIdentifier(i, e.target.value)}
-            placeholder="+65 9xxx xxxx, UEN, or account no."
+            placeholder={CONTACT_IDENTIFIER_HINT}
             className="flex-1 box-border px-3 py-2.5 rounded-lg border border-border bg-input text-text text-[13px]"
           />
         </div>

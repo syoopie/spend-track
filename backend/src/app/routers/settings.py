@@ -6,6 +6,7 @@ from fastapi import APIRouter
 from app.config import get_db_path, set_db_path
 from app.db import get_conn, init_db
 from app.errors import api_error
+from app.localization import ACTIVE_COUNTRY
 from app.models import DeleteScopeResult, RelocateRequest, ResetRequest, SettingsOut
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -21,11 +22,27 @@ def _require_delete_confirmation(body: ResetRequest) -> None:
         raise api_error(400, "RESET_CONFIRMATION_MISMATCH", "Type DELETE to confirm.")
 
 
+def _localization_fields() -> dict:
+    return {
+        "country_code": ACTIVE_COUNTRY.code,
+        "country_name": ACTIVE_COUNTRY.name,
+        "currency_code": ACTIVE_COUNTRY.currency_code,
+        "currency_symbol": ACTIVE_COUNTRY.currency_symbol,
+        "transfer_scheme_name": ACTIVE_COUNTRY.transfer_scheme_name,
+        "supported_banks": [p.bank_name for p in ACTIVE_COUNTRY.bank_parsers],
+    }
+
+
 @router.get("", response_model=SettingsOut)
 def get_settings():
     db_path = get_db_path()
     size = db_path.stat().st_size if db_path.exists() else 0
-    return SettingsOut(db_path=str(db_path), size_bytes=size, schema_version=_schema_version(db_path))
+    return SettingsOut(
+        db_path=str(db_path),
+        size_bytes=size,
+        schema_version=_schema_version(db_path),
+        **_localization_fields(),
+    )
 
 
 @router.post("/relocate", response_model=SettingsOut)
@@ -56,7 +73,12 @@ def relocate_database(body: RelocateRequest):
     set_db_path(new_path)
 
     size = new_path.stat().st_size if new_path.exists() else 0
-    return SettingsOut(db_path=str(new_path), size_bytes=size, schema_version=_schema_version(new_path))
+    return SettingsOut(
+        db_path=str(new_path),
+        size_bytes=size,
+        schema_version=_schema_version(new_path),
+        **_localization_fields(),
+    )
 
 
 @router.post("/reset", status_code=204)
