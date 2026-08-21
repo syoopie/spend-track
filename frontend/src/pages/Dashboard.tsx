@@ -10,6 +10,7 @@ import { RefundDrawer } from '../components/RefundDrawer'
 import { DateRangePicker } from '../components/DateRangePicker'
 import { TransactionEditPopover } from '../components/TransactionEditPopover'
 import { RecategorizeModal } from '../components/RecategorizeModal'
+import { Checkbox } from '../components/Checkbox'
 import { useUploadDialog } from '../components/UploadProvider'
 
 function MetricCard({
@@ -277,11 +278,7 @@ export function Dashboard() {
               ))}
             </select>
             <label className="flex items-center gap-1.5 text-xs text-muted cursor-pointer whitespace-nowrap">
-              <input
-                type="checkbox"
-                checked={excludedVisible}
-                onChange={(e) => setExcludedVisible(e.target.checked)}
-              />
+              <Checkbox checked={excludedVisible} onChange={setExcludedVisible} />
               Show excluded
             </label>
           </div>
