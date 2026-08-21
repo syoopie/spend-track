@@ -1,97 +1,27 @@
-import { useState } from 'react'
-import { useCategories, useCommitBatch, useCurrentStagingBatch, useDiscardBatch, useUpdateStagingRow } from '../api/hooks'
-import { categoryIcon } from '../lib/categoryColor'
-import { fmtDate, fmtSigned } from '../lib/format'
-import { CategoryBadge } from './CategoryBadge'
-import { Checkbox } from './Checkbox'
-import { Modal } from './Modal'
-import { Select } from './Select'
-import type { StagingRow } from '../api/types'
-
-const AMBER_BG = 'oklch(20% 0.02 70)'
-const AMBER_BADGE_BG = 'oklch(30% 0.07 70)'
-const AMBER_BADGE_FG = 'oklch(82% 0.13 70)'
-
-function StagingRowPopover({
-  row,
-  batchId,
-  onApplied,
-}: {
-  row: StagingRow
-  batchId: string
-  onApplied: () => void
-}) {
-  const categoriesQ = useCategories()
-  const updateRow = useUpdateStagingRow(batchId)
-  const [category, setCategory] = useState(row.category)
-  const [saveAsRule, setSaveAsRule] = useState(false)
-  const [saveAsContact, setSaveAsContact] = useState(false)
-
-  // Same direction-lock as TransactionEditPopover - this row's amount sign
-  // decides which half of the category list it can be assigned into.
-  const direction = row.amount > 0 ? 'inflow' : 'outflow'
-  const categoryOptions = (categoriesQ.data ?? []).filter((c) => c.direction === direction)
-
-  return (
-    <div
-      className="px-5 py-4 flex items-end gap-3 border-b border-border"
-      style={{ background: AMBER_BG }}
-    >
-      <div className="flex-1">
-        <div className="text-[11px] text-muted mb-1">Assign category · {direction === 'inflow' ? 'Inflow' : 'Outflow'}</div>
-        <Select uiSize="sm" value={category} onChange={(e) => setCategory(e.target.value)} className="w-full">
-          {categoryOptions.map((c) => {
-            const Icon = categoryIcon(categoriesQ.data, c.name)
-            return (
-              <option key={c.id} value={c.name}>
-                <span className="inline-flex items-center gap-1.5">
-                  <Icon size={12} className="shrink-0" />
-                  {c.name}
-                </span>
-              </option>
-            )
-          })}
-        </Select>
-      </div>
-      <label className="flex items-center gap-1.5 text-[12px] text-text pb-2 cursor-pointer">
-        <Checkbox checked={saveAsRule} onChange={setSaveAsRule} />
-        Save as rule
-      </label>
-      <label className="flex items-center gap-1.5 text-[12px] text-text pb-2 cursor-pointer">
-        <Checkbox checked={saveAsContact} onChange={setSaveAsContact} />
-        Save as contact mapping
-      </label>
-      <button
-        onClick={() =>
-          updateRow.mutate(
-            {
-              index: row.index,
-              body: { category, save_as_rule: saveAsRule, save_as_contact: saveAsContact },
-            },
-            { onSuccess: onApplied },
-          )
-        }
-        disabled={updateRow.isPending}
-        className="text-[12px] font-semibold px-3.5 py-2 rounded-lg border-none bg-accent text-accent-fg cursor-pointer disabled:opacity-60"
-      >
-        Apply
-      </button>
-    </div>
-  )
-}
+import { useCommitBatch, useCurrentStagingBatch, useDiscardBatch, useUpdateStagingRow } from '../api/hooks'
+import { ReviewDialog, type ApplyRowBody, type ReviewRow, type ReviewStatCard } from './ReviewDialog'
 
 export function StagingReviewDialog({ onClose }: { onClose: () => void }) {
   const batchQ = useCurrentStagingBatch()
-  const categoriesQ = useCategories()
   const commit = useCommitBatch()
   const discard = useDiscardBatch()
-  const [openIndex, setOpenIndex] = useState<number | null>(null)
+  const updateRow = useUpdateStagingRow(batchQ.data?.batch_id ?? '')
 
   if (batchQ.isLoading) {
     return (
-      <Modal onClose={onClose} width={460}>
-        <div className="text-muted text-sm">Loading staged transactions…</div>
-      </Modal>
+      <ReviewDialog
+        title="Staging & Pre-Commit Review"
+        subtitle="Loading staged transactions…"
+        onClose={onClose}
+        statCards={[]}
+        aiStatus="disabled"
+        aiWarning={null}
+        aiModel={null}
+        rows={[]}
+        onApplyRow={async () => {}}
+        applyPending={false}
+        footer={null}
+      />
     )
   }
   if (!batchQ.data) return null
@@ -109,103 +39,91 @@ export function StagingReviewDialog({ onClose }: { onClose: () => void }) {
     onClose()
   }
 
+  async function handleApplyRow(row: ReviewRow, body: ApplyRowBody) {
+    await updateRow.mutateAsync({
+      index: row.key,
+      body: {
+        category: body.category,
+        save_as_rule: body.save_as_rule,
+        rule_pattern: body.rule_pattern,
+        save_as_contact: body.save_as_contact,
+        contact_name: body.contact_name,
+        contact_identifier: body.contact_identifier,
+        reject_ai: body.reject_ai,
+        restore_ai: body.restore_ai,
+      },
+    })
+  }
+
+  const rows: ReviewRow[] = visibleRows.map((r) => ({
+    key: r.index,
+    transaction_date: r.transaction_date,
+    raw_description: r.raw_description,
+    matched_label: r.matched_label,
+    amount: r.amount,
+    category: r.category,
+    subcategory: r.subcategory,
+    is_excluded: r.is_excluded,
+    exclusion_reason: r.exclusion_reason,
+    needs_review: r.needs_review,
+    is_paynow: r.is_paynow,
+    ai_suggested: r.ai_suggested,
+    ai_category: r.ai_category,
+    ai_label: r.ai_label,
+    ai_rule_pattern: r.ai_rule_pattern,
+  }))
+
+  const statCards: ReviewStatCard[] = [
+    { label: 'New Extracted', value: batch.new_extracted },
+    { label: 'Duplicates Skipped', value: batch.duplicates_skipped, tone: 'muted' },
+    { label: 'New Accounts Provisioned', value: batch.new_accounts_provisioned },
+    ...(batch.needs_category_count > 0
+      ? [{ label: 'PayNow — Needs Review', value: batch.needs_category_count, tone: 'amber' as const }]
+      : []),
+    ...(batch.ai_suggested_count > 0
+      ? [{ label: 'AI Suggested', value: batch.ai_suggested_count, tone: 'ai' as const }]
+      : []),
+  ]
+
   return (
-    <Modal onClose={onClose} width={860}>
-      <div className="flex items-start justify-between mb-0.5">
-        <div>
-          <div className="text-lg font-bold">Staging &amp; Pre-Commit Review</div>
-          <div className="text-[13px] text-muted mt-0.5 mb-4">
-            {batch.source_filenames.join(', ')} — parsed, awaiting commit
-          </div>
-        </div>
-        <button
-          onClick={onClose}
-          className="text-muted hover:text-text text-lg leading-none cursor-pointer border-none bg-transparent"
-        >
-          ×
-        </button>
-      </div>
-
-      <div className="flex gap-3 mb-5 flex-wrap">
-        <div className="bg-input border border-border rounded-[10px] px-4.5 py-3">
-          <div className="text-[11px] text-muted-2">New Extracted</div>
-          <div className="text-xl font-bold font-mono">{batch.new_extracted}</div>
-        </div>
-        <div className="bg-input border border-border rounded-[10px] px-4.5 py-3">
-          <div className="text-[11px] text-muted-2">Duplicates Skipped</div>
-          <div className="text-xl font-bold font-mono text-muted-2">{batch.duplicates_skipped}</div>
-        </div>
-        <div className="bg-input border border-border rounded-[10px] px-4.5 py-3">
-          <div className="text-[11px] text-muted-2">New Accounts Provisioned</div>
-          <div className="text-xl font-bold font-mono">{batch.new_accounts_provisioned}</div>
-        </div>
-        {batch.needs_category_count > 0 && (
-          <div className="rounded-[10px] px-4.5 py-3" style={{ background: 'oklch(24% 0.05 70)', border: '1px solid oklch(40% 0.08 70)' }}>
-            <div className="text-[11px]" style={{ color: 'oklch(80% 0.12 70)' }}>
-              PayNow — Needs Review
+    <ReviewDialog
+      title="Staging & Pre-Commit Review"
+      subtitle={`${batch.source_filenames.join(', ')} — parsed, awaiting commit`}
+      onClose={onClose}
+      statCards={statCards}
+      aiStatus={batch.ai_status}
+      aiWarning={batch.ai_warning}
+      aiModel={batch.ai_model}
+      rows={rows}
+      onApplyRow={handleApplyRow}
+      applyPending={updateRow.isPending}
+      emptyMessage="Nothing new to commit."
+      footer={
+        <>
+          {batch.ai_status === 'running' && (
+            <div className="text-[11px] text-muted mr-auto">
+              AI categorization still running — you can commit once it finishes, or close this and check back
+              later.
             </div>
-            <div className="text-xl font-bold font-mono" style={{ color: 'oklch(85% 0.12 70)' }}>
-              {batch.needs_category_count}
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="bg-input border border-border rounded-xl overflow-y-auto mb-5 max-h-[45vh]">
-        <div className="grid grid-cols-[80px_1fr_180px_110px] px-5 py-2.5 text-[11px] text-muted-2 uppercase tracking-wide border-b border-border/70 sticky top-0 bg-input">
-          <div>Date</div>
-          <div>Description</div>
-          <div>Category</div>
-          <div className="text-right">Amount</div>
-        </div>
-        {visibleRows.map((row) => {
-          const isOpen = openIndex === row.index
-          const colorOverride = row.needs_review ? { bg: AMBER_BADGE_BG, fg: AMBER_BADGE_FG } : undefined
-          return (
-            <div key={row.index}>
-              <div
-                onClick={() => row.needs_review && setOpenIndex(isOpen ? null : row.index)}
-                className={`grid grid-cols-[80px_1fr_180px_110px] items-center px-5 py-3 text-[13px] border-b border-border/70 ${
-                  row.needs_review ? 'cursor-pointer' : ''
-                }`}
-                style={{ background: row.needs_review ? AMBER_BG : isOpen ? 'var(--color-input)' : undefined }}
-              >
-                <div className="text-muted font-mono text-xs">{fmtDate(row.transaction_date)}</div>
-                <div className="truncate pr-2" title={row.raw_description}>
-                  {row.matched_label ?? row.raw_description}
-                </div>
-                <div>
-                  <CategoryBadge category={row.category} categories={categoriesQ.data} colorOverride={colorOverride} />
-                </div>
-                <div className={`text-right font-mono ${row.amount > 0 ? 'text-success' : 'text-text'}`}>
-                  {fmtSigned(row.amount)}
-                </div>
-              </div>
-              {isOpen && (
-                <StagingRowPopover row={row} batchId={batch.batch_id} onApplied={() => setOpenIndex(null)} />
-              )}
-            </div>
-          )
-        })}
-      </div>
-
-      <div className="flex justify-end gap-3">
-        <button
-          onClick={handleDiscard}
-          disabled={discard.isPending}
-          className="text-[13px] font-semibold px-4.5 py-2.5 rounded-lg cursor-pointer bg-input disabled:opacity-60"
-          style={{ border: '1px solid oklch(45% 0.15 25)', color: 'oklch(70% 0.18 25)' }}
-        >
-          Discard Batch
-        </button>
-        <button
-          onClick={handleCommit}
-          disabled={commit.isPending || visibleRows.length === 0}
-          className="text-[13px] font-semibold px-5 py-2.5 rounded-lg border-none bg-accent text-accent-fg cursor-pointer disabled:opacity-60"
-        >
-          Commit {batch.new_extracted} Transaction{batch.new_extracted === 1 ? '' : 's'}
-        </button>
-      </div>
-    </Modal>
+          )}
+          <button
+            onClick={handleDiscard}
+            disabled={discard.isPending}
+            className="text-[13px] font-semibold px-4.5 py-2.5 rounded-lg cursor-pointer bg-input disabled:opacity-60"
+            style={{ border: '1px solid oklch(45% 0.15 25)', color: 'oklch(70% 0.18 25)' }}
+          >
+            Discard Batch
+          </button>
+          <button
+            onClick={handleCommit}
+            disabled={commit.isPending || visibleRows.length === 0 || batch.ai_status === 'running'}
+            title={batch.ai_status === 'running' ? 'Wait for AI categorization to finish, or close this dialog' : undefined}
+            className="text-[13px] font-semibold px-5 py-2.5 rounded-lg border-none bg-accent text-accent-fg cursor-pointer disabled:opacity-60"
+          >
+            Commit {batch.new_extracted} Transaction{batch.new_extracted === 1 ? '' : 's'}
+          </button>
+        </>
+      }
+    />
   )
 }

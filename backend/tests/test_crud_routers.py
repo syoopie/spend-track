@@ -139,7 +139,10 @@ def test_update_missing_transaction_404s(client):
     assert resp.json()["detail"]["code"] == "TRANSACTION_NOT_FOUND"
 
 
-def test_recategorize_reruns_categorization_over_month_range(client):
+def test_recategorize_stages_a_batch_and_only_writes_on_commit(client):
+    """Recategorize is treated the same as an upload: the POST proposes
+    results into a pending, reviewable batch - it must not touch the DB
+    until that batch is explicitly committed."""
     _upload_and_commit(client)
     tx = client.get("/api/transactions").json()[0]
     client.patch(
@@ -151,23 +154,78 @@ def test_recategorize_reruns_categorization_over_month_range(client):
         rows = client.get("/api/transactions", params={"include_excluded": True}).json()
         return next(t for t in rows if t["id"] == tx_id)
 
-    # out of range: untouched
-    resp_out = client.post(
-        "/api/transactions/recategorize", json={"date_from": "2026-06", "date_to": "2026-06"}
-    )
-    assert resp_out.json() == {"transactions_scanned": 0, "transactions_changed": 0}
+    # out of range: an empty batch is still staged (not applied) - discard it
+    # to free the "only one pending batch" slot for the real run below.
+    resp_out = client.post("/api/transactions/recategorize", json={"date_from": "2026-06", "date_to": "2026-06"})
+    assert resp_out.status_code == 200
+    out_body = resp_out.json()
+    assert out_body["scanned"] == 0
+    assert out_body["rows"] == []
+    assert client.delete(f"/api/transactions/recategorize/{out_body['batch_id']}").status_code == 204
     assert _fetch(tx["id"])["category"] == "Groceries"
 
-    # in range: recomputed from the raw description, overwriting the manual edit
-    resp = client.post(
-        "/api/transactions/recategorize", json={"date_from": "2026-05", "date_to": "2026-05"}
-    )
+    # in range: proposes the recomputed result but does not apply it yet
+    resp = client.post("/api/transactions/recategorize", json={"date_from": "2026-05", "date_to": "2026-05"})
     body = resp.json()
-    assert body["transactions_scanned"] == 39
-    assert body["transactions_changed"] >= 1
+    assert body["scanned"] == 39
+    assert body["changed"] >= 1
+    assert len(body["rows"]) == 39
+    assert _fetch(tx["id"])["category"] == "Groceries"  # still untouched - only proposed so far
 
+    # a second run is rejected while this one is still pending
+    conflict = client.post("/api/transactions/recategorize", json={"date_from": "2026-05", "date_to": "2026-05"})
+    assert conflict.status_code == 409
+    assert conflict.json()["detail"]["code"] == "RECATEGORIZE_BATCH_EXISTS"
+
+    # committing applies every proposed row to the DB
+    commit_resp = client.post(f"/api/transactions/recategorize/{body['batch_id']}/commit")
+    assert commit_resp.status_code == 200
+    assert commit_resp.json()["transactions_committed"] == 39
     reverted = _fetch(tx["id"])
     assert (reverted["category"], reverted["matched_label"]) != ("Groceries", "Manual Override")
+
+    # the batch is gone once committed, freeing the slot for a future run
+    assert client.get("/api/transactions/recategorize/current").status_code == 404
+
+
+def test_recategorize_discard_leaves_db_untouched(client):
+    _upload_and_commit(client)
+    tx = client.get("/api/transactions").json()[0]
+
+    body = client.post("/api/transactions/recategorize", json={"date_from": "2026-05", "date_to": "2026-05"}).json()
+    assert client.delete(f"/api/transactions/recategorize/{body['batch_id']}").status_code == 204
+    assert client.get("/api/transactions/recategorize/current").status_code == 404
+
+    refetched = next(t for t in client.get("/api/transactions").json() if t["id"] == tx["id"])
+    assert refetched["category"] == tx["category"]
+    assert refetched["matched_label"] == tx["matched_label"]
+
+
+def test_recategorize_row_edit_is_staged_until_commit(client):
+    _upload_and_commit(client)
+    batch = client.post("/api/transactions/recategorize", json={"date_from": "2026-05", "date_to": "2026-05"}).json()
+    row = batch["rows"][0]
+
+    resp = client.patch(
+        f"/api/transactions/recategorize/{batch['batch_id']}/rows/{row['transaction_id']}",
+        json={"category": "Entertainment", "save_as_rule": True, "rule_pattern": "MANUAL RULE PATTERN"},
+    )
+    assert resp.status_code == 200
+    updated_row = next(r for r in resp.json()["rows"] if r["transaction_id"] == row["transaction_id"])
+    assert updated_row["category"] == "Entertainment"
+
+    # not written to the DB yet
+    still_unwritten = next(t for t in client.get("/api/transactions").json() if t["id"] == row["transaction_id"])
+    assert still_unwritten["category"] != "Entertainment"
+
+    # the rule itself, though, is created immediately (independent of commit)
+    rules = client.get("/api/rules").json()
+    assert any(r["match_pattern"] == "MANUAL RULE PATTERN" for r in rules)
+
+    # committing writes the edited value
+    client.post(f"/api/transactions/recategorize/{batch['batch_id']}/commit")
+    written = next(t for t in client.get("/api/transactions").json() if t["id"] == row["transaction_id"])
+    assert written["category"] == "Entertainment"
 
 
 # --- contacts -----------------------------------------------------------

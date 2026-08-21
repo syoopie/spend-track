@@ -43,6 +43,25 @@ class StagingRow:
     contact_id: int | None
     needs_review: bool
     is_duplicate: bool
+    # Set once at row creation from the raw description's PayNow markers
+    # (engine/paynow.py::is_paynow_transfer) and never touched again by the
+    # update endpoint - unlike needs_review, which gets cleared to False on
+    # any edit, this is what routers/statements.py uses to permanently gate
+    # "Save as contact mapping" (PayNow-only) vs. "Save as rule" (everything
+    # else) even after the row has already been resolved once.
+    is_paynow: bool = False
+    # ai_suggested/ai_category/ai_label/ai_rule_pattern are a permanent record
+    # of what the AI proposed for this row - set once by the background AI
+    # job and never cleared afterward, even when the user rejects or
+    # overrides the suggestion. That's what lets a rejected suggestion be
+    # restored later (see routers/statements.py's restore_ai handling):
+    # "currently showing the AI's suggestion" is derived by comparing
+    # category/matched_label against ai_category/ai_label, not tracked as
+    # separate mutable state that could drift out of sync.
+    ai_suggested: bool = False
+    ai_category: str | None = None
+    ai_label: str | None = None
+    ai_rule_pattern: str | None = None
 
 
 @dataclass
@@ -52,6 +71,13 @@ class StagingBatch:
     accounts: list[StagingAccount]
     rows: list[StagingRow]
     batch_id: str = field(default_factory=lambda: uuid.uuid4().hex)
+    # "disabled" (AI off), "running" (background categorization in flight),
+    # "done", "failed" (unreachable/errored - see ai_warning). Set once right
+    # after the batch is created in upload_statement() and mutated in place
+    # by the background task - see routers/statements.py.
+    ai_status: str = "disabled"
+    ai_warning: str | None = None
+    ai_model: str | None = None
 
 
 class StagingStore:

@@ -3,13 +3,51 @@ from pathlib import Path
 
 from fastapi import APIRouter
 
-from app.config import get_db_path, set_db_path
+from app.config import get_ai_settings, get_db_path, set_ai_settings, set_db_path
 from app.db import get_conn, init_db
+from app.engine.ai_providers import build_provider
 from app.errors import api_error
 from app.localization import ACTIVE_COUNTRY
-from app.models import DeleteScopeResult, RelocateRequest, ResetRequest, SettingsOut
+from app.models import (
+    AiSettingsOut,
+    AiSettingsUpdateRequest,
+    AiStatusOut,
+    DeleteScopeResult,
+    RelocateRequest,
+    ResetRequest,
+    SettingsOut,
+)
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
+
+_PROVIDER_REQUIREMENTS = {
+    "ollama": ("ollama_model", "A model name"),
+    "openai_compatible": ("openai_model", "A model name"),
+    "anthropic": ("anthropic_model", "A model name"),
+}
+_PROVIDER_KEY_REQUIREMENTS = {
+    "openai_compatible": "openai_api_key",
+    "anthropic": "anthropic_api_key",
+}
+
+
+def _redact(ai: dict) -> dict:
+    def last4(key: str) -> str | None:
+        return key[-4:] if len(key) >= 4 else (key or None)
+
+    return {
+        "ai_enabled": ai["ai_enabled"],
+        "ai_provider": ai["ai_provider"],
+        "ollama_url": ai["ollama_url"],
+        "ollama_model": ai["ollama_model"],
+        "openai_base_url": ai["openai_base_url"],
+        "openai_model": ai["openai_model"],
+        "openai_api_key_set": bool(ai["openai_api_key"]),
+        "openai_api_key_last4": last4(ai["openai_api_key"]) if ai["openai_api_key"] else None,
+        "anthropic_model": ai["anthropic_model"],
+        "anthropic_api_key_set": bool(ai["anthropic_api_key"]),
+        "anthropic_api_key_last4": last4(ai["anthropic_api_key"]) if ai["anthropic_api_key"] else None,
+    }
 
 
 def _schema_version(db_path: Path) -> int:
@@ -33,16 +71,57 @@ def _localization_fields() -> dict:
     }
 
 
-@router.get("", response_model=SettingsOut)
-def get_settings():
-    db_path = get_db_path()
+def _settings_out(db_path: Path) -> SettingsOut:
     size = db_path.stat().st_size if db_path.exists() else 0
     return SettingsOut(
         db_path=str(db_path),
         size_bytes=size,
         schema_version=_schema_version(db_path),
         **_localization_fields(),
+        **_redact(get_ai_settings()),
     )
+
+
+@router.get("", response_model=SettingsOut)
+def get_settings():
+    return _settings_out(get_db_path())
+
+
+@router.get("/ai/status", response_model=AiStatusOut)
+def get_ai_status():
+    provider = build_provider(get_ai_settings())
+    health = provider.check_health()
+    return AiStatusOut(reachable=health.reachable, models=health.models, error=health.error)
+
+
+@router.patch("/ai", response_model=AiSettingsOut)
+def update_ai_settings(body: AiSettingsUpdateRequest):
+    current = get_ai_settings()
+    updates = body.model_dump(exclude={"clear_openai_api_key", "clear_anthropic_api_key"}, exclude_none=True)
+    # A blank key means "the user didn't type a new one" (the raw key is
+    # never echoed back to the frontend, so its input starts empty) - not
+    # "clear it". Clearing is only ever the explicit clear_*_api_key flag.
+    for key_field in ("openai_api_key", "anthropic_api_key"):
+        if not updates.get(key_field):
+            updates.pop(key_field, None)
+    if body.clear_openai_api_key:
+        updates["openai_api_key"] = ""
+    if body.clear_anthropic_api_key:
+        updates["anthropic_api_key"] = ""
+
+    resulting_provider = updates.get("ai_provider", current["ai_provider"])
+    resulting_enabled = updates.get("ai_enabled", current["ai_enabled"])
+    if resulting_enabled:
+        merged = {**current, **updates}
+        model_field, model_label = _PROVIDER_REQUIREMENTS[resulting_provider]
+        if not merged.get(model_field):
+            raise api_error(400, "AI_PROVIDER_NOT_CONFIGURED", f"{model_label} is required for {resulting_provider}.")
+        key_field = _PROVIDER_KEY_REQUIREMENTS.get(resulting_provider)
+        if key_field and not merged.get(key_field):
+            raise api_error(400, "AI_PROVIDER_NOT_CONFIGURED", f"An API key is required for {resulting_provider}.")
+
+    updated = set_ai_settings(**updates)
+    return AiSettingsOut(**_redact(updated))
 
 
 @router.post("/relocate", response_model=SettingsOut)
@@ -71,14 +150,7 @@ def relocate_database(body: RelocateRequest):
             src.unlink()
 
     set_db_path(new_path)
-
-    size = new_path.stat().st_size if new_path.exists() else 0
-    return SettingsOut(
-        db_path=str(new_path),
-        size_bytes=size,
-        schema_version=_schema_version(new_path),
-        **_localization_fields(),
-    )
+    return _settings_out(new_path)
 
 
 @router.post("/reset", status_code=204)

@@ -1,10 +1,19 @@
-from fastapi import APIRouter, File, Form, UploadFile
+from fastapi import APIRouter, BackgroundTasks, File, Form, UploadFile
 
 from app import repo
+from app.config import get_ai_settings
 from app.db import get_conn
+from app.engine.ai_providers import (
+    AiCandidate,
+    AiProviderResponseError,
+    AiProviderUnavailableError,
+    active_model_name,
+    build_provider,
+)
+from app.engine.ai_providers import cancellation as ai_cancellation
 from app.engine.fingerprint import clean_description, compute_daily_sequence_indices, compute_fingerprint
 from app.engine.identity import derive_account_id
-from app.engine.naming import extract_display_name
+from app.engine.paynow import is_paynow_transfer
 from app.engine.refunds import find_refund_pairs
 from app.engine.rules import categorize
 from app.engine.staging_store import StagingAccount, StagingBatch, StagingRow, get_store
@@ -40,6 +49,11 @@ def _batch_to_response(batch: StagingBatch) -> StagingBatchOut:
             contact_id=r.contact_id,
             needs_review=r.needs_review,
             is_duplicate=r.is_duplicate,
+            is_paynow=r.is_paynow,
+            ai_suggested=r.ai_suggested,
+            ai_category=r.ai_category,
+            ai_label=r.ai_label,
+            ai_rule_pattern=r.ai_rule_pattern,
         )
         for r in batch.rows
     ]
@@ -62,11 +76,78 @@ def _batch_to_response(batch: StagingBatch) -> StagingBatchOut:
         duplicates_skipped=sum(1 for r in batch.rows if r.is_duplicate),
         new_accounts_provisioned=sum(1 for a in batch.accounts if a.is_new),
         needs_category_count=sum(1 for r in batch.rows if r.needs_review),
+        ai_status=batch.ai_status,
+        ai_warning=batch.ai_warning,
+        ai_model=batch.ai_model,
+        ai_suggested_count=sum(1 for r in batch.rows if r.ai_suggested),
     )
 
 
+def _ai_candidates(rows: list[StagingRow]) -> list[AiCandidate]:
+    return [
+        AiCandidate(
+            index=r.index,
+            raw_description=r.raw_description,
+            amount=r.amount,
+            direction="inflow" if r.amount > 0 else "outflow",
+        )
+        for r in rows
+        if r.category in ("Others", "Other Income") and r.matched_label is None and not r.is_duplicate
+    ]
+
+
+def _run_ai_categorization(
+    batch_id: str, candidates: list[AiCandidate], categories: list[tuple[str, str]], ai_settings: dict
+) -> None:
+    store = get_store()
+    try:
+        batch = store.get(batch_id)
+    except KeyError:
+        return  # discarded/committed before the background task even started
+
+    provider = build_provider(ai_settings)
+    health = provider.check_health()
+    if not health.reachable:
+        batch.ai_warning = (
+            f"AI is enabled but the model can't be reached ({ai_settings['ai_provider']}: {health.error}) - "
+            "this statement was categorized using rules only."
+        )
+        batch.ai_status = "failed"
+        return
+
+    try:
+        suggestions = provider.categorize(candidates, categories, cancel_key=batch_id)
+    except (AiProviderUnavailableError, AiProviderResponseError) as exc:
+        batch.ai_warning = (
+            f"AI is enabled but the request failed ({ai_settings['ai_provider']}: {exc}) - "
+            "this statement was categorized using rules only."
+        )
+        batch.ai_status = "failed"
+        return
+
+    try:
+        batch = store.get(batch_id)  # re-fetch: may have been committed/discarded while the model was thinking
+    except KeyError:
+        return
+
+    by_index = {r.index: r for r in batch.rows}
+    for suggestion in suggestions:
+        row = by_index.get(suggestion.index)
+        if row is None:
+            continue
+        row.category = suggestion.category
+        row.matched_label = suggestion.display_label
+        row.ai_suggested = True
+        row.ai_category = suggestion.category
+        row.ai_label = suggestion.display_label
+        row.ai_rule_pattern = suggestion.rule_pattern
+    batch.ai_status = "done"
+
+
 @router.post("/upload", response_model=StagingBatchOut)
-async def upload_statement(files: list[UploadFile] = File(...), password: str | None = Form(default=None)):
+async def upload_statement(
+    background_tasks: BackgroundTasks, files: list[UploadFile] = File(...), password: str | None = Form(default=None)
+):
     if get_store().current() is not None:
         raise api_error(
             409, "STAGING_BATCH_EXISTS", "Commit or discard the pending statement before uploading another."
@@ -103,6 +184,7 @@ async def upload_statement(files: list[UploadFile] = File(...), password: str | 
         rules = repo.fetch_active_rules(conn)
         contact_identifiers = repo.fetch_contact_identifiers(conn)
         category_directions = repo.fetch_category_directions(conn)
+        ai_categories = repo.fetch_ai_target_categories(conn)
         # Any card account already committed, or parsed anywhere in this same
         # multi-file batch, is enough to treat a "pay my card bill" line on a
         # bank account as already counted elsewhere - see engine/card_payments.py.
@@ -170,6 +252,7 @@ async def upload_statement(files: list[UploadFile] = File(...), password: str | 
                             contact_id=cat.contact_id,
                             needs_review=cat.needs_review,
                             is_duplicate=is_duplicate,
+                            is_paynow=is_paynow_transfer(tx.raw_description.upper()),
                         )
                     )
                     row_index += 1
@@ -191,6 +274,16 @@ async def upload_statement(files: list[UploadFile] = File(...), password: str | 
         raise api_error(
             409, "STAGING_BATCH_EXISTS", "Commit or discard the pending statement before uploading another."
         )
+
+    ai_settings = get_ai_settings()
+    candidates = _ai_candidates(staging_rows)
+    if ai_settings["ai_enabled"] and candidates:
+        batch.ai_status = "running"
+        batch.ai_model = active_model_name(ai_settings)
+        background_tasks.add_task(_run_ai_categorization, batch.batch_id, candidates, ai_categories, ai_settings)
+    else:
+        batch.ai_status = "done" if ai_settings["ai_enabled"] else "disabled"
+
     return _batch_to_response(batch)
 
 
@@ -219,41 +312,44 @@ def update_staging_row(batch_id: str, index: int, body: StagingRowUpdateRequest)
     except KeyError:
         raise api_error(404, "STAGING_BATCH_NOT_FOUND", "No staging batch with that id.")
 
-    try:
-        row = store.update_row(
-            batch_id,
-            index,
-            category=body.category,
-            subcategory=body.subcategory,
-            needs_review=False,
-        )
-    except KeyError:
+    row = next((r for r in batch.rows if r.index == index), None)
+    if row is None:
         raise api_error(404, "STAGING_ROW_NOT_FOUND", "No staging row at that index.")
 
-    with get_conn() as conn:
-        if body.save_as_rule:
-            pattern = body.rule_pattern or extract_display_name(row.raw_description)
-            priority = body.rule_priority if body.rule_priority is not None else repo.next_user_rule_priority(conn)
-            repo.insert_rule(
-                conn,
-                priority=priority,
-                match_pattern=pattern,
-                target_category=body.category,
-                target_subcategory=body.subcategory,
-            )
+    # ai_suggested/ai_category/ai_label/ai_rule_pattern are never cleared
+    # here - they're a permanent record of what the AI proposed (see
+    # StagingRow's docstring comment), so a rejected suggestion can always be
+    # restored later. reject_ai clears matched_label back to null (the user
+    # trusts none of what the AI proposed, not just its category);
+    # restore_ai re-applies the row's recorded ai_category/ai_label,
+    # ignoring whatever `category` the request otherwise carries.
+    fields: dict = {"subcategory": body.subcategory, "needs_review": False}
+    if body.restore_ai:
+        if row.ai_category is None:
+            raise api_error(400, "NO_AI_SUGGESTION", "This row has no AI suggestion to restore.")
+        fields["category"] = row.ai_category
+        fields["matched_label"] = row.ai_label
+    elif body.reject_ai:
+        fields["category"] = body.category
+        fields["matched_label"] = None
+    else:
+        fields["category"] = body.category
+    store.update_row(batch_id, index, **fields)
 
-        if body.save_as_contact:
-            identifier = body.contact_identifier or extract_display_name(row.raw_description)
-            name = body.contact_name or identifier
-            contact_id = repo.find_contact_id_by_identifier(conn, identifier)
-            if contact_id is None:
-                contact_id = repo.insert_contact(
-                    conn,
-                    name=name,
-                    default_category=body.category,
-                    default_subcategory=body.subcategory,
-                    identifiers=[identifier],
-                )
+    with get_conn() as conn:
+        contact_id = repo.apply_save_as_rule_and_contact(
+            conn,
+            raw_description=row.raw_description,
+            category=body.category,
+            subcategory=body.subcategory,
+            save_as_rule=body.save_as_rule,
+            rule_pattern=body.rule_pattern,
+            rule_priority=body.rule_priority,
+            save_as_contact=body.save_as_contact,
+            contact_name=body.contact_name,
+            contact_identifier=body.contact_identifier,
+        )
+        if contact_id is not None:
             store.update_row(batch_id, index, contact_id=contact_id)
 
     return _batch_to_response(batch)
@@ -338,6 +434,7 @@ def commit_staging_batch(batch_id: str):
                 refund_pairs_created += 1
 
     store.delete(batch_id)
+    ai_cancellation.cancel(batch_id)  # see discard_staging_batch's comment
     return CommitResult(
         transactions_committed=transactions_committed,
         duplicates_skipped=duplicates_skipped,
@@ -349,3 +446,9 @@ def commit_staging_batch(batch_id: str):
 @router.delete("/staging/{batch_id}", status_code=204)
 def discard_staging_batch(batch_id: str):
     get_store().delete(batch_id)
+    # If a background AI categorization call for this batch is still in
+    # flight, its result would just be thrown away by the batch-id guard in
+    # _run_ai_categorization anyway - this actively interrupts the HTTP call
+    # itself (best-effort, see ai_providers/cancellation.py) so a discarded
+    # batch doesn't leave an expensive cloud request running for nothing.
+    ai_cancellation.cancel(batch_id)

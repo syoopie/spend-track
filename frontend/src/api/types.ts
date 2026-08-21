@@ -19,7 +19,14 @@ export interface StagingRow {
   contact_id: number | null
   needs_review: boolean
   is_duplicate: boolean
+  is_paynow: boolean
+  ai_suggested: boolean
+  ai_category: string | null
+  ai_label: string | null
+  ai_rule_pattern: string | null
 }
+
+export type AiJobStatus = 'disabled' | 'running' | 'done' | 'failed'
 
 export interface StagingBatch {
   batch_id: string
@@ -31,6 +38,10 @@ export interface StagingBatch {
   duplicates_skipped: number
   new_accounts_provisioned: number
   needs_category_count: number
+  ai_status: AiJobStatus
+  ai_warning: string | null
+  ai_model: string | null
+  ai_suggested_count: number
 }
 
 export interface StagingRowUpdateRequest {
@@ -42,6 +53,8 @@ export interface StagingRowUpdateRequest {
   save_as_contact?: boolean
   contact_name?: string | null
   contact_identifier?: string | null
+  reject_ai?: boolean
+  restore_ai?: boolean
 }
 
 export interface CommitResult {
@@ -91,9 +104,55 @@ export interface RecategorizeRequest {
   account_id?: string | null
 }
 
-export interface RecategorizeResult {
-  transactions_scanned: number
-  transactions_changed: number
+export interface RecategorizeRow {
+  transaction_id: number
+  account_number_masked: string
+  transaction_date: string
+  raw_description: string
+  matched_label: string | null
+  amount: number
+  category: string
+  subcategory: string | null
+  contact_id: number | null
+  is_excluded: boolean
+  exclusion_reason: string | null
+  needs_review: boolean
+  is_paynow: boolean
+  ai_suggested: boolean
+  ai_category: string | null
+  ai_label: string | null
+  ai_rule_pattern: string | null
+}
+
+export interface RecategorizeBatch {
+  batch_id: string
+  date_from: string
+  date_to: string
+  account_id: string | null
+  scanned: number
+  changed: number
+  rows: RecategorizeRow[]
+  ai_status: AiJobStatus
+  ai_warning: string | null
+  ai_model: string | null
+  ai_suggested_count: number
+}
+
+export interface RecategorizeRowUpdateRequest {
+  category: string
+  subcategory?: string | null
+  save_as_rule?: boolean
+  rule_pattern?: string | null
+  rule_priority?: number | null
+  save_as_contact?: boolean
+  contact_name?: string | null
+  contact_identifier?: string | null
+  reject_ai?: boolean
+  restore_ai?: boolean
+}
+
+export interface RecategorizeCommitResult {
+  transactions_committed: number
 }
 
 export interface RefundPairing {
@@ -162,7 +221,45 @@ export interface Category {
   direction: CategoryDirection
 }
 
-export interface Settings {
+export type AiProviderKind = 'ollama' | 'openai_compatible' | 'anthropic'
+
+export interface AiSettingsFields {
+  ai_enabled: boolean
+  ai_provider: AiProviderKind
+  ollama_url: string
+  ollama_model: string
+  openai_base_url: string
+  openai_model: string
+  openai_api_key_set: boolean
+  openai_api_key_last4: string | null
+  anthropic_model: string
+  anthropic_api_key_set: boolean
+  anthropic_api_key_last4: string | null
+}
+
+export type AiSettings = AiSettingsFields
+
+export interface AiSettingsUpdateRequest {
+  ai_enabled?: boolean
+  ai_provider?: AiProviderKind
+  ollama_url?: string
+  ollama_model?: string
+  openai_base_url?: string
+  openai_model?: string
+  openai_api_key?: string
+  clear_openai_api_key?: boolean
+  anthropic_model?: string
+  anthropic_api_key?: string
+  clear_anthropic_api_key?: boolean
+}
+
+export interface AiStatus {
+  reachable: boolean
+  models: string[]
+  error: string | null
+}
+
+export interface Settings extends AiSettingsFields {
   db_path: string
   size_bytes: number
   schema_version: number

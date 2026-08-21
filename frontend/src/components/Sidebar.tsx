@@ -1,5 +1,6 @@
 import { BookOpen, LayoutGrid, ListChecks, Settings as SettingsIcon, SlidersHorizontal, Upload, Users } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
+import { useSettings } from '../api/hooks'
 import { useUploadDialog } from './UploadProvider'
 
 const NAV_ITEMS = [
@@ -37,6 +38,11 @@ const NAV_ITEMS = [
 
 export function Sidebar() {
   const { openDialog, hasPendingBatch } = useUploadDialog()
+  const settingsQ = useSettings()
+  // The "local-only" claim stops being true the moment a cloud AI provider
+  // is active - this footer must reflect that rather than keep asserting it
+  // unconditionally. See Settings' AI section for where this is configured.
+  const usingCloudAi = !!settingsQ.data?.ai_enabled && settingsQ.data?.ai_provider !== 'ollama'
 
   return (
     // The rail reserves a fixed 64px in the layout so the main content
@@ -110,7 +116,7 @@ export function Sidebar() {
         <div className="flex-1" />
         <div className="flex items-start text-[11px] text-muted-2 pt-2.5 border-t border-border">
           <div className="w-9 h-4 flex items-center justify-center shrink-0">
-            <span className="w-1.5 h-1.5 rounded-full bg-success" />
+            <span className={`w-1.5 h-1.5 rounded-full ${usingCloudAi ? 'bg-accent' : 'bg-success'}`} />
           </div>
           {/* Fixed width so it wraps onto two lines instead of rendering as
               one long line that crowds (or overflows past) the rail's right
@@ -118,7 +124,9 @@ export function Sidebar() {
               width, same trap the old caption had before it got a fixed
               width too. */}
           <div className="w-0 group-hover:w-auto overflow-hidden shrink-0">
-            <div className="w-[160px] leading-snug">Local-only · no data leaves this device</div>
+            <div className="w-[160px] leading-snug">
+              {usingCloudAi ? 'Cloud AI enabled · some data leaves this device' : 'Local-only · no data leaves this device'}
+            </div>
           </div>
         </div>
       </div>

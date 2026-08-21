@@ -2,6 +2,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError } from './client'
 import type {
   Account,
+  AiSettings,
+  AiSettingsUpdateRequest,
+  AiStatus,
   CommitResult,
   Contact,
   ContactCreateRequest,
@@ -10,8 +13,10 @@ import type {
   DashboardSummary,
   DeleteScopeResult,
   MonthlyTotal,
+  RecategorizeBatch,
+  RecategorizeCommitResult,
   RecategorizeRequest,
-  RecategorizeResult,
+  RecategorizeRowUpdateRequest,
   RefundPairing,
   Rule,
   RuleCreateRequest,
@@ -55,15 +60,65 @@ export function useUpdateTransaction() {
   })
 }
 
+// --- recategorize -----------------------------------------------------------
+//
+// Deliberately "treated the exact same as an upload" (per the app's own
+// UX): the POST proposes a pollable, reviewable, discardable batch - same
+// shape and lifecycle as staging's StagingBatch/useCurrentStagingBatch,
+// rendered in the same ReviewDialog with Commit/Discard - rather than
+// writing straight to the DB. See engine/recategorize_job.py.
+
 export function useRecategorizeTransactions() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: RecategorizeRequest) => api.post<RecategorizeResult>('/transactions/recategorize', body),
+    mutationFn: (body: RecategorizeRequest) => api.post<RecategorizeBatch>('/transactions/recategorize', body),
+    onSuccess: (data) => qc.setQueryData(['recategorize-batch', 'current'], data),
+  })
+}
+
+export function useCurrentRecategorizeBatch(enabled: boolean) {
+  return useQuery({
+    queryKey: ['recategorize-batch', 'current'],
+    queryFn: async () => {
+      try {
+        return await api.get<RecategorizeBatch>('/transactions/recategorize/current')
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 404) return null
+        throw e
+      }
+    },
+    enabled,
+    refetchInterval: (query) => (query.state.data?.ai_status === 'running' ? 1500 : false),
+  })
+}
+
+export function useUpdateRecategorizeRow(batchId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ transactionId, body }: { transactionId: number; body: RecategorizeRowUpdateRequest }) =>
+      api.patch<RecategorizeBatch>(`/transactions/recategorize/${batchId}/rows/${transactionId}`, body),
+    onSuccess: (data) => qc.setQueryData(['recategorize-batch', 'current'], data),
+  })
+}
+
+export function useCommitRecategorizeBatch() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (batchId: string) => api.post<RecategorizeCommitResult>(`/transactions/recategorize/${batchId}/commit`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['transactions'] })
       qc.invalidateQueries({ queryKey: ['dashboard-summary'] })
       qc.invalidateQueries({ queryKey: ['monthly-totals'] })
+      qc.invalidateQueries({ queryKey: ['recategorize-batch'] })
     },
+  })
+}
+
+export function useDiscardRecategorizeBatch() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (batchId: string) => api.delete(`/transactions/recategorize/${batchId}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['recategorize-batch'] }),
   })
 }
 
@@ -116,6 +171,10 @@ export function useCurrentStagingBatch() {
         throw e
       }
     },
+    // Polls while the background AI pass is still working so the dialog's
+    // banner/rows update live without the user having to do anything -
+    // see StagingReviewDialog's ai_status banner.
+    refetchInterval: (query) => (query.state.data?.ai_status === 'running' ? 1500 : false),
   })
 }
 
@@ -235,6 +294,26 @@ export function useCategories(includeHidden = false) {
 
 export function useSettings() {
   return useQuery({ queryKey: ['settings'], queryFn: () => api.get<Settings>('/settings') })
+}
+
+export function useAiStatus(enabled: boolean) {
+  return useQuery({
+    queryKey: ['ai-status'],
+    queryFn: () => api.get<AiStatus>('/settings/ai/status'),
+    enabled,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function useUpdateAiSettings() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: AiSettingsUpdateRequest) => api.patch<AiSettings>('/settings/ai', body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['settings'] })
+      qc.invalidateQueries({ queryKey: ['ai-status'] })
+    },
+  })
 }
 
 export function useRelocateDb() {
