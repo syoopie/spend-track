@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useCategories, useCreateRule, useDeleteRule, useReorderRules, useRules } from '../api/hooks'
 import { Checkbox } from '../components/Checkbox'
 import { Modal } from '../components/Modal'
+import { Select } from '../components/Select'
 import { categoryColor } from '../lib/categoryColor'
 import type { Rule } from '../api/types'
 
@@ -28,63 +29,73 @@ function RuleBuilderModal({ onClose }: { onClose: () => void }) {
 
   return (
     <Modal onClose={onClose} width={460}>
-      <div className="text-base font-bold mb-4">New Rule</div>
-      <div className="text-[13px] text-[#c6c6cf] flex flex-col gap-3 mb-3.5">
-        <div className="flex items-center gap-2">
-          <span className="text-muted-2 w-[70px]">IF</span>
-          <span className="w-[110px]">Transaction</span>
-          <span className="text-muted-2">CONTAINS</span>
+      <div className="text-base font-bold mb-1">New Rule</div>
+      <div className="text-[12px] text-muted mb-4">Applies to every transaction whose description contains the text below.</div>
+
+      <div className="flex flex-col gap-3.5">
+        <div>
+          <div className="text-xs text-muted mb-1">Description contains</div>
           <input
+            autoFocus
             value={pattern}
             onChange={(e) => setPattern(e.target.value)}
             placeholder="e.g. NETFLIX"
-            className="flex-1 box-border px-2.5 py-2 rounded-md border border-border bg-input text-text text-[13px]"
+            className="w-full box-border px-3 py-2.5 rounded-lg border border-border bg-input text-text text-[13px]
+              outline-none focus:border-accent"
           />
         </div>
+
+        <label className="flex items-center gap-2 cursor-pointer text-[13px]">
+          <Checkbox checked={isExclusion} onChange={setIsExclusion} />
+          Exclude these transactions instead of categorizing them
+        </label>
+
+        <div className="h-px bg-border" />
+
         {!isExclusion && (
-          <div className="flex items-center gap-2">
-            <span className="text-muted-2 w-[70px]">THEN SET</span>
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="flex-1 px-2.5 py-2 rounded-md border border-border bg-input text-text text-[13px]"
-            >
+          <div>
+            <div className="text-xs text-muted mb-1">Category</div>
+            <Select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full">
               <option value="">Select category…</option>
               {(categoriesQ.data ?? []).map((c) => (
                 <option key={c.id} value={c.name}>
                   {c.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
         )}
-        <div className="flex items-center gap-2">
-          <span className="text-muted-2 w-[70px]">PRIORITY</span>
+
+        {isExclusion && (
+          <div>
+            <div className="text-xs text-muted mb-1">Exclusion reason</div>
+            <input
+              value={exclusionReason}
+              onChange={(e) => setExclusionReason(e.target.value)}
+              placeholder="e.g. Self-transfer between own accounts"
+              className="w-full box-border px-3 py-2.5 rounded-lg border border-border bg-input text-text text-[13px]
+                outline-none focus:border-accent"
+            />
+          </div>
+        )}
+
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-xs text-muted">Priority</div>
+            <div className="text-[11px] text-muted-2">Lower numbers are evaluated first</div>
+          </div>
           <input
             type="number"
             value={priority}
             onChange={(e) => setPriority(e.target.value === '' ? '' : Number(e.target.value))}
             placeholder="auto"
-            className="w-[70px] box-border px-2.5 py-2 rounded-md border border-border bg-input text-text text-[13px] outline-none focus:border-accent"
+            className="w-20 box-border px-2.5 py-2 rounded-lg border border-border bg-input text-text text-[13px]
+              outline-none focus:border-accent text-right"
           />
         </div>
-        <label className="flex items-center gap-2 cursor-pointer">
-          <Checkbox checked={isExclusion} onChange={setIsExclusion} />
-          This is an exclusion rule
-        </label>
-        {isExclusion && (
-          <div>
-            <div className="text-xs text-muted-2 mb-1">Exclusion Reason</div>
-            <input
-              value={exclusionReason}
-              onChange={(e) => setExclusionReason(e.target.value)}
-              placeholder="e.g. Self-transfer between own accounts"
-              className="w-full box-border px-2.5 py-2 rounded-md border border-border bg-input text-text text-[13px]"
-            />
-          </div>
-        )}
       </div>
-      <div className="flex justify-end gap-2.5">
+
+      <div className="flex justify-end gap-2.5 mt-5">
         <button
           onClick={onClose}
           className="text-[13px] px-4 py-2.5 rounded-lg border border-border bg-input text-text cursor-pointer"

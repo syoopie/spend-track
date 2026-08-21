@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useCategories, useUpdateTransaction } from '../api/hooks'
 import type { Transaction } from '../api/types'
 import { Checkbox } from './Checkbox'
+import { Select } from './Select'
 
 export function TransactionEditPopover({
   transaction,
@@ -49,18 +50,14 @@ export function TransactionEditPopover({
         </div>
         <div className="w-[220px]">
           <div className="text-[11px] text-muted mb-1">Category</div>
-          <select
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className="w-full text-[13px] px-2.5 py-1.5 rounded-md border border-border bg-card text-text"
-          >
+          <Select uiSize="sm" bg="card" value={category} onChange={(e) => setCategory(e.target.value)} className="w-full">
             {!currentCategoryKnown && <option value={category}>{category}</option>}
             {categoryOptions.map((c) => (
               <option key={c.id} value={c.name}>
                 {c.name}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
       </div>
       <label className="flex items-center gap-2 text-[12px] text-text cursor-pointer">

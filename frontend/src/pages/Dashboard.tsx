@@ -11,6 +11,7 @@ import { DateRangePicker } from '../components/DateRangePicker'
 import { TransactionEditPopover } from '../components/TransactionEditPopover'
 import { RecategorizeModal } from '../components/RecategorizeModal'
 import { Checkbox } from '../components/Checkbox'
+import { Select } from '../components/Select'
 import { useUploadDialog } from '../components/UploadProvider'
 
 function MetricCard({
@@ -150,18 +151,14 @@ export function Dashboard() {
             onChange={setRange}
             monthlyTotals={monthlyTotalsQ.data ?? []}
           />
-          <select
-            value={accountId ?? ''}
-            onChange={(e) => setAccountId(e.target.value || undefined)}
-            className="text-[13px] px-3 py-2 rounded-lg border border-border bg-input text-text"
-          >
+          <Select value={accountId ?? ''} onChange={(e) => setAccountId(e.target.value || undefined)} className="w-[190px]">
             <option value="">All Accounts</option>
             {(accountsQ.data ?? []).map((a) => (
               <option key={a.id} value={a.id}>
                 {a.bank_name} {a.account_number_masked}
               </option>
             ))}
-          </select>
+          </Select>
           <button
             onClick={() => setRecategorizeOpen(true)}
             title="Re-run categorization rules over the selected range"
@@ -216,7 +213,7 @@ export function Dashboard() {
 
       {/* Charts row 1 */}
       <div className="grid grid-cols-[1.3fr_1fr] gap-3.5 mb-3.5">
-        <CashFlowChart data={s.cash_flow} />
+        <CashFlowChart data={s.cash_flow} trend={monthlyTotalsQ.data} selectedMonth={s.date_to} />
         <CategoryDonut data={s.category_breakdown} categories={categoriesQ.data} rangeLabel={rangeLabel} />
       </div>
 
@@ -261,10 +258,11 @@ export function Dashboard() {
               placeholder="Search transactions…"
               className="text-[13px] px-3 py-1.5 rounded-lg border border-border bg-input text-text w-[200px]"
             />
-            <select
+            <Select
+              uiSize="sm"
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="text-[13px] px-2.5 py-1.5 rounded-lg border border-border bg-input text-text"
+              className="w-[160px]"
             >
               <option value="">All Categories</option>
               {(categoriesQ.data ?? []).map((c) => (
@@ -272,7 +270,7 @@ export function Dashboard() {
                   {c.name}
                 </option>
               ))}
-            </select>
+            </Select>
             <label className="flex items-center gap-1.5 text-xs text-muted cursor-pointer whitespace-nowrap">
               <Checkbox checked={excludedVisible} onChange={setExcludedVisible} />
               Show excluded
