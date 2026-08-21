@@ -107,6 +107,16 @@ def delete_rule(rule_id: int):
         conn.execute("DELETE FROM rules WHERE id = ?", (rule_id,))
 
 
+def _reorder_mismatch() -> HTTPException:
+    return HTTPException(
+        status_code=400,
+        detail={
+            "code": "REORDER_ID_MISMATCH",
+            "message": "ordered_ids must contain exactly every non-default rule id, no more and no less.",
+        },
+    )
+
+
 @router.post("/reorder", response_model=list[RuleOut])
 def reorder_rules(body: RuleReorderRequest):
     with get_conn() as conn:
@@ -116,6 +126,15 @@ def reorder_rules(body: RuleReorderRequest):
         ).fetchall() if body.ordered_ids else []
         if rows:
             raise _immutable()
+
+        # Unknown ids silently no-op an UPDATE, and a partial list leaves the
+        # omitted rules at their old priority - which can now numerically
+        # collide with the freshly-assigned 1..N block below. Requiring an
+        # exact match of the current editable set catches both.
+        editable_ids = {r["id"] for r in conn.execute("SELECT id FROM rules WHERE is_default = 0").fetchall()}
+        if len(body.ordered_ids) != len(editable_ids) or set(body.ordered_ids) != editable_ids:
+            raise _reorder_mismatch()
+
         for priority, rule_id in enumerate(body.ordered_ids, start=1):
             conn.execute("UPDATE rules SET priority = ? WHERE id = ?", (priority, rule_id))
         rows = conn.execute("SELECT * FROM rules ORDER BY priority ASC").fetchall()

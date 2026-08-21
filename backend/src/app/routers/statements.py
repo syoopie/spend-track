@@ -197,7 +197,16 @@ async def upload_statement(files: list[UploadFile] = File(...), password: str | 
         accounts=staging_accounts,
         rows=staging_rows,
     )
-    get_store().create(batch)
+    try:
+        get_store().create(batch)
+    except ValueError:
+        # A second upload can race past the current()-is-None check above
+        # while this one was busy parsing PDFs - StagingStore.create() is the
+        # actual point of truth, so translate its rejection into the same
+        # clean 409 the upfront check gives the common (non-racing) case.
+        raise _error(
+            409, "STAGING_BATCH_EXISTS", "Commit or discard the pending statement before uploading another."
+        )
     return _batch_to_response(batch)
 
 
