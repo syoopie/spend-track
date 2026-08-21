@@ -1,8 +1,8 @@
 import { FileUp, Pencil, RefreshCw } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useAccounts, useCategories, useDashboardSummary, useMonthlyTotals, useTransactions } from '../api/hooks'
-import { categoryColor } from '../lib/categoryColor'
-import { amountIntensityColor, fmtDate, fmtMonthRangeLabel, fmtMonthYearLabel, fmtPlain, shiftMonth } from '../lib/format'
+import { categoryColor, categoryIcon } from '../lib/categoryColor'
+import { amountIntensityColor, fmtDate, fmtMonthRangeLabel, fmtPlain, shiftMonth } from '../lib/format'
 import { CashFlowChart } from '../components/CashFlowChart'
 import { CategoryDonut } from '../components/CategoryDonut'
 import { VelocityChart } from '../components/VelocityChart'
@@ -12,6 +12,7 @@ import { TransactionEditPopover } from '../components/TransactionEditPopover'
 import { RecategorizeModal } from '../components/RecategorizeModal'
 import { Checkbox } from '../components/Checkbox'
 import { Select } from '../components/Select'
+import { Tabs } from '../components/Tabs'
 import { useUploadDialog } from '../components/UploadProvider'
 
 function MetricCard({
@@ -44,6 +45,8 @@ export function Dashboard() {
   const [refundTxId, setRefundTxId] = useState<number | null>(null)
   const [editingTxId, setEditingTxId] = useState<number | null>(null)
   const [recategorizeOpen, setRecategorizeOpen] = useState(false)
+  const [chartsTab, setChartsTab] = useState<'cashflow' | 'velocity'>('cashflow')
+  const [breakdownTab, setBreakdownTab] = useState<'category' | 'merchants' | 'paynow'>('category')
 
   const accountsQ = useAccounts()
   const categoriesQ = useCategories()
@@ -134,46 +137,42 @@ export function Dashboard() {
   const s = summaryQ.data
   const rangeLabel = fmtMonthRangeLabel(s.date_from, s.date_to)
   const rangeMonthCount = s.cash_flow.length
-  const showVelocity = s.spend_velocity.length > 0
   const topCategory = s.category_breakdown[0]
+  const prevRangeFrom = shiftMonth(s.date_from, -rangeMonthCount)
+  const prevRangeTo = shiftMonth(s.date_to, -rangeMonthCount)
 
   return (
-    <div className="px-9 pt-7 pb-15">
-      {banner}
-      <div className="flex items-start justify-between mb-5.5 gap-4 flex-wrap">
-        <div>
-          <div className="text-[22px] font-bold">Dashboard</div>
-          <div className="text-[13px] text-muted mt-0.5">Post-mortem view of where the money went</div>
-        </div>
-        <div className="flex gap-2.5 items-center">
-          <DateRangePicker
-            value={resolvedRange ?? { from: s.date_from, to: s.date_to }}
-            onChange={setRange}
-            monthlyTotals={monthlyTotalsQ.data ?? []}
-          />
-          <Select value={accountId ?? ''} onChange={(e) => setAccountId(e.target.value || undefined)} className="w-[190px]">
-            <option value="">All Accounts</option>
-            {(accountsQ.data ?? []).map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.bank_name} {a.account_number_masked}
-              </option>
-            ))}
-          </Select>
-          <button
-            onClick={() => setRecategorizeOpen(true)}
-            title="Re-run categorization rules over the selected range"
-            className="flex items-center gap-1.5 text-[13px] px-3 py-2 rounded-lg border border-border bg-input text-text cursor-pointer"
-          >
-            <RefreshCw size={14} />
-            Recategorize
-          </button>
-          <button
-            onClick={openDialog}
-            disabled={hasPendingBatch}
-            className="text-[13px] font-semibold px-4 py-2 rounded-lg border-none bg-accent text-accent-fg cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            + Upload Statement
-          </button>
+    <div className="px-9 pb-15">
+      <div className="pt-7">{banner}</div>
+      <div className="sticky top-0 z-20 -mx-9 px-9 bg-bg pt-7 pb-5.5">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <div className="text-[22px] font-bold">Dashboard</div>
+            <div className="text-[13px] text-muted mt-0.5">Post-mortem view of where the money went</div>
+          </div>
+          <div className="flex gap-2.5 items-center">
+            <DateRangePicker
+              value={resolvedRange ?? { from: s.date_from, to: s.date_to }}
+              onChange={setRange}
+              monthlyTotals={monthlyTotalsQ.data ?? []}
+            />
+            <Select value={accountId ?? ''} onChange={(e) => setAccountId(e.target.value || undefined)} className="w-[190px]">
+              <option value="">All Accounts</option>
+              {(accountsQ.data ?? []).map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.bank_name} {a.account_number_masked}
+                </option>
+              ))}
+            </Select>
+            <button
+              onClick={() => setRecategorizeOpen(true)}
+              title="Re-run categorization rules over the selected range"
+              className="flex items-center gap-1.5 text-[13px] px-3 py-2 rounded-lg border border-border bg-input text-text cursor-pointer"
+            >
+              <RefreshCw size={14} />
+              Recategorize
+            </button>
+          </div>
         </div>
       </div>
 
@@ -211,39 +210,64 @@ export function Dashboard() {
         />
       </div>
 
-      {/* Charts row 1 */}
-      <div className="grid grid-cols-[1.3fr_1fr] gap-3.5 mb-3.5">
-        <CashFlowChart data={s.cash_flow} trend={monthlyTotalsQ.data} selectedMonth={s.date_to} />
-        <CategoryDonut data={s.category_breakdown} categories={categoriesQ.data} rangeLabel={rangeLabel} />
-      </div>
-
-      {/* Charts row 2 */}
-      <div className={`grid gap-3.5 mb-5 ${showVelocity ? 'grid-cols-[1.3fr_1fr]' : 'grid-cols-1'}`}>
-        {showVelocity && (
-          <VelocityChart
-            data={s.spend_velocity}
-            monthLabel={fmtMonthYearLabel(s.date_from)}
-            prevMonthLabel={fmtMonthYearLabel(shiftMonth(s.date_from, -1))}
-          />
-        )}
+      {/* Charts row */}
+      <div className="grid grid-cols-2 gap-3.5 mb-5">
         <div className="bg-card border border-border rounded-xl p-5">
-          <div className="text-[13px] font-semibold mb-3">Top Merchants &amp; PayNow Contacts</div>
-          <div className="text-[11px] text-muted-2 mb-1.5 uppercase tracking-wide">Merchants</div>
-          {s.top_merchants.length === 0 && <div className="text-xs text-muted-2 py-1">No spending yet</div>}
-          {s.top_merchants.map((m) => (
-            <div key={m.name} className="flex justify-between text-[13px] py-1.5 border-b border-[#24252e]">
-              <span>{m.name}</span>
-              <span className="font-mono text-[#c6c6cf]">{fmtPlain(m.amount)}</span>
-            </div>
-          ))}
-          <div className="text-[11px] text-muted-2 mt-3.5 mb-1.5 uppercase tracking-wide">PayNow Contacts</div>
-          {s.top_paynow_contacts.length === 0 && <div className="text-xs text-muted-2 py-1">No PayNow transfers yet</div>}
-          {s.top_paynow_contacts.map((p) => (
-            <div key={p.name} className="flex justify-between text-[13px] py-1.5 border-b border-[#24252e]">
-              <span>{p.name}</span>
-              <span className="font-mono text-[#c6c6cf]">{fmtPlain(p.amount)}</span>
-            </div>
-          ))}
+          <Tabs
+            tabs={[
+              { key: 'cashflow', label: 'Cash Flow' },
+              { key: 'velocity', label: 'Spend Velocity' },
+            ]}
+            active={chartsTab}
+            onChange={setChartsTab}
+          />
+          {chartsTab === 'cashflow' ? (
+            <CashFlowChart data={s.cash_flow} trend={monthlyTotalsQ.data} rangeFrom={s.date_from} rangeTo={s.date_to} bare />
+          ) : (
+            <VelocityChart
+              data={s.spend_velocity}
+              periodLabel={rangeLabel}
+              prevPeriodLabel={fmtMonthRangeLabel(prevRangeFrom, prevRangeTo)}
+              bare
+            />
+          )}
+        </div>
+
+        <div className="bg-card border border-border rounded-xl p-5">
+          <Tabs
+            tabs={[
+              { key: 'category', label: 'Category Breakdown' },
+              { key: 'merchants', label: 'Top Merchants' },
+              { key: 'paynow', label: 'Top Paynow Contacts' },
+            ]}
+            active={breakdownTab}
+            onChange={setBreakdownTab}
+          />
+          {breakdownTab === 'category' && (
+            <CategoryDonut data={s.category_breakdown} categories={categoriesQ.data} rangeLabel={rangeLabel} bare />
+          )}
+          {breakdownTab === 'merchants' && (
+            <>
+              {s.top_merchants.length === 0 && <div className="text-xs text-muted-2 py-1">No spending yet</div>}
+              {s.top_merchants.map((m) => (
+                <div key={m.name} className="flex justify-between text-[13px] py-1.5 border-b border-[#24252e]">
+                  <span>{m.name}</span>
+                  <span className="font-mono text-[#c6c6cf]">{fmtPlain(m.amount)}</span>
+                </div>
+              ))}
+            </>
+          )}
+          {breakdownTab === 'paynow' && (
+            <>
+              {s.top_paynow_contacts.length === 0 && <div className="text-xs text-muted-2 py-1">No PayNow transfers yet</div>}
+              {s.top_paynow_contacts.map((p) => (
+                <div key={p.name} className="flex justify-between text-[13px] py-1.5 border-b border-[#24252e]">
+                  <span>{p.name}</span>
+                  <span className="font-mono text-[#c6c6cf]">{fmtPlain(p.amount)}</span>
+                </div>
+              ))}
+            </>
+          )}
         </div>
       </div>
 
@@ -294,6 +318,7 @@ export function Dashboard() {
         )}
         {filteredTransactions.map((tx) => {
           const cc = categoryColor(categoriesQ.data, tx.category)
+          const CategoryIcon = categoryIcon(categoriesQ.data, tx.category)
           return (
             <div key={tx.id}>
               <div
@@ -310,7 +335,11 @@ export function Dashboard() {
                   )}
                 </div>
                 <div>
-                  <span className="text-[11px] px-2 py-0.5 rounded-md" style={{ background: cc.bg, color: cc.fg }}>
+                  <span
+                    className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md"
+                    style={{ background: cc.bg, color: cc.fg }}
+                  >
+                    <CategoryIcon size={11} className="shrink-0" />
                     {tx.category}
                   </span>
                 </div>

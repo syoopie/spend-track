@@ -191,8 +191,9 @@ export interface CategoryBreakdownSlice {
 
 export interface VelocityPoint {
   day: number
-  current_month_cumulative: number
-  previous_month_cumulative: number
+  date: string
+  current_period_cumulative: number
+  previous_period_cumulative: number
 }
 
 export interface TopEntry {

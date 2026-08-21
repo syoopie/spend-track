@@ -1,4 +1,4 @@
-import { LayoutGrid, ListChecks, Settings as SettingsIcon, SlidersHorizontal, Users } from 'lucide-react'
+import { LayoutGrid, ListChecks, Settings as SettingsIcon, SlidersHorizontal, Upload, Users } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { useUploadDialog } from './UploadProvider'
 
@@ -50,7 +50,8 @@ export function Sidebar() {
         title={hasPendingBatch ? 'Review the pending statement before uploading another' : undefined}
         className="flex items-center justify-center gap-1.5 px-2.5 py-2.5 rounded-lg text-sm font-semibold mb-3.5 border-none bg-accent text-accent-fg cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        + Upload Statement
+        <Upload size={15} className="shrink-0" />
+        Upload Statement
       </button>
 
       {NAV_ITEMS.map((item) => (

@@ -6,10 +6,12 @@ export function CategoryDonut({
   data,
   categories,
   rangeLabel,
+  bare = false,
 }: {
   data: CategoryBreakdownSlice[]
   categories: Category[] | undefined
   rangeLabel: string
+  bare?: boolean
 }) {
   let cumulative = 0
   const stops = data.map((s) => {
@@ -20,8 +22,8 @@ export function CategoryDonut({
   const gradient = stops.length ? `conic-gradient(${stops.join(', ')})` : '#3a3b48'
   const total = data.reduce((sum, s) => sum + s.amount, 0)
 
-  return (
-    <div className="bg-card border border-border rounded-xl p-5">
+  const content = (
+    <>
       <div className="text-[13px] font-semibold mb-3.5">Category Breakdown — {rangeLabel}</div>
       <div className="flex items-center gap-4.5">
         <div className="w-[110px] h-[110px] rounded-full relative shrink-0" style={{ background: gradient }}>
@@ -42,6 +44,9 @@ export function CategoryDonut({
           })}
         </div>
       </div>
-    </div>
+    </>
   )
+
+  if (bare) return content
+  return <div className="bg-card border border-border rounded-xl p-5">{content}</div>
 }
