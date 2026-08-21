@@ -1,7 +1,8 @@
 import { FileUp, Pencil, RefreshCw } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useAccounts, useCategories, useDashboardSummary, useMonthlyTotals, useTransactions } from '../api/hooks'
 import { amountIntensityColor, fmtDate, fmtMonthRangeLabel, fmtPlain, shiftMonth } from '../lib/format'
+import { loadDashboardFilters, saveDashboardFilters } from '../lib/dashboardFilters'
 import { CashFlowChart } from '../components/CashFlowChart'
 import { CategoryBadge } from '../components/CategoryBadge'
 import { categoryOptionElements } from '../components/CategoryOptions'
@@ -38,8 +39,11 @@ function MetricCard({
 
 export function Dashboard() {
   const { openDialog, hasPendingBatch, openReview } = useUploadDialog()
-  const [range, setRange] = useState<{ from: string; to: string } | undefined>(undefined)
-  const [accountId, setAccountId] = useState<string | undefined>(undefined)
+  // Loaded once per mount (not on every render) so a stored selection wins,
+  // but doesn't keep re-overriding state after the user changes it.
+  const [storedFilters] = useState(loadDashboardFilters)
+  const [range, setRange] = useState<{ from: string; to: string } | undefined>(storedFilters.range)
+  const [accountId, setAccountId] = useState<string | undefined>(storedFilters.accountId)
   const [excludedVisible, setExcludedVisible] = useState(true)
   const [searchText, setSearchText] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
@@ -52,6 +56,29 @@ export function Dashboard() {
   const accountsQ = useAccounts()
   const categoriesQ = useCategories()
   const monthlyTotalsQ = useMonthlyTotals(accountId)
+
+  // No stored range (a first-ever visit, or the user never picked one) -
+  // default to the trailing 3 months ending at the latest month with data,
+  // computed fresh every time rather than persisted, so it stays "current"
+  // instead of freezing at whatever the default happened to be once.
+  useEffect(() => {
+    if (storedFilters.range || range) return
+    const months = (monthlyTotalsQ.data ?? []).map((t) => t.month)
+    if (months.length === 0) return
+    const latest = months.reduce((a, b) => (a > b ? a : b))
+    setRange({ from: shiftMonth(latest, -2), to: latest })
+  }, [monthlyTotalsQ.data, range, storedFilters.range])
+
+  function updateRange(next: { from: string; to: string }) {
+    setRange(next)
+    saveDashboardFilters({ range: next, accountId })
+  }
+
+  function updateAccountId(next: string | undefined) {
+    setAccountId(next)
+    saveDashboardFilters({ range, accountId: next })
+  }
+
   const summaryQ = useDashboardSummary({ date_from: range?.from, date_to: range?.to, account_id: accountId })
   const resolvedRange = range ?? (summaryQ.data ? { from: summaryQ.data.date_from, to: summaryQ.data.date_to } : undefined)
   const txQ = useTransactions({
@@ -154,10 +181,10 @@ export function Dashboard() {
           <div className="flex gap-2.5 items-center">
             <DateRangePicker
               value={resolvedRange ?? { from: s.date_from, to: s.date_to }}
-              onChange={setRange}
+              onChange={updateRange}
               monthlyTotals={monthlyTotalsQ.data ?? []}
             />
-            <Select value={accountId ?? ''} onChange={(e) => setAccountId(e.target.value || undefined)} className="w-[190px]">
+            <Select value={accountId ?? ''} onChange={(e) => updateAccountId(e.target.value || undefined)} className="w-[190px]">
               <option value="">All Accounts</option>
               {(accountsQ.data ?? []).map((a) => (
                 <option key={a.id} value={a.id}>
