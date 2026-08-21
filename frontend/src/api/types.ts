@@ -10,6 +10,7 @@ export interface StagingRow {
   account_number_masked: string
   transaction_date: string
   raw_description: string
+  matched_label: string | null
   amount: number
   category: string
   subcategory: string | null
@@ -65,6 +66,7 @@ export interface Transaction {
   transaction_date: string
   raw_description: string
   cleaned_description: string | null
+  matched_label: string | null
   amount: number
   category: string
   subcategory: string | null
@@ -115,6 +117,8 @@ export interface Rule {
   target_subcategory: string | null
   is_exclusion_rule: boolean
   exclusion_reason: string | null
+  is_default: boolean
+  display_label: string | null
 }
 
 export interface RuleCreateRequest {
@@ -130,6 +134,8 @@ export interface Category {
   id: number
   name: string
   hue: number | null
+  icon: string | null
+  is_hidden: boolean
   sort_order: number
 }
 

@@ -1,7 +1,7 @@
 from app.engine.rules import categorize
 
 
-def rule(priority, pattern, category=None, subcategory=None, is_exclusion=False, reason=None):
+def rule(priority, pattern, category=None, subcategory=None, is_exclusion=False, reason=None, display_label=None):
     return {
         "priority": priority,
         "match_pattern": pattern,
@@ -9,17 +9,30 @@ def rule(priority, pattern, category=None, subcategory=None, is_exclusion=False,
         "target_subcategory": subcategory,
         "is_exclusion_rule": is_exclusion,
         "exclusion_reason": reason,
+        "display_label": display_label,
     }
 
 
 def test_first_matching_rule_wins_by_priority_order():
     rules = [
-        rule(1, "SP GROUP", "Bills & Utilities"),
+        rule(1, "SP GROUP", "Bills & Fees"),
         rule(2, "GRAB", "Transport"),
     ]
     result = categorize("SP GROUP UTILITIES", rules, [])
-    assert result.category == "Bills & Utilities"
+    assert result.category == "Bills & Fees"
     assert not result.is_excluded
+
+
+def test_matched_label_falls_back_to_title_cased_pattern():
+    rules = [rule(1, "SHENG SIONG", "Groceries")]
+    result = categorize("SHENG SIONG 1 STATION MKT SINGAPORE", rules, [])
+    assert result.matched_label == "Sheng Siong"
+
+
+def test_matched_label_uses_rule_display_label_when_set():
+    rules = [rule(1, "BUS/MRT", "Transport", display_label="Public Transport")]
+    result = categorize("BUS/MRT 865044496 SINGAPORE", rules, [])
+    assert result.matched_label == "Public Transport"
 
 
 def test_exclusion_rule_sets_excluded_and_reason():
@@ -53,11 +66,12 @@ def test_no_rule_match_falls_back_to_contact():
     assert result.contact_id == 7
 
 
-def test_no_rule_or_contact_match_defaults_to_others_and_flags_paynow_for_review():
+def test_no_rule_or_contact_match_flags_paynow_for_review_in_its_own_category():
     result = categorize("PAYNOW-FAST PIB2605050213183371 UNKNOWN PERSON", [], [])
-    assert result.category == "Others"
+    assert result.category == "PayNow Transfers"
     assert result.subcategory == "PayNow"
     assert result.needs_review is True
+    assert result.matched_label is None
 
 
 def test_non_paynow_unmatched_defaults_to_others_unparsable_without_review_flag():

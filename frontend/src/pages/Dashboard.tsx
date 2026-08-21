@@ -29,7 +29,7 @@ function MetricCard({
 }
 
 export function Dashboard() {
-  const { openDialog } = useUploadDialog()
+  const { openDialog, hasPendingBatch, openReview } = useUploadDialog()
   const [month, setMonth] = useState<string | undefined>(undefined)
   const [accountId, setAccountId] = useState<string | undefined>(undefined)
   const [excludedVisible, setExcludedVisible] = useState(true)
@@ -55,31 +55,57 @@ export function Dashboard() {
   const inflowCount = (txQ.data ?? []).filter((t) => t.amount > 0).length
   const distinctAccounts = new Set((txQ.data ?? []).map((t) => t.account_id)).size
 
+  const banner = hasPendingBatch && (
+    <div
+      className="flex items-center justify-between gap-4 px-4.5 py-3 mb-5 rounded-xl border"
+      style={{ background: 'oklch(24% 0.05 70)', borderColor: 'oklch(40% 0.08 70)' }}
+    >
+      <div className="text-[13px]" style={{ color: 'oklch(85% 0.12 70)' }}>
+        A statement is awaiting review before it can be committed.
+      </div>
+      <button
+        onClick={openReview}
+        className="text-[12px] font-semibold px-3.5 py-2 rounded-lg border-none bg-accent text-accent-fg cursor-pointer shrink-0"
+      >
+        Review Now
+      </button>
+    </div>
+  )
+
   if (summaryQ.isLoading || !summaryQ.data || accountsQ.isLoading) {
-    return <div className="p-9 text-muted">Loading dashboard…</div>
+    return (
+      <div className="p-9">
+        {banner}
+        <div className="text-muted">Loading dashboard…</div>
+      </div>
+    )
   }
 
   if ((accountsQ.data ?? []).length === 0) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-10">
-        <div className="text-center max-w-md">
-          <div className="w-13 h-13 rounded-xl bg-accent/12 mx-auto mb-5 flex items-center justify-center">
-            <svg width="22" height="22" viewBox="0 0 16 16">
-              <path d="M8 11 V2" stroke="#e35fd0" strokeWidth="1.6" fill="none" />
-              <polygon points="4.5,5.5 11.5,5.5 8,1.5" fill="#e35fd0" />
-              <rect x="2" y="12.5" width="12" height="2" fill="none" stroke="#e35fd0" strokeWidth="1.6" />
-            </svg>
+      <div className="min-h-screen flex flex-col p-9">
+        {banner}
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center max-w-md">
+            <div className="w-13 h-13 rounded-xl bg-accent/12 mx-auto mb-5 flex items-center justify-center">
+              <svg width="22" height="22" viewBox="0 0 16 16">
+                <path d="M8 11 V2" stroke="#e35fd0" strokeWidth="1.6" fill="none" />
+                <polygon points="4.5,5.5 11.5,5.5 8,1.5" fill="#e35fd0" />
+                <rect x="2" y="12.5" width="12" height="2" fill="none" stroke="#e35fd0" strokeWidth="1.6" />
+              </svg>
+            </div>
+            <div className="text-xl font-semibold text-text mb-2.5">No statements yet</div>
+            <div className="text-[13px] text-muted mb-5.5">
+              Upload a DBS, OCBC, or UOB e-statement PDF to see your spending here - or drag one in anywhere.
+            </div>
+            <button
+              onClick={openDialog}
+              disabled={hasPendingBatch}
+              className="text-[13px] font-semibold px-5 py-2.5 rounded-lg border-none bg-accent text-accent-fg cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              + Upload Statement
+            </button>
           </div>
-          <div className="text-xl font-semibold text-text mb-2.5">No statements yet</div>
-          <div className="text-[13px] text-muted mb-5.5">
-            Upload a DBS, OCBC, or UOB e-statement PDF to see your spending here - or drag one in anywhere.
-          </div>
-          <button
-            onClick={openDialog}
-            className="text-[13px] font-semibold px-5 py-2.5 rounded-lg border-none bg-accent text-accent-fg cursor-pointer"
-          >
-            + Upload Statement
-          </button>
         </div>
       </div>
     )
@@ -91,6 +117,7 @@ export function Dashboard() {
 
   return (
     <div className="px-9 pt-7 pb-15">
+      {banner}
       <div className="flex items-start justify-between mb-5.5 gap-4 flex-wrap">
         <div>
           <div className="text-[22px] font-bold">Dashboard</div>
@@ -117,7 +144,8 @@ export function Dashboard() {
           </select>
           <button
             onClick={openDialog}
-            className="text-[13px] font-semibold px-4 py-2 rounded-lg border-none bg-accent text-accent-fg cursor-pointer"
+            disabled={hasPendingBatch}
+            className="text-[13px] font-semibold px-4 py-2 rounded-lg border-none bg-accent text-accent-fg cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             + Upload Statement
           </button>
@@ -228,11 +256,16 @@ export function Dashboard() {
             >
               <div className="text-muted font-mono text-xs">{fmtDate(tx.transaction_date)}</div>
               <div className="truncate pr-2">
-                {tx.raw_description}
-                {tx.is_excluded && (
-                  <span className="text-[10px] text-muted-2 border border-border rounded px-1.5 py-0.5 ml-1.5">
-                    excluded
-                  </span>
+                <div className="truncate">
+                  {tx.matched_label ?? tx.raw_description}
+                  {tx.is_excluded && (
+                    <span className="text-[10px] text-muted-2 border border-border rounded px-1.5 py-0.5 ml-1.5">
+                      excluded
+                    </span>
+                  )}
+                </div>
+                {tx.matched_label && (
+                  <div className="truncate text-[11px] text-muted-2">{tx.raw_description}</div>
                 )}
               </div>
               <div>

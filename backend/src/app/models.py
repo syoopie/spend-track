@@ -13,6 +13,7 @@ class StagingRowOut(BaseModel):
     account_number_masked: str
     transaction_date: str
     raw_description: str
+    matched_label: str | None
     amount: float
     category: str
     subcategory: str | None
@@ -73,6 +74,7 @@ class TransactionOut(BaseModel):
     transaction_date: str
     raw_description: str
     cleaned_description: str | None
+    matched_label: str | None
     amount: float
     category: str
     subcategory: str | None
@@ -145,6 +147,8 @@ class RuleOut(BaseModel):
     target_subcategory: str | None
     is_exclusion_rule: bool
     exclusion_reason: str | None
+    is_default: bool
+    display_label: str | None
 
 
 class RuleReorderRequest(BaseModel):
@@ -154,12 +158,15 @@ class RuleReorderRequest(BaseModel):
 class CategoryCreateRequest(BaseModel):
     name: str
     hue: int | None = None
+    icon: str | None = None
 
 
 class CategoryOut(BaseModel):
     id: int
     name: str
     hue: int | None
+    icon: str | None
+    is_hidden: bool
     sort_order: int
 
 

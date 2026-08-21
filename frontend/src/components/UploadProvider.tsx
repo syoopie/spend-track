@@ -1,11 +1,13 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useUploadStatement } from '../api/hooks'
+import { useCurrentStagingBatch, useUploadStatement } from '../api/hooks'
 import { ApiError } from '../api/client'
 import { Modal } from './Modal'
+import { StagingReviewDialog } from './StagingReviewDialog'
 
 interface UploadContextValue {
   openDialog: () => void
+  openReview: () => void
+  hasPendingBatch: boolean
 }
 
 const UploadContext = createContext<UploadContextValue | null>(null)
@@ -72,11 +74,13 @@ function PasswordModal({
 }
 
 export function UploadProvider({ children }: { children: ReactNode }) {
-  const navigate = useNavigate()
   const upload = useUploadStatement()
+  const pendingBatchQ = useCurrentStagingBatch()
+  const hasPendingBatch = !!pendingBatchQ.data
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [reviewOpen, setReviewOpen] = useState(false)
   const [dragActive, setDragActive] = useState(false)
   const dragCounter = useRef(0)
 
@@ -86,6 +90,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   async function handleFile(file: File, password?: string) {
+    if (hasPendingBatch) return
     if (!password && !isPdfFile(file)) {
       setErrorMessage('Only PDF statements are supported.')
       setDialogOpen(true)
@@ -94,11 +99,11 @@ export function UploadProvider({ children }: { children: ReactNode }) {
     setErrorMessage(null)
     setPasswordError(null)
     try {
-      const batch = await upload.mutateAsync({ file, password })
+      await upload.mutateAsync({ file, password })
       setDialogOpen(false)
       setPasswordModalOpen(false)
       setPendingFile(null)
-      navigate(`/staging/${batch.batch_id}`)
+      setReviewOpen(true)
     } catch (e) {
       if (e instanceof ApiError) {
         if (e.code === 'ENCRYPTED_PDF_PASSWORD_REQUIRED') {
@@ -125,16 +130,18 @@ export function UploadProvider({ children }: { children: ReactNode }) {
   // the latest closure without needing to re-attach on every render.
   const handleFileRef = useRef(handleFile)
   handleFileRef.current = handleFile
+  const hasPendingBatchRef = useRef(hasPendingBatch)
+  hasPendingBatchRef.current = hasPendingBatch
 
   useEffect(() => {
     function onDragEnter(e: DragEvent) {
-      if (!hasFiles(e)) return
+      if (!hasFiles(e) || hasPendingBatchRef.current) return
       e.preventDefault()
       dragCounter.current++
       setDragActive(true)
     }
     function onDragOver(e: DragEvent) {
-      if (!hasFiles(e)) return
+      if (!hasFiles(e) || hasPendingBatchRef.current) return
       e.preventDefault()
     }
     function onDragLeave(e: DragEvent) {
@@ -144,7 +151,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
       if (dragCounter.current === 0) setDragActive(false)
     }
     function onDrop(e: DragEvent) {
-      if (!hasFiles(e)) return
+      if (!hasFiles(e) || hasPendingBatchRef.current) return
       e.preventDefault()
       dragCounter.current = 0
       setDragActive(false)
@@ -167,12 +174,17 @@ export function UploadProvider({ children }: { children: ReactNode }) {
     <UploadContext.Provider
       value={{
         openDialog: () => {
+          if (hasPendingBatch) return
           setErrorMessage(null)
           setDialogOpen(true)
         },
+        openReview: () => setReviewOpen(true),
+        hasPendingBatch,
       }}
     >
       {children}
+
+      {reviewOpen && <StagingReviewDialog onClose={() => setReviewOpen(false)} />}
 
       {dragActive && (
         <div className="fixed inset-0 z-[70] pointer-events-none flex items-center justify-center bg-accent/10 backdrop-blur-[2px]">

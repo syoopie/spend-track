@@ -5,6 +5,10 @@ UX's "Pre-Commit Staging Review" is inherently transient/discardable. Since
 this is a single local process, a batch lives here until committed or
 discarded. Known limitation: a batch is lost if the server restarts before
 commit - acceptable for a local single-user tool.
+
+Only one batch may be staged at a time - a second upload is rejected until
+the pending one is committed or discarded (see routers/statements.py), so
+the review UI never has to juggle more than a single pending statement.
 """
 
 import uuid
@@ -26,6 +30,7 @@ class StagingRow:
     account_number: str  # correlates to a StagingAccount.account_number in this batch
     transaction_date: str
     raw_description: str
+    matched_label: str | None
     amount: float
     fingerprint: str
     category: str
@@ -48,14 +53,21 @@ class StagingBatch:
 
 class StagingStore:
     def __init__(self) -> None:
-        self._batches: dict[str, StagingBatch] = {}
+        self._batch: StagingBatch | None = None
 
     def create(self, batch: StagingBatch) -> str:
-        self._batches[batch.batch_id] = batch
+        if self._batch is not None:
+            raise ValueError("A staging batch is already pending")
+        self._batch = batch
         return batch.batch_id
 
+    def current(self) -> StagingBatch | None:
+        return self._batch
+
     def get(self, batch_id: str) -> StagingBatch:
-        return self._batches[batch_id]
+        if self._batch is None or self._batch.batch_id != batch_id:
+            raise KeyError(batch_id)
+        return self._batch
 
     def update_row(self, batch_id: str, index: int, **fields) -> StagingRow:
         batch = self.get(batch_id)
@@ -67,7 +79,14 @@ class StagingStore:
         return row
 
     def delete(self, batch_id: str) -> None:
-        self._batches.pop(batch_id, None)
+        if self._batch is not None and self._batch.batch_id == batch_id:
+            self._batch = None
+
+    def reset(self) -> None:
+        """Test-only escape hatch: this store is a process-wide singleton
+        (see get_store below), so tests that don't share a DB still share
+        it - each test must clear any pending batch left by a prior one."""
+        self._batch = None
 
 
 _store = StagingStore()

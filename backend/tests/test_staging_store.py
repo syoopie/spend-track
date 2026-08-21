@@ -22,6 +22,7 @@ def make_batch():
                 account_number="770-331-567-8",
                 transaction_date="2026-05-05",
                 raw_description="Grab",
+                matched_label="Grab",
                 amount=-24.80,
                 fingerprint="abc123",
                 category="Transport",

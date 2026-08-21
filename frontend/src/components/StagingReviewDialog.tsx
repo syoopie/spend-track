@@ -1,9 +1,8 @@
 import { useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { useCategories, useCommitBatch, useDiscardBatch, useStagingBatch, useUpdateStagingRow } from '../api/hooks'
+import { useCategories, useCommitBatch, useCurrentStagingBatch, useDiscardBatch, useUpdateStagingRow } from '../api/hooks'
 import { categoryColor } from '../lib/categoryColor'
 import { fmtDate, fmtSigned } from '../lib/format'
-import { useUploadDialog } from '../components/UploadProvider'
+import { Modal } from './Modal'
 import type { StagingRow } from '../api/types'
 
 const AMBER_BG = 'oklch(20% 0.02 70)'
@@ -71,69 +70,62 @@ function StagingRowPopover({
   )
 }
 
-export function Staging() {
-  const { batchId } = useParams<{ batchId: string }>()
-  const navigate = useNavigate()
-  const { openDialog } = useUploadDialog()
-  const batchQ = useStagingBatch(batchId)
+export function StagingReviewDialog({ onClose }: { onClose: () => void }) {
+  const batchQ = useCurrentStagingBatch()
   const categoriesQ = useCategories()
   const commit = useCommitBatch()
   const discard = useDiscardBatch()
   const [openIndex, setOpenIndex] = useState<number | null>(null)
 
-  if (!batchId) {
+  if (batchQ.isLoading) {
     return (
-      <div className="p-9 text-center text-muted">
-        No statement is currently staged.{' '}
-        <button onClick={openDialog} className="text-accent hover:text-accent-hover cursor-pointer border-none bg-transparent underline">
-          Upload one to get started.
-        </button>
-      </div>
+      <Modal onClose={onClose} width={460}>
+        <div className="text-muted text-sm">Loading staged transactions…</div>
+      </Modal>
     )
   }
-
-  if (batchQ.isLoading) return <div className="p-9 text-muted">Loading staged transactions…</div>
-  if (batchQ.isError || !batchQ.data) {
-    return (
-      <div className="p-9 text-center text-muted">
-        This staging batch is no longer available.{' '}
-        <button onClick={openDialog} className="text-accent hover:text-accent-hover cursor-pointer border-none bg-transparent underline">
-          Upload a statement.
-        </button>
-      </div>
-    )
-  }
+  if (!batchQ.data) return null
 
   const batch = batchQ.data
   const visibleRows = batch.rows.filter((r) => !r.is_duplicate)
 
   async function handleCommit() {
-    await commit.mutateAsync(batchId!)
-    navigate('/')
+    await commit.mutateAsync(batch.batch_id)
+    onClose()
   }
 
   async function handleDiscard() {
-    await discard.mutateAsync(batchId!)
-    navigate('/')
+    await discard.mutateAsync(batch.batch_id)
+    onClose()
   }
 
   return (
-    <div className="px-9 pt-7 pb-15">
-      <div className="text-[22px] font-bold mb-0.5">Staging &amp; Pre-Commit Review</div>
-      <div className="text-[13px] text-muted mb-5">
-        {batch.source_filename} — parsed, awaiting commit
+    <Modal onClose={onClose} width={860}>
+      <div className="flex items-start justify-between mb-0.5">
+        <div>
+          <div className="text-lg font-bold">Staging &amp; Pre-Commit Review</div>
+          <div className="text-[13px] text-muted mt-0.5 mb-4">
+            {batch.source_filename} — parsed, awaiting commit
+          </div>
+        </div>
+        <button
+          onClick={onClose}
+          className="text-muted hover:text-text text-lg leading-none cursor-pointer border-none bg-transparent"
+        >
+          ×
+        </button>
       </div>
 
       <div className="flex gap-3 mb-5 flex-wrap">
-        <div className="bg-card border border-border rounded-[10px] px-4.5 py-3">
+        <div className="bg-input border border-border rounded-[10px] px-4.5 py-3">
           <div className="text-[11px] text-muted-2">New Extracted</div>
           <div className="text-xl font-bold font-mono">{batch.new_extracted}</div>
         </div>
-        <div className="bg-card border border-border rounded-[10px] px-4.5 py-3">
+        <div className="bg-input border border-border rounded-[10px] px-4.5 py-3">
           <div className="text-[11px] text-muted-2">Duplicates Skipped</div>
           <div className="text-xl font-bold font-mono text-muted-2">{batch.duplicates_skipped}</div>
         </div>
-        <div className="bg-card border border-border rounded-[10px] px-4.5 py-3">
+        <div className="bg-input border border-border rounded-[10px] px-4.5 py-3">
           <div className="text-[11px] text-muted-2">New Accounts Provisioned</div>
           <div className="text-xl font-bold font-mono">{batch.new_accounts_provisioned}</div>
         </div>
@@ -149,8 +141,8 @@ export function Staging() {
         )}
       </div>
 
-      <div className="bg-card border border-border rounded-xl overflow-hidden mb-5">
-        <div className="grid grid-cols-[80px_1fr_180px_110px] px-5 py-2.5 text-[11px] text-muted-2 uppercase tracking-wide border-b border-border/70">
+      <div className="bg-input border border-border rounded-xl overflow-y-auto mb-5 max-h-[45vh]">
+        <div className="grid grid-cols-[80px_1fr_180px_110px] px-5 py-2.5 text-[11px] text-muted-2 uppercase tracking-wide border-b border-border/70 sticky top-0 bg-input">
           <div>Date</div>
           <div>Description</div>
           <div>Category</div>
@@ -171,7 +163,12 @@ export function Staging() {
                 style={{ background: row.needs_review ? AMBER_BG : isOpen ? '#22232c' : undefined }}
               >
                 <div className="text-muted font-mono text-xs">{fmtDate(row.transaction_date)}</div>
-                <div className="truncate pr-2">{row.raw_description}</div>
+                <div className="truncate pr-2">
+                  <div className="truncate">{row.matched_label ?? row.raw_description}</div>
+                  {row.matched_label && (
+                    <div className="truncate text-[11px] text-muted-2">{row.raw_description}</div>
+                  )}
+                </div>
                 <div>
                   <span
                     className="text-[11px] px-2 py-0.5 rounded-md"
@@ -185,18 +182,18 @@ export function Staging() {
                 </div>
               </div>
               {isOpen && (
-                <StagingRowPopover row={row} batchId={batchId} onApplied={() => setOpenIndex(null)} />
+                <StagingRowPopover row={row} batchId={batch.batch_id} onApplied={() => setOpenIndex(null)} />
               )}
             </div>
           )
         })}
       </div>
 
-      <div className="flex justify-end gap-3 sticky bottom-5">
+      <div className="flex justify-end gap-3">
         <button
           onClick={handleDiscard}
           disabled={discard.isPending}
-          className="text-[13px] font-semibold px-4.5 py-2.5 rounded-lg cursor-pointer bg-card disabled:opacity-60"
+          className="text-[13px] font-semibold px-4.5 py-2.5 rounded-lg cursor-pointer bg-input disabled:opacity-60"
           style={{ border: '1px solid oklch(45% 0.15 25)', color: 'oklch(70% 0.18 25)' }}
         >
           Discard Batch
@@ -209,6 +206,6 @@ export function Staging() {
           Commit {batch.new_extracted} Transaction{batch.new_extracted === 1 ? '' : 's'}
         </button>
       </div>
-    </div>
+    </Modal>
   )
 }

@@ -1,4 +1,4 @@
-PRAGMA user_version = 2;
+PRAGMA user_version = 3;
 
 CREATE TABLE IF NOT EXISTS accounts (
     id TEXT PRIMARY KEY,
@@ -31,6 +31,8 @@ CREATE TABLE IF NOT EXISTS rules (
     target_subcategory TEXT,
     is_exclusion_rule BOOLEAN DEFAULT 0,
     exclusion_reason TEXT,
+    is_default BOOLEAN DEFAULT 0,
+    display_label TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -41,6 +43,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     transaction_date TEXT NOT NULL,
     raw_description TEXT NOT NULL,
     cleaned_description TEXT,
+    matched_label TEXT,
     amount REAL NOT NULL,
     category TEXT DEFAULT 'Others',
     subcategory TEXT DEFAULT 'Unparsable',
@@ -66,6 +69,8 @@ CREATE TABLE IF NOT EXISTS categories (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT UNIQUE NOT NULL,
     hue INTEGER,
+    icon TEXT,
+    is_hidden BOOLEAN DEFAULT 0,
     sort_order INTEGER DEFAULT 0
 );
 

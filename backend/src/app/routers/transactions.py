@@ -25,6 +25,7 @@ def _row_to_out(row: sqlite3.Row, paired_ids: set[int]) -> TransactionOut:
         transaction_date=row["transaction_date"],
         raw_description=row["raw_description"],
         cleaned_description=row["cleaned_description"],
+        matched_label=row["matched_label"],
         amount=row["amount"],
         category=row["category"],
         subcategory=row["subcategory"],

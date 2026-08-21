@@ -32,8 +32,19 @@ def test_categories_seeded_with_defaults(client):
     resp = client.get("/api/categories")
     names = [c["name"] for c in resp.json()]
     assert names == [
-        "Groceries", "Dining", "Transport", "Shopping", "Bills & Utilities", "PayNow Transfers", "Others",
+        "Sports & Hobbies", "Beauty", "Food & Drink", "Shopping", "Transport", "Home", "Bills & Fees",
+        "Entertainment", "Healthcare", "Education", "Groceries", "PayNow Transfers",
     ]
+
+
+def test_categories_hidden_others_excluded_unless_requested(client):
+    resp = client.get("/api/categories")
+    assert "Others" not in [c["name"] for c in resp.json()]
+
+    resp_all = client.get("/api/categories", params={"include_hidden": True})
+    names = [c["name"] for c in resp_all.json()]
+    assert "Others" in names
+    assert len(names) == 13
 
 
 def test_create_category(client):
@@ -142,10 +153,11 @@ def test_import_contacts_csv_skips_already_mapped_identifier(client):
 
 
 def test_create_list_reorder_delete_rules(client):
-    r1 = client.post("/api/rules", json={"match_pattern": "SP GROUP", "target_category": "Bills & Utilities"}).json()
+    r1 = client.post("/api/rules", json={"match_pattern": "SP GROUP", "target_category": "Bills & Fees"}).json()
     r2 = client.post("/api/rules", json={"match_pattern": "GRAB", "target_category": "Transport"}).json()
     assert r1["priority"] == 1
     assert r2["priority"] == 2
+    assert r1["is_default"] is False
 
     reordered = client.post("/api/rules/reorder", json={"ordered_ids": [r2["id"], r1["id"]]}).json()
     assert reordered[0]["id"] == r2["id"]
@@ -155,6 +167,21 @@ def test_create_list_reorder_delete_rules(client):
     assert resp.status_code == 204
     remaining = client.get("/api/rules").json()
     assert len(remaining) == 1
+
+
+def test_default_rules_hidden_and_immutable(client):
+    visible = client.get("/api/rules").json()
+    assert all(not r["is_default"] for r in visible)
+
+    with_defaults = client.get("/api/rules", params={"include_default": True}).json()
+    default_rules = [r for r in with_defaults if r["is_default"]]
+    assert len(default_rules) > 50
+    sample = default_rules[0]
+
+    assert client.patch(f"/api/rules/{sample['id']}", json={"priority": 1}).status_code == 403
+    assert client.delete(f"/api/rules/{sample['id']}").status_code == 403
+    reorder_resp = client.post("/api/rules/reorder", json={"ordered_ids": [sample["id"]]})
+    assert reorder_resp.status_code == 403
 
 
 def test_exclusion_rule_create_and_update(client):
@@ -177,7 +204,7 @@ def test_exclusion_rule_create_and_update(client):
 def test_get_settings_reports_path_and_size(client):
     _upload_and_commit(client)
     resp = client.get("/api/settings").json()
-    assert resp["schema_version"] == 2
+    assert resp["schema_version"] == 3
     assert resp["size_bytes"] > 0
 
 
@@ -198,7 +225,7 @@ def test_reset_wipes_data_and_reinitializes_schema(client):
     assert client.get("/api/transactions").json() == []
     assert client.get("/api/accounts").json() == []
     cats = client.get("/api/categories").json()
-    assert len(cats) == 7  # default categories re-seeded
+    assert len(cats) == 12  # default categories re-seeded (Others is hidden)
 
 
 def test_relocate_moves_db_file_and_updates_config(tmp_path, monkeypatch):

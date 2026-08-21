@@ -31,7 +31,7 @@ function RuleBuilderModal({ onClose }: { onClose: () => void }) {
       <div className="text-[13px] text-[#c6c6cf] flex flex-col gap-3 mb-3.5">
         <div className="flex items-center gap-2">
           <span className="text-muted-2 w-[70px]">IF</span>
-          <span className="w-[110px]">Raw Description</span>
+          <span className="w-[110px]">Transaction</span>
           <span className="text-muted-2">CONTAINS</span>
           <input
             value={pattern}
@@ -64,7 +64,7 @@ function RuleBuilderModal({ onClose }: { onClose: () => void }) {
             value={priority}
             onChange={(e) => setPriority(e.target.value === '' ? '' : Number(e.target.value))}
             placeholder="auto"
-            className="w-[70px] box-border px-2.5 py-2 rounded-md border border-border bg-input text-text text-[13px]"
+            className="w-[70px] box-border px-2.5 py-2 rounded-md border border-border bg-input text-text text-[13px] outline-none focus:border-accent"
           />
         </div>
         <label className="flex items-center gap-2 cursor-pointer">
@@ -165,7 +165,7 @@ export function Rules() {
                 {r.priority}
               </div>
               <div className="flex-1 text-[13px]">
-                <span className="text-muted-2">IF</span> Raw Description{' '}
+                <span className="text-muted-2">IF</span> Transaction{' '}
                 <span className="text-muted-2">CONTAINS</span>{' '}
                 <span className="font-mono bg-input px-1.5 py-0.5 rounded">{r.match_pattern}</span>{' '}
                 <span className="text-muted-2">THEN</span>{' '}
