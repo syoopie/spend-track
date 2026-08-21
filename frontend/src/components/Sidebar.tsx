@@ -58,7 +58,7 @@ export function Sidebar() {
             reveal stays governed entirely by the rail's own animated width
             and overflow-hidden, same as before - this only fixes the
             resting state's leak, not the transition. */}
-        <NavLink to="/" end className="flex items-center gap-2.5 px-2 pt-1.5 pb-5.5">
+        <NavLink to="/" end className="flex items-center gap-2.5 px-2.5 pt-1.5 pb-5.5">
           <div className="w-6.5 h-6.5 rounded-md bg-accent shrink-0" />
           <div className="w-0 group-hover:w-auto overflow-hidden shrink-0">
             <div className="text-sm font-semibold font-display text-text leading-tight whitespace-nowrap">
@@ -113,7 +113,7 @@ export function Sidebar() {
         ))}
 
         <div className="flex-1" />
-        <div className="text-[11px] text-muted-2 px-2 pt-2.5 border-t border-border leading-relaxed whitespace-nowrap">
+        <div className="text-[11px] text-muted-2 px-2.5 pt-2.5 border-t border-border leading-relaxed whitespace-nowrap">
           <span className="inline-block w-1.5 h-1.5 rounded-full bg-success mr-1.5 shrink-0" />
           <span className="w-0 group-hover:w-auto overflow-hidden inline-block align-middle">
             Local-only · no data leaves this device
