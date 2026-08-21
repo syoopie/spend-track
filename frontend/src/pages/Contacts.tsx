@@ -111,7 +111,7 @@ export function Contacts() {
     <div className="px-9 pt-7 pb-15">
       <div className="flex items-start justify-between mb-5 gap-4 flex-wrap">
         <div>
-          <div className="text-[22px] font-bold">Contacts &amp; PayNow Directory</div>
+          <div className="text-[22px] font-bold font-display">Contacts &amp; PayNow Directory</div>
           <div className="text-[13px] text-muted mt-0.5">
             Map phone numbers and UENs to people, so transfers categorize themselves
           </div>

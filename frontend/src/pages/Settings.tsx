@@ -245,7 +245,7 @@ export function Settings() {
 
   return (
     <div className="px-9 pt-7 pb-15 max-w-2xl">
-      <div className="text-[22px] font-bold mb-5">Settings &amp; Storage</div>
+      <div className="text-[22px] font-bold font-display mb-5">Settings &amp; Storage</div>
 
       <AppearanceSection />
 

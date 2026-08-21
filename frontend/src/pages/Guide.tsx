@@ -43,7 +43,7 @@ export function Guide() {
   return (
     <div className="px-9 pt-7 pb-15">
       <div className="mb-5.5">
-        <div className="text-[22px] font-bold">User Guide</div>
+        <div className="text-[22px] font-bold font-display">User Guide</div>
         <div className="text-[13px] text-muted mt-0.5">
           How the pieces fit together — upload, categorize, review, repeat.
         </div>

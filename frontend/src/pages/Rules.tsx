@@ -149,7 +149,7 @@ export function Rules() {
     <div className="px-9 pt-7 pb-15">
       <div className="flex items-start justify-between mb-5 gap-4 flex-wrap">
         <div>
-          <div className="text-[22px] font-bold">Categorization &amp; Exclusion Rules</div>
+          <div className="text-[22px] font-bold font-display">Categorization &amp; Exclusion Rules</div>
           <div className="text-[13px] text-muted mt-0.5">Evaluated top to bottom — the first match wins</div>
         </div>
         <button
