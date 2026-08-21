@@ -30,31 +30,41 @@ export function CashFlowChart({
     ? `Cash Flow — Trend into ${fmtMonthRangeLabel(rangeFrom, rangeTo)}`
     : `Cash Flow — Inflow vs Outflow${truncated ? ' (most recent 12 months)' : ''}`
 
+  // Bars used to sit in flex-1 columns with a fixed 36px min-width, which
+  // forced a horizontal scrollbar once 9+ months didn't fit that width in a
+  // narrower card. Scaling the bar/gap sizes down as the month count grows
+  // (instead of holding size fixed and letting the row overflow) means the
+  // full range always fits in whatever width the card actually has.
+  const n = chartData.length
+  const barW = n > 9 ? 'w-2' : n > 6 ? 'w-2.5' : 'w-3.5'
+  const barGap = n > 9 ? 'gap-0.5' : 'gap-1'
+  const colGap = n > 9 ? 'gap-1' : n > 6 ? 'gap-2' : 'gap-3.5'
+
   const content = (
     <>
       <div className="text-[13px] font-semibold mb-4">{title}</div>
-      <div className="flex items-end gap-3.5 h-[150px] px-1.5 overflow-x-auto">
+      <div className={`flex items-end ${colGap} h-[150px] px-1.5`}>
         {chartData.map((m) => {
           const isSelected = !padded || (m.month >= rangeFrom && m.month <= rangeTo)
           return (
-            <div key={m.month} className={`flex flex-col items-center gap-1.5 flex-1 min-w-[36px] ${isSelected ? '' : 'opacity-45'}`}>
-              <div className="flex items-end gap-1 h-[120px]">
+            <div key={m.month} className={`flex flex-col items-center gap-1.5 flex-1 min-w-0 ${isSelected ? '' : 'opacity-45'}`}>
+              <div className={`flex items-end ${barGap} h-[120px]`}>
                 <div className="flex flex-col items-center justify-end h-full">
                   {m.inflow > 0 && <div className="text-[10px] font-mono text-muted-2 mb-0.5">{fmtCompact(m.inflow)}</div>}
                   <div
-                    className="w-3.5 rounded-t-[3px] bg-success"
+                    className={`${barW} rounded-t-[3px] bg-success`}
                     style={{ height: `${Math.max(1, (m.inflow / max) * 120)}px` }}
                   />
                 </div>
                 <div className="flex flex-col items-center justify-end h-full">
                   {m.outflow > 0 && <div className="text-[10px] font-mono text-muted-2 mb-0.5">{fmtCompact(m.outflow)}</div>}
                   <div
-                    className="w-3.5 rounded-t-[3px]"
+                    className={`${barW} rounded-t-[3px]`}
                     style={{ height: `${Math.max(1, (m.outflow / max) * 120)}px`, background: isSelected ? 'var(--color-accent)' : 'var(--color-dim)' }}
                   />
                 </div>
               </div>
-              <div className={`text-[11px] ${isSelected ? 'text-text font-semibold' : 'text-muted-2'}`}>
+              <div className={`text-[11px] text-center ${isSelected ? 'text-text font-semibold' : 'text-muted-2'}`}>
                 {fmtMonthLabel(m.month)}
               </div>
             </div>
