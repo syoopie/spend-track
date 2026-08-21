@@ -1,4 +1,4 @@
-import { Pencil, RefreshCw } from 'lucide-react'
+import { FileUp, Pencil, RefreshCw } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useAccounts, useCategories, useDashboardSummary, useMonthlyTotals, useTransactions } from '../api/hooks'
 import { categoryColor } from '../lib/categoryColor'
@@ -111,11 +111,7 @@ export function Dashboard() {
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center max-w-md">
             <div className="w-13 h-13 rounded-xl bg-accent/12 mx-auto mb-5 flex items-center justify-center">
-              <svg width="22" height="22" viewBox="0 0 16 16">
-                <path d="M8 11 V2" stroke="#e35fd0" strokeWidth="1.6" fill="none" />
-                <polygon points="4.5,5.5 11.5,5.5 8,1.5" fill="#e35fd0" />
-                <rect x="2" y="12.5" width="12" height="2" fill="none" stroke="#e35fd0" strokeWidth="1.6" />
-              </svg>
+              <FileUp size={22} className="text-accent" />
             </div>
             <div className="text-xl font-semibold text-text mb-2.5">No statements yet</div>
             <div className="text-[13px] text-muted mb-5.5">

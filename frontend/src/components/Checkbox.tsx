@@ -1,3 +1,5 @@
+import { Check } from 'lucide-react'
+
 export function Checkbox({
   checked,
   onChange,
@@ -17,13 +19,11 @@ export function Checkbox({
           transition-colors hover:border-accent checked:bg-accent checked:border-accent
           focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2"
       />
-      <svg
-        className="pointer-events-none absolute w-2.5 h-2.5 opacity-0 peer-checked:opacity-100 text-accent-fg"
-        viewBox="0 0 16 16"
-        fill="none"
-      >
-        <path d="M3 8.5 L6.5 12 L13 4.5" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
+      <Check
+        size={11}
+        strokeWidth={3}
+        className="pointer-events-none absolute opacity-0 peer-checked:opacity-100 text-accent-fg"
+      />
     </span>
   )
 }

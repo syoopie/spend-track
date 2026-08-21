@@ -1,3 +1,4 @@
+import { FileUp } from 'lucide-react'
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useCurrentStagingBatch, useUploadStatement } from '../api/hooks'
 import { ApiError } from '../api/client'
@@ -227,11 +228,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
               }}
             />
             <div className="w-11 h-11 rounded-xl bg-accent/12 mx-auto mb-3.5 flex items-center justify-center">
-              <svg width="18" height="18" viewBox="0 0 16 16">
-                <path d="M8 11 V2" stroke="#e35fd0" strokeWidth="1.6" fill="none" />
-                <polygon points="4.5,5.5 11.5,5.5 8,1.5" fill="#e35fd0" />
-                <rect x="2" y="12.5" width="12" height="2" fill="none" stroke="#e35fd0" strokeWidth="1.6" />
-              </svg>
+              <FileUp size={18} className="text-accent" />
             </div>
             <div className="text-sm font-semibold text-text mb-1.5">
               Drag &amp; drop one or more PDFs anywhere in the app
