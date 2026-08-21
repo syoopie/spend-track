@@ -49,7 +49,7 @@ export function MonthRangeCalendar({
 
   return (
     <div className="select-none">
-      <div className="grid grid-cols-6 gap-1.5">
+      <div className="grid grid-cols-4 gap-2.5">
         {months.map((key) => {
           const [y, m] = key.split('-')
           const label = new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('en-US', { month: 'short' })
@@ -64,24 +64,24 @@ export function MonthRangeCalendar({
                 setHoverMonth(key)
               }}
               onMouseEnter={() => dragging && setHoverMonth(key)}
-              className={`text-left px-2 py-1.5 rounded-md border cursor-pointer ${
+              className={`text-left px-3 py-2.5 rounded-md border cursor-pointer ${
                 selected ? 'border-accent bg-accent/15' : 'border-border bg-input hover:border-muted-2'
               }`}
             >
-              <div className={`text-[11px] font-semibold ${selected ? 'text-text' : 'text-muted'}`}>
+              <div className={`text-[15px] font-semibold ${selected ? 'text-text' : 'text-muted'}`}>
                 {label} <span className="text-muted-2 font-normal">'{y.slice(2)}</span>
               </div>
-              <div className="text-[10px] font-mono text-success leading-tight">
+              <div className="text-[12px] font-mono text-success leading-tight mt-0.5">
                 {totals && totals.inflow > 0 ? fmtCompact(totals.inflow) : ' '}
               </div>
-              <div className="text-[10px] font-mono text-danger-text leading-tight">
+              <div className="text-[12px] font-mono text-danger-text leading-tight">
                 {totals && totals.outflow > 0 ? fmtCompact(totals.outflow) : ' '}
               </div>
             </button>
           )
         })}
       </div>
-      <div className="text-[11px] text-muted-2 mt-2 pt-2 border-t border-border">
+      <div className="text-[12px] text-muted-2 mt-3 pt-2.5 border-t border-border">
         Click a month, or click and drag across months to select a range.
       </div>
     </div>

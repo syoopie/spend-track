@@ -39,7 +39,7 @@ export function DateRangePicker({
         <span className="text-muted-2 text-[10px]">▾</span>
       </button>
       {open && (
-        <div className="absolute left-0 top-[calc(100%+6px)] z-40 bg-card border border-border rounded-xl p-3.5 shadow-xl w-[420px] max-w-[90vw]">
+        <div className="absolute left-0 top-[calc(100%+6px)] z-40 bg-card border border-border rounded-xl p-4 shadow-xl w-[400px] max-w-[90vw]">
           <MonthRangeCalendar
             monthlyTotals={monthlyTotals}
             value={value}
