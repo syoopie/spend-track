@@ -51,9 +51,38 @@ function CategoryGroup({
   )
 }
 
+function DirectionSection({
+  title,
+  groups,
+  defaultOpen,
+}: {
+  title: string
+  groups: [string, Rule[]][]
+  defaultOpen: boolean
+}) {
+  if (groups.length === 0) return null
+  return (
+    <div>
+      <div className="text-[11px] font-semibold text-muted-2 uppercase tracking-wide mb-2.5">{title}</div>
+      <div className="flex flex-col gap-3">
+        {groups.map(([category, rules]) => (
+          <CategoryGroup key={category} category={category} rules={rules} defaultOpen={defaultOpen} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function DefaultRules() {
   const rulesQ = useRules(true)
+  const categoriesQ = useCategories(true)
   const [search, setSearch] = useState('')
+
+  const directionByCategory = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const c of categoriesQ.data ?? []) map.set(c.name, c.direction)
+    return map
+  }, [categoriesQ.data])
 
   const groups = useMemo(() => {
     const all = (rulesQ.data ?? []).filter((r) => r.is_default)
@@ -79,6 +108,13 @@ export function DefaultRules() {
     return [...byCategory.entries()].sort(([a], [b]) => a.localeCompare(b))
   }, [rulesQ.data, search])
 
+  // Every category a default rule can target is direction-locked (see
+  // api/types.ts's CategoryDirection) - splitting the page into these two
+  // sections is what makes that split visible here, not just enforced
+  // silently by the engine.
+  const outflowGroups = groups.filter(([category]) => directionByCategory.get(category) !== 'inflow')
+  const inflowGroups = groups.filter(([category]) => directionByCategory.get(category) === 'inflow')
+
   return (
     <div className="px-9 pt-7 pb-15">
       <div className="flex items-start justify-between mb-5 gap-4 flex-wrap">
@@ -101,10 +137,9 @@ export function DefaultRules() {
       {!rulesQ.isLoading && groups.length === 0 && (
         <div className="text-muted text-sm">No default rules match "{search}".</div>
       )}
-      <div className="flex flex-col gap-3">
-        {groups.map(([category, rules]) => (
-          <CategoryGroup key={category} category={category} rules={rules} defaultOpen={!!search} />
-        ))}
+      <div className="flex flex-col gap-5">
+        <DirectionSection title="Outflow Categories" groups={outflowGroups} defaultOpen={!!search} />
+        <DirectionSection title="Inflow Categories" groups={inflowGroups} defaultOpen={!!search} />
       </div>
     </div>
   )

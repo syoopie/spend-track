@@ -150,6 +150,8 @@ export interface RuleCreateRequest {
   exclusion_reason?: string | null
 }
 
+export type CategoryDirection = 'inflow' | 'outflow'
+
 export interface Category {
   id: number
   name: string
@@ -157,6 +159,7 @@ export interface Category {
   icon: string | null
   is_hidden: boolean
   sort_order: number
+  direction: CategoryDirection
 }
 
 export interface Settings {
