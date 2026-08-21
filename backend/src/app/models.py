@@ -26,7 +26,7 @@ class StagingRowOut(BaseModel):
 
 class StagingBatchOut(BaseModel):
     batch_id: str
-    source_filename: str
+    source_filenames: list[str]
     bank_name: str
     accounts: list[StagingAccountOut]
     rows: list[StagingRowOut]

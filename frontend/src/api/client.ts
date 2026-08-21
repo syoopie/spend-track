@@ -59,4 +59,10 @@ export const api = {
     for (const [k, v] of Object.entries(extra ?? {})) form.append(k, v)
     return fetch(`/api${path}`, { method: 'POST', body: form }).then((r) => handle<T>(r))
   },
+  uploadMultiple<T>(path: string, files: File[], extra?: Record<string, string>): Promise<T> {
+    const form = new FormData()
+    for (const file of files) form.append('files', file)
+    for (const [k, v] of Object.entries(extra ?? {})) form.append(k, v)
+    return fetch(`/api${path}`, { method: 'POST', body: form }).then((r) => handle<T>(r))
+  },
 }

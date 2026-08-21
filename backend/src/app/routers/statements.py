@@ -63,7 +63,7 @@ def _batch_to_response(batch: StagingBatch) -> StagingBatchOut:
     ]
     return StagingBatchOut(
         batch_id=batch.batch_id,
-        source_filename=batch.source_filename,
+        source_filenames=batch.source_filenames,
         bank_name=batch.bank_name,
         accounts=[
             StagingAccountOut(
@@ -83,84 +83,101 @@ def _batch_to_response(batch: StagingBatch) -> StagingBatchOut:
 
 
 @router.post("/upload", response_model=StagingBatchOut)
-async def upload_statement(file: UploadFile = File(...), password: str | None = Form(default=None)):
+async def upload_statement(files: list[UploadFile] = File(...), password: str | None = Form(default=None)):
     if get_store().current() is not None:
         raise _error(
             409, "STAGING_BATCH_EXISTS", "Commit or discard the pending statement before uploading another."
         )
-    if not (file.filename or "").lower().endswith(".pdf"):
-        raise _error(422, "UNPARSEABLE_STATEMENT_FORMAT", "Only PDF e-statements are supported.")
+    if not files:
+        raise _error(422, "UNPARSEABLE_STATEMENT_FORMAT", "No files were provided.")
+    for f in files:
+        if not (f.filename or "").lower().endswith(".pdf"):
+            raise _error(422, "UNPARSEABLE_STATEMENT_FORMAT", f"'{f.filename}' is not a PDF e-statement.")
 
-    data = await file.read()
-
-    try:
-        pdf = open_pdf(data, password)
-    except EncryptedPdfError:
-        raise _error(422, "ENCRYPTED_PDF_PASSWORD_REQUIRED", "This PDF is password-protected.")
-    except IncorrectPasswordError:
-        raise _error(422, "INCORRECT_PDF_PASSWORD", "The supplied password did not unlock this PDF.")
-
-    try:
+    # Parse every file up front, before touching the DB/staging store, so a
+    # failure partway through (bad password, unparseable format) leaves no
+    # partial batch behind - the whole multi-file upload is all-or-nothing.
+    parsed_files = []
+    for f in files:
+        data = await f.read()
+        filename = f.filename or "statement.pdf"
         try:
-            parsed = detect_and_parse(pdf.pages)
-        except UnparseableStatementError as exc:
-            raise _error(422, "UNPARSEABLE_STATEMENT_FORMAT", str(exc))
-    finally:
-        pdf.close()
+            pdf = open_pdf(data, password)
+        except EncryptedPdfError:
+            raise _error(422, "ENCRYPTED_PDF_PASSWORD_REQUIRED", f"'{filename}' is password-protected.")
+        except IncorrectPasswordError:
+            raise _error(422, "INCORRECT_PDF_PASSWORD", f"The supplied password did not unlock '{filename}'.")
+        try:
+            try:
+                parsed = detect_and_parse(pdf.pages)
+            except UnparseableStatementError as exc:
+                raise _error(422, "UNPARSEABLE_STATEMENT_FORMAT", f"'{filename}': {exc}")
+        finally:
+            pdf.close()
+        parsed_files.append((filename, parsed))
 
     with get_conn() as conn:
         rules = _fetch_active_rules(conn)
         contact_identifiers = _fetch_contact_identifiers(conn)
 
         staging_accounts: list[StagingAccount] = []
+        account_ids_by_key: dict[tuple[str, str], str] = {}  # (bank_name, account_number) -> account_id
         staging_rows: list[StagingRow] = []
+        seen_fingerprints: set[str] = set()
         row_index = 0
 
-        for parsed_account in parsed.accounts:
-            account_id = derive_account_id(parsed_account.bank_name, parsed_account.account_number)
-            existing = conn.execute("SELECT 1 FROM accounts WHERE id = ?", (account_id,)).fetchone()
-            staging_accounts.append(
-                StagingAccount(
-                    bank_name=parsed_account.bank_name,
-                    account_number=parsed_account.account_number,
-                    account_number_masked=parsed_account.account_number_masked,
-                    account_type=parsed_account.account_type,
-                    is_new=existing is None,
-                )
-            )
-
-            seq_indices = compute_daily_sequence_indices(parsed_account.transactions)
-            for tx, seq in zip(parsed_account.transactions, seq_indices):
-                cleaned = clean_description(tx.raw_description)
-                fingerprint = compute_fingerprint(account_id, tx.transaction_date, tx.amount, cleaned, seq)
-                is_duplicate = (
-                    conn.execute("SELECT 1 FROM transactions WHERE fingerprint = ?", (fingerprint,)).fetchone()
-                    is not None
-                )
-                cat = categorize(tx.raw_description, rules, contact_identifiers)
-                staging_rows.append(
-                    StagingRow(
-                        index=row_index,
-                        account_number=parsed_account.account_number,
-                        transaction_date=tx.transaction_date,
-                        raw_description=tx.raw_description,
-                        matched_label=cat.matched_label,
-                        amount=tx.amount,
-                        fingerprint=fingerprint,
-                        category=cat.category,
-                        subcategory=cat.subcategory,
-                        is_excluded=cat.is_excluded,
-                        exclusion_reason=cat.exclusion_reason,
-                        contact_id=cat.contact_id,
-                        needs_review=cat.needs_review,
-                        is_duplicate=is_duplicate,
+        for _filename, parsed in parsed_files:
+            for parsed_account in parsed.accounts:
+                key = (parsed_account.bank_name, parsed_account.account_number)
+                if key not in account_ids_by_key:
+                    account_id = derive_account_id(parsed_account.bank_name, parsed_account.account_number)
+                    account_ids_by_key[key] = account_id
+                    existing = conn.execute("SELECT 1 FROM accounts WHERE id = ?", (account_id,)).fetchone()
+                    staging_accounts.append(
+                        StagingAccount(
+                            bank_name=parsed_account.bank_name,
+                            account_number=parsed_account.account_number,
+                            account_number_masked=parsed_account.account_number_masked,
+                            account_type=parsed_account.account_type,
+                            is_new=existing is None,
+                        )
                     )
-                )
-                row_index += 1
+                account_id = account_ids_by_key[key]
 
+                seq_indices = compute_daily_sequence_indices(parsed_account.transactions)
+                for tx, seq in zip(parsed_account.transactions, seq_indices):
+                    cleaned = clean_description(tx.raw_description)
+                    fingerprint = compute_fingerprint(account_id, tx.transaction_date, tx.amount, cleaned, seq)
+                    is_duplicate = fingerprint in seen_fingerprints or (
+                        conn.execute("SELECT 1 FROM transactions WHERE fingerprint = ?", (fingerprint,)).fetchone()
+                        is not None
+                    )
+                    seen_fingerprints.add(fingerprint)
+                    cat = categorize(tx.raw_description, rules, contact_identifiers)
+                    staging_rows.append(
+                        StagingRow(
+                            index=row_index,
+                            account_number=parsed_account.account_number,
+                            transaction_date=tx.transaction_date,
+                            raw_description=tx.raw_description,
+                            matched_label=cat.matched_label,
+                            amount=tx.amount,
+                            fingerprint=fingerprint,
+                            category=cat.category,
+                            subcategory=cat.subcategory,
+                            is_excluded=cat.is_excluded,
+                            exclusion_reason=cat.exclusion_reason,
+                            contact_id=cat.contact_id,
+                            needs_review=cat.needs_review,
+                            is_duplicate=is_duplicate,
+                        )
+                    )
+                    row_index += 1
+
+    bank_names = {parsed.bank_name for _filename, parsed in parsed_files}
     batch = StagingBatch(
-        source_filename=file.filename or "statement.pdf",
-        bank_name=parsed.bank_name,
+        source_filenames=[filename for filename, _parsed in parsed_files],
+        bank_name=bank_names.pop() if len(bank_names) == 1 else " + ".join(sorted(bank_names)),
         accounts=staging_accounts,
         rows=staging_rows,
     )

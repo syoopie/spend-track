@@ -23,7 +23,7 @@ export interface StagingRow {
 
 export interface StagingBatch {
   batch_id: string
-  source_filename: string
+  source_filenames: string[]
   bank_name: string
   accounts: StagingAccount[]
   rows: StagingRow[]

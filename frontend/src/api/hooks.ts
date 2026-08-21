@@ -95,8 +95,8 @@ export function useMonthlyTotals(accountId?: string) {
 export function useUploadStatement() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ file, password }: { file: File; password?: string }) =>
-      api.upload<StagingBatch>('/statements/upload', file, password ? { password } : undefined),
+    mutationFn: ({ files, password }: { files: File[]; password?: string }) =>
+      api.uploadMultiple<StagingBatch>('/statements/upload', files, password ? { password } : undefined),
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['accounts'] })
       qc.setQueryData(['staging-batch', 'current'], data)

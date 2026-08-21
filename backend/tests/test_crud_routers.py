@@ -18,7 +18,7 @@ def client(tmp_path, monkeypatch):
 def _upload_and_commit(client, path=ACCOUNT_SAMPLE):
     with open(path, "rb") as f:
         resp = client.post(
-            "/api/statements/upload", files={"file": ("statement.pdf", f, "application/pdf")}
+            "/api/statements/upload", files={"files": ("statement.pdf", f, "application/pdf")}
         )
     body = resp.json()
     client.post(f"/api/statements/staging/{body['batch_id']}/commit")
@@ -381,3 +381,13 @@ def test_dashboard_empty_database_does_not_error(client):
     resp = client.get("/api/dashboard/summary")
     assert resp.status_code == 200
     assert resp.json()["metrics"]["total_outflow"] == 0
+
+
+def test_dashboard_top_paynow_contacts_shows_display_name_not_raw_description(client):
+    _upload_and_commit(client)
+    resp = client.get("/api/dashboard/summary").json()
+    paynow_names = [e["name"] for e in resp["top_paynow_contacts"]]
+    assert paynow_names  # sample data has at least one PayNow-marker transaction
+    for name in paynow_names:
+        assert not name.startswith("PayNow to ")  # prefix stripped for the contact list
+        assert "PIB" not in name.upper() and "PAYNOW" not in name.upper()  # not the raw bank text
