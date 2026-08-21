@@ -203,7 +203,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
       {dialogOpen && (
         <Modal onClose={() => setDialogOpen(false)} width={460}>
           <div className="flex items-center justify-between mb-4">
-            <div className="text-base font-bold">Upload Statement</div>
+            <div className="text-base font-bold">Upload Bank Statement</div>
             <button
               onClick={() => setDialogOpen(false)}
               className="text-muted hover:text-text text-lg leading-none cursor-pointer border-none bg-transparent"

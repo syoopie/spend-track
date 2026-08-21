@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useCategories, useCommitBatch, useCurrentStagingBatch, useDiscardBatch, useUpdateStagingRow } from '../api/hooks'
-import { categoryColor } from '../lib/categoryColor'
+import { categoryIcon } from '../lib/categoryColor'
 import { fmtDate, fmtSigned } from '../lib/format'
+import { CategoryBadge } from './CategoryBadge'
 import { Checkbox } from './Checkbox'
 import { Modal } from './Modal'
 import { Select } from './Select'
@@ -34,11 +35,14 @@ function StagingRowPopover({
       <div className="flex-1">
         <div className="text-[11px] text-muted mb-1">Assign category</div>
         <Select uiSize="sm" value={category} onChange={(e) => setCategory(e.target.value)} className="w-full">
-          {(categoriesQ.data ?? []).map((c) => (
-            <option key={c.id} value={c.name}>
-              {c.name}
-            </option>
-          ))}
+          {(categoriesQ.data ?? []).map((c) => {
+            const Icon = categoryIcon(categoriesQ.data, c.name)
+            return (
+              <option key={c.id} value={c.name}>
+                <Icon size={12} className="shrink-0" /> {c.name}
+              </option>
+            )
+          })}
         </Select>
       </div>
       <label className="flex items-center gap-1.5 text-[12px] text-text pb-2 cursor-pointer">
@@ -148,9 +152,7 @@ export function StagingReviewDialog({ onClose }: { onClose: () => void }) {
         </div>
         {visibleRows.map((row) => {
           const isOpen = openIndex === row.index
-          const cc = row.needs_review
-            ? { bg: AMBER_BADGE_BG, fg: AMBER_BADGE_FG }
-            : categoryColor(categoriesQ.data, row.category)
+          const colorOverride = row.needs_review ? { bg: AMBER_BADGE_BG, fg: AMBER_BADGE_FG } : undefined
           return (
             <div key={row.index}>
               <div
@@ -165,12 +167,7 @@ export function StagingReviewDialog({ onClose }: { onClose: () => void }) {
                   {row.matched_label ?? row.raw_description}
                 </div>
                 <div>
-                  <span
-                    className="text-[11px] px-2 py-0.5 rounded-md"
-                    style={{ background: cc.bg, color: cc.fg }}
-                  >
-                    {row.category}
-                  </span>
+                  <CategoryBadge category={row.category} categories={categoriesQ.data} colorOverride={colorOverride} />
                 </div>
                 <div className={`text-right font-mono ${row.amount > 0 ? 'text-success' : 'text-text'}`}>
                   {fmtSigned(row.amount)}

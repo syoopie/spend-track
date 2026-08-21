@@ -1,9 +1,10 @@
 import { FileUp, Pencil, RefreshCw } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useAccounts, useCategories, useDashboardSummary, useMonthlyTotals, useTransactions } from '../api/hooks'
-import { categoryColor, categoryIcon } from '../lib/categoryColor'
+import { categoryIcon } from '../lib/categoryColor'
 import { amountIntensityColor, fmtDate, fmtMonthRangeLabel, fmtPlain, shiftMonth } from '../lib/format'
 import { CashFlowChart } from '../components/CashFlowChart'
+import { CategoryBadge } from '../components/CategoryBadge'
 import { CategoryDonut } from '../components/CategoryDonut'
 import { VelocityChart } from '../components/VelocityChart'
 import { RefundDrawer } from '../components/RefundDrawer'
@@ -126,7 +127,7 @@ export function Dashboard() {
               disabled={hasPendingBatch}
               className="text-[13px] font-semibold px-5 py-2.5 rounded-lg border-none bg-accent text-accent-fg cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              + Upload Statement
+              + Upload Bank Statement
             </button>
           </div>
         </div>
@@ -289,11 +290,14 @@ export function Dashboard() {
               className="w-[160px]"
             >
               <option value="">All Categories</option>
-              {(categoriesQ.data ?? []).map((c) => (
-                <option key={c.id} value={c.name}>
-                  {c.name}
-                </option>
-              ))}
+              {(categoriesQ.data ?? []).map((c) => {
+                const Icon = categoryIcon(categoriesQ.data, c.name)
+                return (
+                  <option key={c.id} value={c.name}>
+                    <Icon size={12} className="shrink-0" /> {c.name}
+                  </option>
+                )
+              })}
             </Select>
             <label className="flex items-center gap-1.5 text-xs text-muted cursor-pointer whitespace-nowrap">
               <Checkbox checked={excludedVisible} onChange={setExcludedVisible} />
@@ -317,8 +321,6 @@ export function Dashboard() {
           </div>
         )}
         {filteredTransactions.map((tx) => {
-          const cc = categoryColor(categoriesQ.data, tx.category)
-          const CategoryIcon = categoryIcon(categoriesQ.data, tx.category)
           return (
             <div key={tx.id}>
               <div
@@ -335,13 +337,7 @@ export function Dashboard() {
                   )}
                 </div>
                 <div>
-                  <span
-                    className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md"
-                    style={{ background: cc.bg, color: cc.fg }}
-                  >
-                    <CategoryIcon size={11} className="shrink-0" />
-                    {tx.category}
-                  </span>
+                  <CategoryBadge category={tx.category} categories={categoriesQ.data} />
                 </div>
                 <div className="text-muted text-xs">
                   {tx.bank_name} {tx.account_number_masked}
