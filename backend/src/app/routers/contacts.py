@@ -3,22 +3,20 @@ import io
 import sqlite3
 from collections import defaultdict
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, UploadFile
 
+from app import repo
 from app.db import get_conn
+from app.errors import not_found_error
 from app.models import ContactCreateRequest, ContactImportResult, ContactOut, ContactUpdateRequest
 
 router = APIRouter(prefix="/api/contacts", tags=["contacts"])
 
 
-def _not_found() -> HTTPException:
-    return HTTPException(status_code=404, detail={"code": "CONTACT_NOT_FOUND", "message": "No contact with that id."})
-
-
 def _fetch_contact(conn: sqlite3.Connection, contact_id: int) -> ContactOut:
     c = conn.execute("SELECT * FROM contacts WHERE id = ?", (contact_id,)).fetchone()
     if c is None:
-        raise _not_found()
+        raise not_found_error("contact", "CONTACT_NOT_FOUND")
     identifiers = [
         r["identifier"]
         for r in conn.execute(
@@ -74,16 +72,13 @@ def list_contacts():
 @router.post("", response_model=ContactOut)
 def create_contact(body: ContactCreateRequest):
     with get_conn() as conn:
-        cur = conn.execute(
-            "INSERT INTO contacts (name, default_category, default_subcategory) VALUES (?, ?, ?)",
-            (body.name, body.default_category, body.default_subcategory),
+        contact_id = repo.insert_contact(
+            conn,
+            name=body.name,
+            default_category=body.default_category,
+            default_subcategory=body.default_subcategory,
+            identifiers=body.identifiers,
         )
-        contact_id = cur.lastrowid
-        for identifier in body.identifiers:
-            conn.execute(
-                "INSERT INTO contact_identifiers (contact_id, identifier) VALUES (?, ?)",
-                (contact_id, identifier),
-            )
         return _fetch_contact(conn, contact_id)
 
 
@@ -92,7 +87,7 @@ def update_contact(contact_id: int, body: ContactUpdateRequest):
     with get_conn() as conn:
         existing = conn.execute("SELECT * FROM contacts WHERE id = ?", (contact_id,)).fetchone()
         if existing is None:
-            raise _not_found()
+            raise not_found_error("contact", "CONTACT_NOT_FOUND")
         name = body.name if body.name is not None else existing["name"]
         category = body.default_category if body.default_category is not None else existing["default_category"]
         subcategory = (
@@ -103,12 +98,7 @@ def update_contact(contact_id: int, body: ContactUpdateRequest):
             (name, category, subcategory, contact_id),
         )
         if body.identifiers is not None:
-            conn.execute("DELETE FROM contact_identifiers WHERE contact_id = ?", (contact_id,))
-            for identifier in body.identifiers:
-                conn.execute(
-                    "INSERT INTO contact_identifiers (contact_id, identifier) VALUES (?, ?)",
-                    (contact_id, identifier),
-                )
+            repo.replace_contact_identifiers(conn, contact_id, body.identifiers)
         return _fetch_contact(conn, contact_id)
 
 
@@ -138,10 +128,7 @@ async def import_contacts_csv(file: UploadFile = File(...)):
             if not name or not identifier:
                 continue
 
-            already_mapped = conn.execute(
-                "SELECT contact_id FROM contact_identifiers WHERE identifier = ?", (identifier,)
-            ).fetchone()
-            if already_mapped:
+            if repo.find_contact_id_by_identifier(conn, identifier) is not None:
                 continue  # identifier already mapped to some contact - leave as-is
 
             existing_contact = conn.execute(
@@ -150,16 +137,14 @@ async def import_contacts_csv(file: UploadFile = File(...)):
             if existing_contact:
                 contact_id = existing_contact["id"]
                 updated += 1
-            else:
-                cur = conn.execute(
-                    "INSERT INTO contacts (name, default_category, default_subcategory) VALUES (?, ?, ?)",
-                    (name, category or "Others", None),
+                conn.execute(
+                    "INSERT INTO contact_identifiers (contact_id, identifier) VALUES (?, ?)",
+                    (contact_id, identifier),
                 )
-                contact_id = cur.lastrowid
+            else:
+                repo.insert_contact(
+                    conn, name=name, default_category=category or "Others", identifiers=[identifier]
+                )
                 created += 1
-            conn.execute(
-                "INSERT INTO contact_identifiers (contact_id, identifier) VALUES (?, ?)",
-                (contact_id, identifier),
-            )
 
     return ContactImportResult(contacts_created=created, contacts_updated=updated)

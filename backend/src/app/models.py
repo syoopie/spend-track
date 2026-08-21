@@ -55,11 +55,6 @@ class CommitResult(BaseModel):
     refund_pairs_created: int
 
 
-class ErrorDetail(BaseModel):
-    code: str
-    message: str
-
-
 class AccountOut(BaseModel):
     id: str
     bank_name: str
@@ -218,10 +213,11 @@ class CashFlowMonth(BaseModel):
     outflow: float
 
 
-class MonthlyTotal(BaseModel):
-    month: str
-    inflow: float
-    outflow: float
+# Same shape as CashFlowMonth by coincidence, not by contract - kept as a
+# distinct importable name since the two come from different endpoints
+# (per-request-range cash_flow vs. the global /monthly-totals list), but
+# there's no reason to maintain two identical field lists.
+MonthlyTotal = CashFlowMonth
 
 
 class CategoryBreakdownSlice(BaseModel):

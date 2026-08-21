@@ -1,10 +1,11 @@
 import shutil
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 
 from app.config import get_db_path, set_db_path
 from app.db import get_conn, init_db
+from app.errors import api_error
 from app.models import RelocateRequest, ResetRequest, SettingsOut
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -28,16 +29,11 @@ def relocate_database(body: RelocateRequest):
     new location, remove the old files, then repoint config.json."""
     old_path = get_db_path()
     if not old_path.exists():
-        raise HTTPException(
-            status_code=404, detail={"code": "DB_NOT_FOUND", "message": "No database file to relocate."}
-        )
+        raise api_error(404, "DB_NOT_FOUND", "No database file to relocate.")
 
     new_path = Path(body.new_path)
     if new_path.resolve() == old_path.resolve():
-        raise HTTPException(
-            status_code=400,
-            detail={"code": "RELOCATE_SAME_PATH", "message": "New path is the same as the current database path."},
-        )
+        raise api_error(400, "RELOCATE_SAME_PATH", "New path is the same as the current database path.")
     new_path.parent.mkdir(parents=True, exist_ok=True)
 
     with get_conn() as conn:
@@ -61,10 +57,7 @@ def relocate_database(body: RelocateRequest):
 @router.post("/reset", status_code=204)
 def reset_database(body: ResetRequest):
     if body.confirm != "DELETE":
-        raise HTTPException(
-            status_code=400,
-            detail={"code": "RESET_CONFIRMATION_MISMATCH", "message": "Type DELETE to confirm."},
-        )
+        raise api_error(400, "RESET_CONFIRMATION_MISMATCH", "Type DELETE to confirm.")
     db_path = get_db_path()
     for suffix in ("", "-wal", "-shm"):
         p = Path(str(db_path) + suffix)

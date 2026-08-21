@@ -1,7 +1,6 @@
-import sqlite3
+from fastapi import APIRouter, File, Form, UploadFile
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
-
+from app import repo
 from app.db import get_conn
 from app.engine.fingerprint import clean_description, compute_daily_sequence_indices, compute_fingerprint
 from app.engine.identity import derive_account_id
@@ -9,6 +8,7 @@ from app.engine.naming import extract_display_name
 from app.engine.refunds import find_refund_pairs
 from app.engine.rules import categorize
 from app.engine.staging_store import StagingAccount, StagingBatch, StagingRow, get_store
+from app.errors import api_error
 from app.models import (
     CommitResult,
     StagingAccountOut,
@@ -21,24 +21,6 @@ from app.parsing.pdf_io import EncryptedPdfError, IncorrectPasswordError, open_p
 from app.parsing.registry import detect_and_parse
 
 router = APIRouter(prefix="/api/statements", tags=["statements"])
-
-
-def _error(status_code: int, code: str, message: str) -> HTTPException:
-    return HTTPException(status_code=status_code, detail={"code": code, "message": message})
-
-
-def _fetch_active_rules(conn: sqlite3.Connection) -> list[sqlite3.Row]:
-    return conn.execute("SELECT * FROM rules ORDER BY priority ASC").fetchall()
-
-
-def _fetch_contact_identifiers(conn: sqlite3.Connection) -> list[sqlite3.Row]:
-    return conn.execute(
-        """
-        SELECT ci.identifier AS identifier, c.id AS contact_id, c.name AS name,
-               c.default_category AS default_category, c.default_subcategory AS default_subcategory
-        FROM contact_identifiers ci JOIN contacts c ON c.id = ci.contact_id
-        """
-    ).fetchall()
 
 
 def _batch_to_response(batch: StagingBatch) -> StagingBatchOut:
@@ -86,14 +68,14 @@ def _batch_to_response(batch: StagingBatch) -> StagingBatchOut:
 @router.post("/upload", response_model=StagingBatchOut)
 async def upload_statement(files: list[UploadFile] = File(...), password: str | None = Form(default=None)):
     if get_store().current() is not None:
-        raise _error(
+        raise api_error(
             409, "STAGING_BATCH_EXISTS", "Commit or discard the pending statement before uploading another."
         )
     if not files:
-        raise _error(422, "UNPARSEABLE_STATEMENT_FORMAT", "No files were provided.")
+        raise api_error(422, "UNPARSEABLE_STATEMENT_FORMAT", "No files were provided.")
     for f in files:
         if not (f.filename or "").lower().endswith(".pdf"):
-            raise _error(422, "UNPARSEABLE_STATEMENT_FORMAT", f"'{f.filename}' is not a PDF e-statement.")
+            raise api_error(422, "UNPARSEABLE_STATEMENT_FORMAT", f"'{f.filename}' is not a PDF e-statement.")
 
     # Parse every file up front, before touching the DB/staging store, so a
     # failure partway through (bad password, unparseable format) leaves no
@@ -105,21 +87,21 @@ async def upload_statement(files: list[UploadFile] = File(...), password: str | 
         try:
             pdf = open_pdf(data, password)
         except EncryptedPdfError:
-            raise _error(422, "ENCRYPTED_PDF_PASSWORD_REQUIRED", f"'{filename}' is password-protected.")
+            raise api_error(422, "ENCRYPTED_PDF_PASSWORD_REQUIRED", f"'{filename}' is password-protected.")
         except IncorrectPasswordError:
-            raise _error(422, "INCORRECT_PDF_PASSWORD", f"The supplied password did not unlock '{filename}'.")
+            raise api_error(422, "INCORRECT_PDF_PASSWORD", f"The supplied password did not unlock '{filename}'.")
         try:
             try:
                 parsed = detect_and_parse(pdf.pages)
             except UnparseableStatementError as exc:
-                raise _error(422, "UNPARSEABLE_STATEMENT_FORMAT", f"'{filename}': {exc}")
+                raise api_error(422, "UNPARSEABLE_STATEMENT_FORMAT", f"'{filename}': {exc}")
         finally:
             pdf.close()
         parsed_files.append((filename, parsed))
 
     with get_conn() as conn:
-        rules = _fetch_active_rules(conn)
-        contact_identifiers = _fetch_contact_identifiers(conn)
+        rules = repo.fetch_active_rules(conn)
+        contact_identifiers = repo.fetch_contact_identifiers(conn)
         # Any card account already committed, or parsed anywhere in this same
         # multi-file batch, is enough to treat a "pay my card bill" line on a
         # bank account as already counted elsewhere - see engine/card_payments.py.
@@ -204,7 +186,7 @@ async def upload_statement(files: list[UploadFile] = File(...), password: str | 
         # while this one was busy parsing PDFs - StagingStore.create() is the
         # actual point of truth, so translate its rejection into the same
         # clean 409 the upfront check gives the common (non-racing) case.
-        raise _error(
+        raise api_error(
             409, "STAGING_BATCH_EXISTS", "Commit or discard the pending statement before uploading another."
         )
     return _batch_to_response(batch)
@@ -214,7 +196,7 @@ async def upload_statement(files: list[UploadFile] = File(...), password: str | 
 def get_current_staging_batch():
     batch = get_store().current()
     if batch is None:
-        raise _error(404, "NO_STAGING_BATCH", "No statement is currently staged.")
+        raise api_error(404, "NO_STAGING_BATCH", "No statement is currently staged.")
     return _batch_to_response(batch)
 
 
@@ -223,7 +205,7 @@ def get_staging_batch(batch_id: str):
     try:
         batch = get_store().get(batch_id)
     except KeyError:
-        raise _error(404, "STAGING_BATCH_NOT_FOUND", "No staging batch with that id.")
+        raise api_error(404, "STAGING_BATCH_NOT_FOUND", "No staging batch with that id.")
     return _batch_to_response(batch)
 
 
@@ -233,7 +215,7 @@ def update_staging_row(batch_id: str, index: int, body: StagingRowUpdateRequest)
     try:
         batch = store.get(batch_id)
     except KeyError:
-        raise _error(404, "STAGING_BATCH_NOT_FOUND", "No staging batch with that id.")
+        raise api_error(404, "STAGING_BATCH_NOT_FOUND", "No staging batch with that id.")
 
     try:
         row = store.update_row(
@@ -244,38 +226,31 @@ def update_staging_row(batch_id: str, index: int, body: StagingRowUpdateRequest)
             needs_review=False,
         )
     except KeyError:
-        raise _error(404, "STAGING_ROW_NOT_FOUND", "No staging row at that index.")
+        raise api_error(404, "STAGING_ROW_NOT_FOUND", "No staging row at that index.")
 
     with get_conn() as conn:
         if body.save_as_rule:
             pattern = body.rule_pattern or extract_display_name(row.raw_description)
-            priority = body.rule_priority
-            if priority is None:
-                max_priority = conn.execute("SELECT MAX(priority) FROM rules WHERE is_default = 0").fetchone()[0]
-                priority = (max_priority or 0) + 1
-            conn.execute(
-                "INSERT INTO rules (priority, match_pattern, target_category, target_subcategory, "
-                "is_exclusion_rule) VALUES (?, ?, ?, ?, 0)",
-                (priority, pattern, body.category, body.subcategory),
+            priority = body.rule_priority if body.rule_priority is not None else repo.next_user_rule_priority(conn)
+            repo.insert_rule(
+                conn,
+                priority=priority,
+                match_pattern=pattern,
+                target_category=body.category,
+                target_subcategory=body.subcategory,
             )
 
         if body.save_as_contact:
             identifier = body.contact_identifier or extract_display_name(row.raw_description)
             name = body.contact_name or identifier
-            existing_contact = conn.execute(
-                "SELECT contact_id FROM contact_identifiers WHERE identifier = ?", (identifier,)
-            ).fetchone()
-            if existing_contact:
-                contact_id = existing_contact["contact_id"]
-            else:
-                cur = conn.execute(
-                    "INSERT INTO contacts (name, default_category, default_subcategory) VALUES (?, ?, ?)",
-                    (name, body.category, body.subcategory),
-                )
-                contact_id = cur.lastrowid
-                conn.execute(
-                    "INSERT INTO contact_identifiers (contact_id, identifier) VALUES (?, ?)",
-                    (contact_id, identifier),
+            contact_id = repo.find_contact_id_by_identifier(conn, identifier)
+            if contact_id is None:
+                contact_id = repo.insert_contact(
+                    conn,
+                    name=name,
+                    default_category=body.category,
+                    default_subcategory=body.subcategory,
+                    identifiers=[identifier],
                 )
             store.update_row(batch_id, index, contact_id=contact_id)
 
@@ -288,7 +263,7 @@ def commit_staging_batch(batch_id: str):
     try:
         batch = store.get(batch_id)
     except KeyError:
-        raise _error(404, "STAGING_BATCH_NOT_FOUND", "No staging batch with that id.")
+        raise api_error(404, "STAGING_BATCH_NOT_FOUND", "No staging batch with that id.")
 
     accounts_provisioned = 0
     transactions_committed = 0

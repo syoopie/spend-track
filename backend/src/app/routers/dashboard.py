@@ -4,10 +4,11 @@ import sqlite3
 from collections import defaultdict
 from datetime import date, timedelta
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 
 from app.db import get_conn
 from app.engine.refunds import normalize_merchant
+from app.errors import api_error
 from app.models import (
     CashFlowMonth,
     CategoryBreakdownSlice,
@@ -29,13 +30,7 @@ def _validate_month_key(value: str, param_name: str) -> None:
     day appended) assumes this shape and raises an unhandled ValueError -> 500
     on anything else, so reject bad input here with a clean 422 instead."""
     if not _MONTH_KEY_RE.match(value):
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "code": "INVALID_MONTH_FORMAT",
-                "message": f"{param_name} must be in YYYY-MM format, got {value!r}.",
-            },
-        )
+        raise api_error(422, "INVALID_MONTH_FORMAT", f"{param_name} must be in YYYY-MM format, got {value!r}.")
 
 
 def _shift_month(month: str, delta: int) -> str:
