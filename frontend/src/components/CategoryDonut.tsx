@@ -3,7 +3,10 @@ import type { Category, CategoryBreakdownSlice } from '../api/types'
 import { categoryDotColor, categoryIcon } from '../lib/categoryColor'
 import { fmtCompact, fmtPlain } from '../lib/format'
 
-const R = 50
+// Kept a few units short of the viewBox's edge (60 from center) so the
+// hover-expanded stroke width (24) doesn't get clipped by the SVG's default
+// overflow: outer edge on hover = R + 24/2 = 58, inside the 60 boundary.
+const R = 46
 const CIRCUMFERENCE = 2 * Math.PI * R
 
 export function CategoryDonut({
