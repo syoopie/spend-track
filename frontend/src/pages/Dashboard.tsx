@@ -2,7 +2,7 @@ import { Pencil } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useAccounts, useCategories, useDashboardSummary, useMonthlyTotals, useTransactions } from '../api/hooks'
 import { categoryColor } from '../lib/categoryColor'
-import { fmtDate, fmtMonthRangeLabel, fmtMonthYearLabel, fmtPlain, fmtSigned, shiftMonth } from '../lib/format'
+import { amountIntensityColor, fmtDate, fmtMonthRangeLabel, fmtMonthYearLabel, fmtPlain, shiftMonth } from '../lib/format'
 import { CashFlowChart } from '../components/CashFlowChart'
 import { CategoryDonut } from '../components/CategoryDonut'
 import { VelocityChart } from '../components/VelocityChart'
@@ -69,6 +69,10 @@ export function Dashboard() {
     })
   }, [visibleTransactions, searchText, categoryFilter])
   const inflowCount = (txQ.data ?? []).filter((t) => t.amount > 0).length
+  const maxAbsAmount = useMemo(
+    () => filteredTransactions.reduce((m, t) => Math.max(m, Math.abs(t.amount)), 0),
+    [filteredTransactions],
+  )
   const distinctAccounts = new Set((txQ.data ?? []).map((t) => t.account_id)).size
 
   const banner = hasPendingBatch && (
@@ -304,8 +308,11 @@ export function Dashboard() {
                 <div className="text-muted text-xs">
                   {tx.bank_name} {tx.account_number_masked}
                 </div>
-                <div className={`text-right font-mono ${tx.amount > 0 ? 'text-success' : 'text-text'}`}>
-                  {fmtSigned(tx.amount)}
+                <div
+                  className="text-right font-mono"
+                  style={{ color: amountIntensityColor(tx.amount, maxAbsAmount) }}
+                >
+                  {fmtPlain(Math.abs(tx.amount))}
                 </div>
                 <div className="text-center">
                   {tx.has_refund_link && (

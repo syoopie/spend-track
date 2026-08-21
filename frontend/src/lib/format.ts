@@ -44,6 +44,15 @@ export function fmtMonthRangeLabel(from: string, to: string): string {
   return `${fmtMonthLabel(from)}${fromYear === toYear ? '' : ` ${fromYear}`} – ${toLabel}`
 }
 
+export function amountIntensityColor(amount: number, maxAbs: number): string {
+  const isOutflow = amount < 0
+  const hue = isOutflow ? 25 : 150
+  const baseChroma = isOutflow ? 0.16 : 0.17
+  const norm = maxAbs > 0 ? Math.min(Math.log1p(Math.abs(amount)) / Math.log1p(maxAbs), 1) : 0
+  const t = 0.3 + 0.7 * norm
+  return `oklch(72% ${(baseChroma * t).toFixed(3)} ${hue})`
+}
+
 export function fmtCompact(n: number): string {
   const abs = Math.abs(n)
   const sign = n < 0 ? '-' : ''

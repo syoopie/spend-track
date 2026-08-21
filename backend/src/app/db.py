@@ -22,6 +22,7 @@ DEFAULT_CATEGORIES = [
     ("Healthcare", 0, "heart-pulse", False),
     ("Education", 220, "graduation-cap", False),
     ("Groceries", 230, "shopping-cart", False),
+    ("Salary", 130, "banknote", False),
     ("PayNow Transfers", 20, "send", False),
     ("Others", None, "more-horizontal", True),
 ]
