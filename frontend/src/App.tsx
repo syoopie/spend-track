@@ -5,6 +5,7 @@ import { Dashboard } from './pages/Dashboard'
 import { Contacts } from './pages/Contacts'
 import { Rules } from './pages/Rules'
 import { DefaultRules } from './pages/DefaultRules'
+import { Guide } from './pages/Guide'
 import { Settings } from './pages/Settings'
 
 function MainLayout() {
@@ -28,6 +29,7 @@ export default function App() {
           <Route path="/contacts" element={<Contacts />} />
           <Route path="/rules" element={<Rules />} />
           <Route path="/default-rules" element={<DefaultRules />} />
+          <Route path="/guide" element={<Guide />} />
           <Route path="/settings" element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
