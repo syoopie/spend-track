@@ -1,4 +1,5 @@
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom'
+import { useAiStatus, useSettings } from './api/hooks'
 import { Sidebar } from './components/Sidebar'
 import { UploadProvider } from './components/UploadProvider'
 import { Dashboard } from './pages/Dashboard'
@@ -7,6 +8,16 @@ import { Rules } from './pages/Rules'
 import { DefaultRules } from './pages/DefaultRules'
 import { Guide } from './pages/Guide'
 import { Settings } from './pages/Settings'
+
+// Warms the AI reachability check as soon as the app loads (if AI is
+// enabled) so Settings/staging/recategorize screens don't each have to
+// trigger the first check themselves - no UI of its own, it just primes
+// the ['ai-status'] query cache other screens read from.
+function AiStatusWarmup() {
+  const settingsQ = useSettings()
+  useAiStatus(!!settingsQ.data?.ai_enabled)
+  return null
+}
 
 function MainLayout() {
   return (
@@ -22,6 +33,7 @@ function MainLayout() {
 export default function App() {
   return (
     <UploadProvider>
+      <AiStatusWarmup />
       <Routes>
         <Route element={<MainLayout />}>
           <Route path="/" element={<Dashboard />} />

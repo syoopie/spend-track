@@ -23,6 +23,11 @@ class StagingRowOut(BaseModel):
     contact_id: int | None
     needs_review: bool
     is_duplicate: bool
+    is_paynow: bool
+    ai_suggested: bool
+    ai_category: str | None
+    ai_label: str | None
+    ai_rule_pattern: str | None
 
 
 class StagingBatchOut(BaseModel):
@@ -35,6 +40,10 @@ class StagingBatchOut(BaseModel):
     duplicates_skipped: int
     new_accounts_provisioned: int
     needs_category_count: int
+    ai_status: str
+    ai_warning: str | None
+    ai_model: str | None
+    ai_suggested_count: int
 
 
 class StagingRowUpdateRequest(BaseModel):
@@ -46,6 +55,12 @@ class StagingRowUpdateRequest(BaseModel):
     save_as_contact: bool = False
     contact_name: str | None = None
     contact_identifier: str | None = None
+    # True only for the "Reject Suggestion" action - also clears
+    # matched_label back to null, not just the category. See ReviewDialog.tsx.
+    reject_ai: bool = False
+    # True only for the "Restore Suggestion" action - re-applies the row's
+    # permanently-recorded ai_category/ai_label, ignoring `category` above.
+    restore_ai: bool = False
 
 
 class CommitResult(BaseModel):
@@ -101,9 +116,60 @@ class RecategorizeRequest(BaseModel):
     account_id: str | None = None
 
 
-class RecategorizeResult(BaseModel):
-    transactions_scanned: int
-    transactions_changed: int
+class RecategorizeRowOut(BaseModel):
+    transaction_id: int
+    account_number_masked: str
+    transaction_date: str
+    raw_description: str
+    matched_label: str | None
+    amount: float
+    category: str
+    subcategory: str | None
+    contact_id: int | None
+    is_excluded: bool
+    exclusion_reason: str | None
+    needs_review: bool
+    is_paynow: bool
+    ai_suggested: bool
+    ai_category: str | None
+    ai_label: str | None
+    ai_rule_pattern: str | None
+
+
+class RecategorizeBatchOut(BaseModel):
+    batch_id: str
+    date_from: str
+    date_to: str
+    account_id: str | None
+    scanned: int
+    changed: int
+    rows: list[RecategorizeRowOut]
+    ai_status: str
+    ai_warning: str | None
+    ai_model: str | None
+    ai_suggested_count: int
+
+
+class RecategorizeRowUpdateRequest(BaseModel):
+    """Mirrors StagingRowUpdateRequest exactly - see its own docstring-level
+    comment. Edits made from the recategorize review dialog only mutate the
+    in-memory pending batch, same as staging's row edits, until the batch is
+    committed."""
+
+    category: str
+    subcategory: str | None = None
+    save_as_rule: bool = False
+    rule_pattern: str | None = None
+    rule_priority: int | None = None
+    save_as_contact: bool = False
+    contact_name: str | None = None
+    contact_identifier: str | None = None
+    reject_ai: bool = False
+    restore_ai: bool = False
+
+
+class RecategorizeCommitResult(BaseModel):
+    transactions_committed: int
 
 
 class ContactIdentifierIn(BaseModel):
@@ -199,6 +265,51 @@ class SettingsOut(BaseModel):
     currency_symbol: str
     transfer_scheme_name: str
     supported_banks: list[str]
+    ai_enabled: bool
+    ai_provider: str
+    ollama_url: str
+    ollama_model: str
+    openai_base_url: str
+    openai_model: str
+    openai_api_key_set: bool
+    openai_api_key_last4: str | None
+    anthropic_model: str
+    anthropic_api_key_set: bool
+    anthropic_api_key_last4: str | None
+
+
+class AiSettingsOut(BaseModel):
+    ai_enabled: bool
+    ai_provider: str
+    ollama_url: str
+    ollama_model: str
+    openai_base_url: str
+    openai_model: str
+    openai_api_key_set: bool
+    openai_api_key_last4: str | None
+    anthropic_model: str
+    anthropic_api_key_set: bool
+    anthropic_api_key_last4: str | None
+
+
+class AiSettingsUpdateRequest(BaseModel):
+    ai_enabled: bool | None = None
+    ai_provider: str | None = None
+    ollama_url: str | None = None
+    ollama_model: str | None = None
+    openai_base_url: str | None = None
+    openai_model: str | None = None
+    openai_api_key: str | None = None
+    clear_openai_api_key: bool = False
+    anthropic_model: str | None = None
+    anthropic_api_key: str | None = None
+    clear_anthropic_api_key: bool = False
+
+
+class AiStatusOut(BaseModel):
+    reachable: bool
+    models: list[str]
+    error: str | None
 
 
 class RelocateRequest(BaseModel):

@@ -1,0 +1,360 @@
+import pytest
+from fastapi.testclient import TestClient
+
+from app.engine.ai_providers.base import AiProviderUnavailableError, AiSuggestion, ProviderHealth
+
+ACCOUNT_SAMPLE = "../PDF Examples (Sanitized)/UOB/Account Statements/SampleAccountStatement_Feb2024.pdf"
+
+
+@pytest.fixture
+def client(tmp_path, monkeypatch):
+    monkeypatch.setenv("SG_TRACKER_DB_PATH", str(tmp_path / "test.db"))
+    from app.main import app
+
+    with TestClient(app) as c:
+        yield c
+
+
+def _upload(client, path=ACCOUNT_SAMPLE):
+    with open(path, "rb") as f:
+        return client.post("/api/statements/upload", files={"files": ("statement.pdf", f, "application/pdf")})
+
+
+def _enable_ai(client):
+    resp = client.patch(
+        "/api/settings/ai", json={"ai_enabled": True, "ai_provider": "ollama", "ollama_model": "llama3.1"}
+    )
+    assert resp.status_code == 200, resp.text
+
+
+class _FakeProvider:
+    """Stands in for a real OllamaProvider/etc. - suggests a category for the
+    first candidate it's given (if any), so tests don't need to know exactly
+    which raw description in the sample PDF lands in the fallback tier."""
+
+    def __init__(self, reachable=True, health_error=None, raise_on_categorize=None, target_category="Shopping"):
+        self.reachable = reachable
+        self.health_error = health_error
+        self.raise_on_categorize = raise_on_categorize
+        self.target_category = target_category
+        self.categorize_calls = []
+
+    def check_health(self):
+        return ProviderHealth(reachable=self.reachable, models=["llama3.1"], error=self.health_error)
+
+    def categorize(self, candidates, categories, *, cancel_key=None):
+        self.categorize_calls.append(candidates)
+        if self.raise_on_categorize:
+            raise self.raise_on_categorize
+        if not candidates:
+            return []
+        first = candidates[0]
+        return [
+            AiSuggestion(
+                index=first.index, category=self.target_category, display_label="AI Label", rule_pattern="AI RULE"
+            )
+        ]
+
+
+def _staging_current(client):
+    resp = client.get("/api/statements/staging/current")
+    assert resp.status_code == 200
+    return resp.json()
+
+
+def test_upload_with_ai_disabled_leaves_rows_untouched(client):
+    resp = _upload(client)
+    body = resp.json()
+    assert body["ai_status"] == "disabled"
+    assert body["ai_suggested_count"] == 0
+    assert all(not r["ai_suggested"] for r in body["rows"])
+
+
+def test_upload_with_ai_enabled_and_reachable_suggests_categories(client, monkeypatch):
+    _enable_ai(client)
+    fake = _FakeProvider(reachable=True)
+    monkeypatch.setattr("app.routers.statements.build_provider", lambda settings: fake)
+
+    upload_body = _upload(client).json()
+    assert upload_body["ai_status"] == "running"
+    assert upload_body["ai_model"] == "llama3.1"
+
+    final = _staging_current(client)
+    assert final["ai_status"] == "done"
+    assert final["ai_suggested_count"] >= 1
+    suggested = [r for r in final["rows"] if r["ai_suggested"]]
+    assert suggested
+    assert suggested[0]["category"] == "Shopping"
+    assert suggested[0]["matched_label"] == "AI Label"
+    assert suggested[0]["ai_rule_pattern"] == "AI RULE"
+
+
+def test_upload_with_ai_enabled_and_unreachable_sets_warning(client, monkeypatch):
+    _enable_ai(client)
+    fake = _FakeProvider(reachable=False, health_error="connection refused")
+    monkeypatch.setattr("app.routers.statements.build_provider", lambda settings: fake)
+
+    _upload(client)
+    final = _staging_current(client)
+    assert final["ai_status"] == "failed"
+    assert "connection refused" in final["ai_warning"]
+    assert final["ai_suggested_count"] == 0
+
+
+def test_upload_with_ai_categorize_error_sets_warning(client, monkeypatch):
+    _enable_ai(client)
+    fake = _FakeProvider(reachable=True, raise_on_categorize=AiProviderUnavailableError("timed out"))
+    monkeypatch.setattr("app.routers.statements.build_provider", lambda settings: fake)
+
+    _upload(client)
+    final = _staging_current(client)
+    assert final["ai_status"] == "failed"
+    assert "timed out" in final["ai_warning"]
+
+
+def test_background_ai_task_no_op_after_batch_discarded(client, monkeypatch):
+    """If the batch is discarded/committed before the background task's
+    lookups run, it must exit quietly rather than crash or resurrect a
+    deleted batch."""
+    from app.engine.ai_providers.base import AiCandidate
+    from app.routers.statements import _run_ai_categorization
+
+    fake = _FakeProvider(reachable=True)
+    candidate = [AiCandidate(index=0, raw_description="X", amount=-1.0, direction="outflow")]
+    # No batch was ever created with this id - simulates "already gone".
+    _run_ai_categorization("nonexistent-batch-id", candidate, [("Shopping", "outflow")], {"ai_provider": "ollama"})
+
+
+def test_patch_staging_row_accepts_rule_pattern(client, monkeypatch):
+    _enable_ai(client)
+    fake = _FakeProvider(reachable=True)
+    monkeypatch.setattr("app.routers.statements.build_provider", lambda settings: fake)
+    _upload(client)
+    final = _staging_current(client)
+    suggested = next(r for r in final["rows"] if r["ai_suggested"])
+
+    resp = client.patch(
+        f"/api/statements/staging/{final['batch_id']}/rows/{suggested['index']}",
+        json={
+            "category": suggested["category"],
+            "save_as_rule": True,
+            "rule_pattern": suggested["ai_rule_pattern"],
+        },
+    )
+    assert resp.status_code == 200
+
+    rules = client.get("/api/rules").json()
+    assert any(r["match_pattern"] == "AI RULE" for r in rules)
+
+
+def test_staging_reject_then_restore_ai_suggestion(client, monkeypatch):
+    _enable_ai(client)
+    fake = _FakeProvider(reachable=True)
+    monkeypatch.setattr("app.routers.statements.build_provider", lambda settings: fake)
+    _upload(client)
+    final = _staging_current(client)
+    suggested = next(r for r in final["rows"] if r["ai_suggested"])
+    fallback = "Other Income" if suggested["amount"] > 0 else "Others"
+
+    rejected = client.patch(
+        f"/api/statements/staging/{final['batch_id']}/rows/{suggested['index']}",
+        json={"category": fallback, "reject_ai": True},
+    ).json()
+    rejected_row = next(r for r in rejected["rows"] if r["index"] == suggested["index"])
+    assert rejected_row["category"] == fallback
+    assert rejected_row["matched_label"] is None
+    # rejecting doesn't erase the AI's proposal - it stays available to restore
+    assert rejected_row["ai_suggested"] is True
+    assert rejected_row["ai_category"] == "Shopping"
+
+    restored = client.patch(
+        f"/api/statements/staging/{final['batch_id']}/rows/{suggested['index']}",
+        json={"category": fallback, "restore_ai": True},
+    ).json()
+    restored_row = next(r for r in restored["rows"] if r["index"] == suggested["index"])
+    assert restored_row["category"] == "Shopping"
+    assert restored_row["matched_label"] == "AI Label"
+
+
+def test_staging_restore_ai_without_suggestion_404s(client):
+    _upload(client)
+    final = _staging_current(client)
+    row = final["rows"][0]
+
+    resp = client.patch(
+        f"/api/statements/staging/{final['batch_id']}/rows/{row['index']}",
+        json={"category": row["category"], "restore_ai": True},
+    )
+    assert resp.status_code == 400
+
+
+# --- recategorize --------------------------------------------------------------
+
+
+def _upload_and_commit(client, path=ACCOUNT_SAMPLE):
+    body = _upload(client, path).json()
+    client.post(f"/api/statements/staging/{body['batch_id']}/commit")
+    return body
+
+
+def test_recategorize_with_ai_disabled_reports_disabled(client):
+    _upload_and_commit(client)
+    resp = client.post("/api/transactions/recategorize", json={"date_from": "2024-01", "date_to": "2024-12"})
+    body = resp.json()
+    assert body["ai_status"] == "disabled"
+    assert body["ai_suggested_count"] == 0
+    assert len(body["rows"]) == body["scanned"]
+
+
+def test_recategorize_with_ai_enabled_categorizes_leftovers(client, monkeypatch):
+    _upload_and_commit(client)
+    _enable_ai(client)
+    fake = _FakeProvider(reachable=True, target_category="Shopping")
+    monkeypatch.setattr("app.routers.transactions.build_provider", lambda settings: fake)
+
+    resp = client.post("/api/transactions/recategorize", json={"date_from": "2024-01", "date_to": "2024-12"})
+    body = resp.json()
+    assert body["ai_status"] == "running"
+
+    current = client.get("/api/transactions/recategorize/current").json()
+    assert current["ai_status"] == "done"
+    assert current["ai_suggested_count"] >= 1
+    suggested_row = next(r for r in current["rows"] if r["ai_suggested"])
+    assert suggested_row["category"] == "Shopping"
+    assert suggested_row["matched_label"] == "AI Label"
+    assert suggested_row["ai_rule_pattern"] == "AI RULE"
+
+    # not written to the DB yet - only committing the batch applies it
+    txs_before = client.get("/api/transactions").json()
+    assert not any(t["matched_label"] == "AI Label" for t in txs_before)
+
+    client.post(f"/api/transactions/recategorize/{body['batch_id']}/commit")
+    txs_after = client.get("/api/transactions").json()
+    assert any(t["matched_label"] == "AI Label" and t["category"] == "Shopping" for t in txs_after)
+
+
+def test_recategorize_current_404_before_any_run(client):
+    resp = client.get("/api/transactions/recategorize/current")
+    assert resp.status_code == 404
+
+
+def test_recategorize_row_edit_syncs_into_current_batch(client, monkeypatch):
+    _upload_and_commit(client)
+    _enable_ai(client)
+    fake = _FakeProvider(reachable=True, target_category="Shopping")
+    monkeypatch.setattr("app.routers.transactions.build_provider", lambda settings: fake)
+
+    batch = client.post("/api/transactions/recategorize", json={"date_from": "2024-01", "date_to": "2024-12"}).json()
+    current = client.get("/api/transactions/recategorize/current").json()
+    suggested_row = next(r for r in current["rows"] if r["ai_suggested"])
+
+    resp = client.patch(
+        f"/api/transactions/recategorize/{batch['batch_id']}/rows/{suggested_row['transaction_id']}",
+        json={"category": "Transport", "save_as_rule": True, "rule_pattern": "MANUAL PATTERN"},
+    )
+    assert resp.status_code == 200
+    updated_row = next(r for r in resp.json()["rows"] if r["transaction_id"] == suggested_row["transaction_id"])
+    assert updated_row["category"] == "Transport"
+    # the AI's original suggestion is a permanent record - it survives a
+    # manual override so the suggestion can still be restored later, even
+    # though the row is no longer *currently* showing it
+    assert updated_row["ai_suggested"] is True
+    assert updated_row["ai_category"] == "Shopping"
+
+    rules = client.get("/api/rules").json()
+    assert any(r["match_pattern"] == "MANUAL PATTERN" for r in rules)
+
+
+def test_recategorize_reject_ai_suggestion_clears_label_and_flags(client, monkeypatch):
+    _upload_and_commit(client)
+    _enable_ai(client)
+    fake = _FakeProvider(reachable=True, target_category="Shopping")
+    monkeypatch.setattr("app.routers.transactions.build_provider", lambda settings: fake)
+
+    batch = client.post("/api/transactions/recategorize", json={"date_from": "2024-01", "date_to": "2024-12"}).json()
+    current = client.get("/api/transactions/recategorize/current").json()
+    suggested_row = next(r for r in current["rows"] if r["ai_suggested"])
+    fallback = "Other Income" if suggested_row["amount"] > 0 else "Others"
+
+    resp = client.patch(
+        f"/api/transactions/recategorize/{batch['batch_id']}/rows/{suggested_row['transaction_id']}",
+        json={"category": fallback, "reject_ai": True},
+    )
+    assert resp.status_code == 200
+    updated_row = next(r for r in resp.json()["rows"] if r["transaction_id"] == suggested_row["transaction_id"])
+    assert updated_row["category"] == fallback
+    assert updated_row["matched_label"] is None
+    # rejecting is not an unrecoverable delete - the suggestion is retained
+    # so it can be restored (see the restore test below)
+    assert updated_row["ai_suggested"] is True
+    assert updated_row["ai_category"] == "Shopping"
+    assert updated_row["ai_label"] == "AI Label"
+
+
+def test_recategorize_restore_ai_suggestion_after_reject(client, monkeypatch):
+    _upload_and_commit(client)
+    _enable_ai(client)
+    fake = _FakeProvider(reachable=True, target_category="Shopping")
+    monkeypatch.setattr("app.routers.transactions.build_provider", lambda settings: fake)
+
+    batch = client.post("/api/transactions/recategorize", json={"date_from": "2024-01", "date_to": "2024-12"}).json()
+    current = client.get("/api/transactions/recategorize/current").json()
+    suggested_row = next(r for r in current["rows"] if r["ai_suggested"])
+    fallback = "Other Income" if suggested_row["amount"] > 0 else "Others"
+
+    client.patch(
+        f"/api/transactions/recategorize/{batch['batch_id']}/rows/{suggested_row['transaction_id']}",
+        json={"category": fallback, "reject_ai": True},
+    )
+    resp = client.patch(
+        f"/api/transactions/recategorize/{batch['batch_id']}/rows/{suggested_row['transaction_id']}",
+        json={"category": fallback, "restore_ai": True},
+    )
+    assert resp.status_code == 200
+    updated_row = next(r for r in resp.json()["rows"] if r["transaction_id"] == suggested_row["transaction_id"])
+    assert updated_row["category"] == "Shopping"
+    assert updated_row["matched_label"] == "AI Label"
+    assert updated_row["ai_suggested"] is True
+
+
+def test_recategorize_restore_ai_without_suggestion_404s(client):
+    _upload_and_commit(client)
+    batch = client.post("/api/transactions/recategorize", json={"date_from": "2024-01", "date_to": "2024-12"}).json()
+    row = batch["rows"][0]
+
+    resp = client.patch(
+        f"/api/transactions/recategorize/{batch['batch_id']}/rows/{row['transaction_id']}",
+        json={"category": row["category"], "restore_ai": True},
+    )
+    assert resp.status_code == 400
+
+
+def test_recategorize_discard_calls_ai_cancellation(client, monkeypatch):
+    """TestClient runs background tasks to completion before client.post(...)
+    returns (see conftest/other tests' comments on this), so a genuinely
+    still-in-flight call can't be reproduced here - what this verifies is
+    the router's contract: discarding always tells the cancellation
+    registry about this batch's id, which is what actually interrupts a
+    real long-running call against a real server (best-effort, see
+    ai_providers/cancellation.py)."""
+    from app.engine.ai_providers import cancellation
+
+    _upload_and_commit(client)
+    calls = []
+    monkeypatch.setattr(cancellation, "cancel", lambda key: calls.append(key))
+
+    batch = client.post("/api/transactions/recategorize", json={"date_from": "2024-01", "date_to": "2024-12"}).json()
+    assert client.delete(f"/api/transactions/recategorize/{batch['batch_id']}").status_code == 204
+    assert calls == [batch["batch_id"]]
+
+
+def test_recategorize_commit_also_cancels_ai(client, monkeypatch):
+    from app.engine.ai_providers import cancellation
+
+    _upload_and_commit(client)
+    calls = []
+    monkeypatch.setattr(cancellation, "cancel", lambda key: calls.append(key))
+
+    batch = client.post("/api/transactions/recategorize", json={"date_from": "2024-01", "date_to": "2024-12"}).json()
+    assert client.post(f"/api/transactions/recategorize/{batch['batch_id']}/commit").status_code == 200
+    assert calls == [batch["batch_id"]]

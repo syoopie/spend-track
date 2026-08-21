@@ -151,6 +151,13 @@ export function Guide() {
             <strong className="text-text">Recategorize</strong> button on the dashboard — handy after adding a new
             rule, since it only affects future uploads otherwise.
           </p>
+          <p>
+            <strong className="text-text">AI categorization</strong> (under Settings) is opt-in and off by default.
+            When enabled, whatever the rule engine leaves in "Others" gets sent to a model for a suggested category,
+            label, and rule — surfaced for review, never applied silently. The default provider is a local Ollama
+            model, so nothing leaves this device. Choosing a cloud provider instead (OpenAI-compatible or
+            Anthropic) sends those transactions' descriptions and amounts to that provider's servers.
+          </p>
         </Section>
 
         <Section id="dashboard" title="Dashboard & Filters">

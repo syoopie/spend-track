@@ -11,7 +11,7 @@ import { VelocityChart } from '../components/VelocityChart'
 import { RefundDrawer } from '../components/RefundDrawer'
 import { DateRangePicker } from '../components/DateRangePicker'
 import { TransactionEditPopover } from '../components/TransactionEditPopover'
-import { RecategorizeModal } from '../components/RecategorizeModal'
+import { RecategorizeReviewDialog } from '../components/RecategorizeReviewDialog'
 import { Checkbox } from '../components/Checkbox'
 import { Select } from '../components/Select'
 import { Tabs } from '../components/Tabs'
@@ -215,7 +215,7 @@ export function Dashboard() {
       </div>
 
       {recategorizeOpen && (
-        <RecategorizeModal
+        <RecategorizeReviewDialog
           range={{ from: s.date_from, to: s.date_to }}
           accountId={accountId}
           onClose={() => setRecategorizeOpen(false)}
