@@ -90,17 +90,19 @@ export function Sidebar() {
           </div>
           <span className="w-0 group-hover:w-auto overflow-hidden shrink-0 whitespace-nowrap">Upload Bank Statement</span>
         </button>
-        {/* Outer wrapper is what's actually 0-width at rest (and centered
-            via mx-auto) - the inner div keeps its own fixed 190px so
-            wrapping/line-height stays constant once revealed, same reason
-            as before. Without the outer wrapper, a horizontally-centered
-            190px box inside a 64px rail overflows evenly on both sides, and
-            the rail's clipping boundary lands in the *middle* of that box -
-            letting a slice of text through even though the box as a whole
-            is "mostly" clipped. */}
-        <div className="w-0 group-hover:w-[190px] mx-auto overflow-hidden mt-1.5 mb-3.5">
-          <div className="w-[190px] text-[11px] text-muted-2 text-center leading-snug">
-            or drag &amp; drop a PDF — anytime, anywhere in the app
+        {/* Left-anchored the same way as every label (spacer matching the
+            icon slot width, then a w-0/group-hover:w-auto wrapper) instead
+            of centered with mx-auto - a centered box's position depends on
+            the row's *current* width, so as the rail animates from 64px to
+            240px, a centered caption visibly drifts sideways every frame.
+            Left-anchoring makes its position fixed, same as the icons and
+            every other label - only its clipped visible width changes. */}
+        <div className="flex mt-1.5 mb-3.5">
+          <div className="w-9 shrink-0" />
+          <div className="w-0 group-hover:w-auto overflow-hidden shrink-0">
+            <div className="w-[170px] text-[11px] text-muted-2 leading-snug">
+              or drag &amp; drop a PDF — anytime, anywhere in the app
+            </div>
           </div>
         </div>
 
