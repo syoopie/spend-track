@@ -12,7 +12,7 @@ function AddContactModal({ onClose }: { onClose: () => void }) {
   const categoriesQ = useCategories()
   const createContact = useCreateContact()
   const [name, setName] = useState('')
-  const [category, setCategory] = useState('PayNow Transfers')
+  const [category, setCategory] = useState('')
   const [identifiers, setIdentifiers] = useState<string[]>([''])
 
   function updateIdentifier(i: number, value: string) {
@@ -23,7 +23,7 @@ function AddContactModal({ onClose }: { onClose: () => void }) {
     if (!name.trim()) return
     await createContact.mutateAsync({
       name: name.trim(),
-      default_category: category,
+      default_category: category || categoriesQ.data?.[0]?.name || '',
       identifiers: identifiers.map((i) => i.trim()).filter(Boolean),
     })
     onClose()
@@ -47,6 +47,7 @@ function AddContactModal({ onClose }: { onClose: () => void }) {
         onChange={(e) => setCategory(e.target.value)}
         className="w-full box-border px-3 py-2.5 rounded-lg border border-border bg-input text-text text-[13px] mb-3.5"
       >
+        <option value="">Select category…</option>
         {(categoriesQ.data ?? []).map((c) => (
           <option key={c.id} value={c.name}>
             {c.name}

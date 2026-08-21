@@ -1,3 +1,4 @@
+import { ListChecks } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { useUploadDialog } from './UploadProvider'
 
@@ -11,17 +12,6 @@ const NAV_ITEMS = [
         <rect x="9" y="1" width="6" height="6" fill="none" stroke="currentColor" strokeWidth="1.3" />
         <rect x="1" y="9" width="6" height="6" fill="none" stroke="currentColor" strokeWidth="1.3" />
         <rect x="9" y="9" width="6" height="6" fill="none" stroke="currentColor" strokeWidth="1.3" />
-      </svg>
-    ),
-  },
-  {
-    to: '/staging',
-    label: 'Staging Review',
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 16 16" className="shrink-0">
-        <path d="M8 1 V9" stroke="currentColor" strokeWidth="1.3" fill="none" />
-        <polygon points="5,7 11,7 8,10.5" fill="currentColor" />
-        <rect x="1.5" y="12" width="13" height="2.5" fill="none" stroke="currentColor" strokeWidth="1.3" />
       </svg>
     ),
   },
@@ -50,6 +40,11 @@ const NAV_ITEMS = [
     ),
   },
   {
+    to: '/default-rules',
+    label: 'Default Rules',
+    icon: <ListChecks size={16} className="shrink-0" />,
+  },
+  {
     to: '/settings',
     label: 'Settings',
     icon: (
@@ -65,7 +60,7 @@ const NAV_ITEMS = [
 ]
 
 export function Sidebar() {
-  const { openDialog } = useUploadDialog()
+  const { openDialog, hasPendingBatch } = useUploadDialog()
 
   return (
     <div className="w-56 shrink-0 bg-sidebar text-muted flex flex-col p-3.5 border-r border-border">
@@ -80,7 +75,9 @@ export function Sidebar() {
 
       <button
         onClick={openDialog}
-        className="flex items-center justify-center gap-1.5 px-2.5 py-2.5 rounded-lg text-sm font-semibold mb-3.5 border-none bg-accent text-accent-fg cursor-pointer"
+        disabled={hasPendingBatch}
+        title={hasPendingBatch ? 'Review the pending statement before uploading another' : undefined}
+        className="flex items-center justify-center gap-1.5 px-2.5 py-2.5 rounded-lg text-sm font-semibold mb-3.5 border-none bg-accent text-accent-fg cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
       >
         + Upload Statement
       </button>

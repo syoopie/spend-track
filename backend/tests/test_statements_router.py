@@ -132,3 +132,24 @@ def test_discard_batch_removes_it(client):
     batch_id = body["batch_id"]
     assert client.delete(f"/api/statements/staging/{batch_id}").status_code == 204
     assert client.get(f"/api/statements/staging/{batch_id}").status_code == 404
+
+
+def test_current_staging_batch(client):
+    assert client.get("/api/statements/staging/current").status_code == 404
+
+    body = _upload(client).json()
+    current = client.get("/api/statements/staging/current").json()
+    assert current["batch_id"] == body["batch_id"]
+
+    client.delete(f"/api/statements/staging/{body['batch_id']}")
+    assert client.get("/api/statements/staging/current").status_code == 404
+
+
+def test_second_upload_rejected_while_one_is_pending(client):
+    first = _upload(client).json()
+    resp = _upload(client)
+    assert resp.status_code == 409
+    assert resp.json()["detail"]["code"] == "STAGING_BATCH_EXISTS"
+
+    client.post(f"/api/statements/staging/{first['batch_id']}/commit")
+    assert _upload(client).status_code == 200

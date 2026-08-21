@@ -2,9 +2,9 @@ import { Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import { Sidebar } from './components/Sidebar'
 import { UploadProvider } from './components/UploadProvider'
 import { Dashboard } from './pages/Dashboard'
-import { Staging } from './pages/Staging'
 import { Contacts } from './pages/Contacts'
 import { Rules } from './pages/Rules'
+import { DefaultRules } from './pages/DefaultRules'
 import { Settings } from './pages/Settings'
 
 function MainLayout() {
@@ -25,10 +25,9 @@ export default function App() {
         <Route element={<MainLayout />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/dashboard" element={<Navigate to="/" replace />} />
-          <Route path="/staging" element={<Staging />} />
-          <Route path="/staging/:batchId" element={<Staging />} />
           <Route path="/contacts" element={<Contacts />} />
           <Route path="/rules" element={<Rules />} />
+          <Route path="/default-rules" element={<DefaultRules />} />
           <Route path="/settings" element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

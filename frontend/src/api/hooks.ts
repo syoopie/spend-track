@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api } from './client'
+import { api, ApiError } from './client'
 import type {
   Account,
   CommitResult,
@@ -57,15 +57,24 @@ export function useUploadStatement() {
   return useMutation({
     mutationFn: ({ file, password }: { file: File; password?: string }) =>
       api.upload<StagingBatch>('/statements/upload', file, password ? { password } : undefined),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['accounts'] }),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['accounts'] })
+      qc.setQueryData(['staging-batch', 'current'], data)
+    },
   })
 }
 
-export function useStagingBatch(batchId: string | undefined) {
+export function useCurrentStagingBatch() {
   return useQuery({
-    queryKey: ['staging-batch', batchId],
-    queryFn: () => api.get<StagingBatch>(`/statements/staging/${batchId}`),
-    enabled: !!batchId,
+    queryKey: ['staging-batch', 'current'],
+    queryFn: async () => {
+      try {
+        return await api.get<StagingBatch>('/statements/staging/current')
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 404) return null
+        throw e
+      }
+    },
   })
 }
 
@@ -74,7 +83,7 @@ export function useUpdateStagingRow(batchId: string) {
   return useMutation({
     mutationFn: ({ index, body }: { index: number; body: StagingRowUpdateRequest }) =>
       api.patch<StagingBatch>(`/statements/staging/${batchId}/rows/${index}`, body),
-    onSuccess: (data) => qc.setQueryData(['staging-batch', batchId], data),
+    onSuccess: (data) => qc.setQueryData(['staging-batch', 'current'], data),
   })
 }
 
@@ -86,13 +95,16 @@ export function useCommitBatch() {
       qc.invalidateQueries({ queryKey: ['accounts'] })
       qc.invalidateQueries({ queryKey: ['transactions'] })
       qc.invalidateQueries({ queryKey: ['dashboard-summary'] })
+      qc.invalidateQueries({ queryKey: ['staging-batch'] })
     },
   })
 }
 
 export function useDiscardBatch() {
+  const qc = useQueryClient()
   return useMutation({
     mutationFn: (batchId: string) => api.delete(`/statements/staging/${batchId}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['staging-batch'] }),
   })
 }
 
@@ -137,8 +149,11 @@ export function useImportContactsCsv() {
 
 // --- rules ----------------------------------------------------------------------
 
-export function useRules() {
-  return useQuery({ queryKey: ['rules'], queryFn: () => api.get<Rule[]>('/rules') })
+export function useRules(includeDefault = false) {
+  return useQuery({
+    queryKey: ['rules', includeDefault],
+    queryFn: () => api.get<Rule[]>('/rules', { include_default: includeDefault }),
+  })
 }
 
 export function useCreateRule() {
@@ -167,8 +182,11 @@ export function useReorderRules() {
 
 // --- categories -----------------------------------------------------------------
 
-export function useCategories() {
-  return useQuery({ queryKey: ['categories'], queryFn: () => api.get<Category[]>('/categories') })
+export function useCategories(includeHidden = false) {
+  return useQuery({
+    queryKey: ['categories', includeHidden],
+    queryFn: () => api.get<Category[]>('/categories', { include_hidden: includeHidden }),
+  })
 }
 
 // --- settings ---------------------------------------------------------------------

@@ -10,6 +10,13 @@ def _not_found() -> HTTPException:
     return HTTPException(status_code=404, detail={"code": "RULE_NOT_FOUND", "message": "No rule with that id."})
 
 
+def _immutable() -> HTTPException:
+    return HTTPException(
+        status_code=403,
+        detail={"code": "RULE_IMMUTABLE", "message": "Default rules cannot be edited, deleted, or reordered."},
+    )
+
+
 def _row_to_out(row) -> RuleOut:
     return RuleOut(
         id=row["id"],
@@ -19,13 +26,16 @@ def _row_to_out(row) -> RuleOut:
         target_subcategory=row["target_subcategory"],
         is_exclusion_rule=bool(row["is_exclusion_rule"]),
         exclusion_reason=row["exclusion_reason"],
+        is_default=bool(row["is_default"]),
+        display_label=row["display_label"],
     )
 
 
 @router.get("", response_model=list[RuleOut])
-def list_rules():
+def list_rules(include_default: bool = False):
     with get_conn() as conn:
-        rows = conn.execute("SELECT * FROM rules ORDER BY priority ASC").fetchall()
+        query = "SELECT * FROM rules" + ("" if include_default else " WHERE is_default = 0") + " ORDER BY priority ASC"
+        rows = conn.execute(query).fetchall()
         return [_row_to_out(r) for r in rows]
 
 
@@ -34,7 +44,7 @@ def create_rule(body: RuleCreateRequest):
     with get_conn() as conn:
         priority = body.priority
         if priority is None:
-            max_priority = conn.execute("SELECT MAX(priority) FROM rules").fetchone()[0]
+            max_priority = conn.execute("SELECT MAX(priority) FROM rules WHERE is_default = 0").fetchone()[0]
             priority = (max_priority or 0) + 1
         # target_category is NOT NULL per TECHNICAL_SPEC.md's schema even
         # though exclusion rules don't use it - default to "Others" for those.
@@ -61,6 +71,8 @@ def update_rule(rule_id: int, body: RuleUpdateRequest):
         existing = conn.execute("SELECT * FROM rules WHERE id = ?", (rule_id,)).fetchone()
         if existing is None:
             raise _not_found()
+        if existing["is_default"]:
+            raise _immutable()
         merged = {
             "priority": body.priority if body.priority is not None else existing["priority"],
             "match_pattern": body.match_pattern if body.match_pattern is not None else existing["match_pattern"],
@@ -89,12 +101,21 @@ def update_rule(rule_id: int, body: RuleUpdateRequest):
 @router.delete("/{rule_id}", status_code=204)
 def delete_rule(rule_id: int):
     with get_conn() as conn:
+        existing = conn.execute("SELECT is_default FROM rules WHERE id = ?", (rule_id,)).fetchone()
+        if existing is not None and existing["is_default"]:
+            raise _immutable()
         conn.execute("DELETE FROM rules WHERE id = ?", (rule_id,))
 
 
 @router.post("/reorder", response_model=list[RuleOut])
 def reorder_rules(body: RuleReorderRequest):
     with get_conn() as conn:
+        rows = conn.execute(
+            f"SELECT id FROM rules WHERE is_default = 1 AND id IN ({','.join('?' * len(body.ordered_ids))})",
+            body.ordered_ids,
+        ).fetchall() if body.ordered_ids else []
+        if rows:
+            raise _immutable()
         for priority, rule_id in enumerate(body.ordered_ids, start=1):
             conn.execute("UPDATE rules SET priority = ? WHERE id = ?", (priority, rule_id))
         rows = conn.execute("SELECT * FROM rules ORDER BY priority ASC").fetchall()

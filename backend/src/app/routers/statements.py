@@ -34,7 +34,7 @@ def _fetch_active_rules(conn: sqlite3.Connection) -> list[sqlite3.Row]:
 def _fetch_contact_identifiers(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     return conn.execute(
         """
-        SELECT ci.identifier AS identifier, c.id AS contact_id,
+        SELECT ci.identifier AS identifier, c.id AS contact_id, c.name AS name,
                c.default_category AS default_category, c.default_subcategory AS default_subcategory
         FROM contact_identifiers ci JOIN contacts c ON c.id = ci.contact_id
         """
@@ -49,6 +49,7 @@ def _batch_to_response(batch: StagingBatch) -> StagingBatchOut:
             account_number_masked=masked_by_number[r.account_number],
             transaction_date=r.transaction_date,
             raw_description=r.raw_description,
+            matched_label=r.matched_label,
             amount=r.amount,
             category=r.category,
             subcategory=r.subcategory,
@@ -83,6 +84,10 @@ def _batch_to_response(batch: StagingBatch) -> StagingBatchOut:
 
 @router.post("/upload", response_model=StagingBatchOut)
 async def upload_statement(file: UploadFile = File(...), password: str | None = Form(default=None)):
+    if get_store().current() is not None:
+        raise _error(
+            409, "STAGING_BATCH_EXISTS", "Commit or discard the pending statement before uploading another."
+        )
     if not (file.filename or "").lower().endswith(".pdf"):
         raise _error(422, "UNPARSEABLE_STATEMENT_FORMAT", "Only PDF e-statements are supported.")
 
@@ -139,6 +144,7 @@ async def upload_statement(file: UploadFile = File(...), password: str | None = 
                         account_number=parsed_account.account_number,
                         transaction_date=tx.transaction_date,
                         raw_description=tx.raw_description,
+                        matched_label=cat.matched_label,
                         amount=tx.amount,
                         fingerprint=fingerprint,
                         category=cat.category,
@@ -159,6 +165,14 @@ async def upload_statement(file: UploadFile = File(...), password: str | None = 
         rows=staging_rows,
     )
     get_store().create(batch)
+    return _batch_to_response(batch)
+
+
+@router.get("/staging/current", response_model=StagingBatchOut)
+def get_current_staging_batch():
+    batch = get_store().current()
+    if batch is None:
+        raise _error(404, "NO_STAGING_BATCH", "No statement is currently staged.")
     return _batch_to_response(batch)
 
 
@@ -195,7 +209,7 @@ def update_staging_row(batch_id: str, index: int, body: StagingRowUpdateRequest)
             pattern = body.rule_pattern or extract_display_name(row.raw_description)
             priority = body.rule_priority
             if priority is None:
-                max_priority = conn.execute("SELECT MAX(priority) FROM rules").fetchone()[0]
+                max_priority = conn.execute("SELECT MAX(priority) FROM rules WHERE is_default = 0").fetchone()[0]
                 priority = (max_priority or 0) + 1
             conn.execute(
                 "INSERT INTO rules (priority, match_pattern, target_category, target_subcategory, "
@@ -260,14 +274,15 @@ def commit_staging_batch(batch_id: str):
             account_id = account_id_by_number[row.account_number]
             conn.execute(
                 "INSERT INTO transactions (fingerprint, account_id, transaction_date, raw_description, "
-                "cleaned_description, amount, category, subcategory, contact_id, is_excluded, exclusion_reason) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "cleaned_description, matched_label, amount, category, subcategory, contact_id, is_excluded, "
+                "exclusion_reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     row.fingerprint,
                     account_id,
                     row.transaction_date,
                     row.raw_description,
                     clean_description(row.raw_description),
+                    row.matched_label,
                     row.amount,
                     row.category,
                     row.subcategory,

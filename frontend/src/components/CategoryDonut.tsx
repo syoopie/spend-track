@@ -1,5 +1,5 @@
 import type { Category, CategoryBreakdownSlice } from '../api/types'
-import { categoryDotColor } from '../lib/categoryColor'
+import { categoryDotColor, categoryIcon } from '../lib/categoryColor'
 import { fmtCompact } from '../lib/format'
 
 export function CategoryDonut({
@@ -31,15 +31,15 @@ export function CategoryDonut({
         </div>
         <div className="flex flex-col gap-1.5 text-xs">
           {data.length === 0 && <div className="text-muted-2">No spending yet</div>}
-          {data.map((s) => (
-            <div key={s.category} className="flex items-center gap-1.5 text-[#c6c6cf]">
-              <span
-                className="w-2 h-2 rounded-full shrink-0"
-                style={{ background: categoryDotColor(categories, s.category) }}
-              />
-              {s.category} <span className="text-muted-2">{s.pct}%</span>
-            </div>
-          ))}
+          {data.map((s) => {
+            const Icon = categoryIcon(categories, s.category)
+            return (
+              <div key={s.category} className="flex items-center gap-1.5 text-[#c6c6cf]">
+                <Icon size={12} color={categoryDotColor(categories, s.category)} className="shrink-0" />
+                {s.category} <span className="text-muted-2">{s.pct}%</span>
+              </div>
+            )
+          })}
         </div>
       </div>
     </div>
