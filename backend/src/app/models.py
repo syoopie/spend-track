@@ -188,13 +188,15 @@ class MetricCards(BaseModel):
     net_expenditure: float
     total_inflow: float
     total_outflow: float
-    paynow_total: float
-    card_total: float
-    paynow_pct: float
-    card_pct: float
 
 
 class CashFlowMonth(BaseModel):
+    month: str
+    inflow: float
+    outflow: float
+
+
+class MonthlyTotal(BaseModel):
     month: str
     inflow: float
     outflow: float
@@ -218,7 +220,8 @@ class TopEntry(BaseModel):
 
 
 class DashboardSummaryOut(BaseModel):
-    month: str
+    date_from: str
+    date_to: str
     metrics: MetricCards
     cash_flow: list[CashFlowMonth]
     category_breakdown: list[CategoryBreakdownSlice]

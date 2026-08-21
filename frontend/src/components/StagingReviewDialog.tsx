@@ -132,7 +132,7 @@ export function StagingReviewDialog({ onClose }: { onClose: () => void }) {
         {batch.needs_category_count > 0 && (
           <div className="rounded-[10px] px-4.5 py-3" style={{ background: 'oklch(24% 0.05 70)', border: '1px solid oklch(40% 0.08 70)' }}>
             <div className="text-[11px]" style={{ color: 'oklch(80% 0.12 70)' }}>
-              Needs Category (Others &gt; PayNow)
+              PayNow — Needs Review
             </div>
             <div className="text-xl font-bold font-mono" style={{ color: 'oklch(85% 0.12 70)' }}>
               {batch.needs_category_count}
@@ -163,18 +163,15 @@ export function StagingReviewDialog({ onClose }: { onClose: () => void }) {
                 style={{ background: row.needs_review ? AMBER_BG : isOpen ? '#22232c' : undefined }}
               >
                 <div className="text-muted font-mono text-xs">{fmtDate(row.transaction_date)}</div>
-                <div className="truncate pr-2">
-                  <div className="truncate">{row.matched_label ?? row.raw_description}</div>
-                  {row.matched_label && (
-                    <div className="truncate text-[11px] text-muted-2">{row.raw_description}</div>
-                  )}
+                <div className="truncate pr-2" title={row.raw_description}>
+                  {row.matched_label ?? row.raw_description}
                 </div>
                 <div>
                   <span
                     className="text-[11px] px-2 py-0.5 rounded-md"
                     style={{ background: cc.bg, color: cc.fg }}
                   >
-                    {row.needs_review ? 'Others > PayNow' : row.category}
+                    {row.category}
                   </span>
                 </div>
                 <div className={`text-right font-mono ${row.amount > 0 ? 'text-success' : 'text-text'}`}>

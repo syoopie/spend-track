@@ -19,3 +19,13 @@ def test_falls_back_to_original_when_everything_is_noise():
 def test_leaves_simple_merchant_names_untouched():
     assert extract_display_name("Zalora") == "Zalora"
     assert extract_display_name("Starbucks") == "Starbucks"
+
+
+def test_strips_paynow_proxy_type_suffix():
+    """'Transfer - Mobile'/'Transfer - UEN' name the PayNow proxy type used,
+    not the payee - both words must go, not just "Transfer"."""
+    raw = "PAYNOW-FAST PIB2602069196189641 KW OTHR Transfer - Mobile"
+    assert extract_display_name(raw) == "KW"
+
+    raw_uen = "PAYNOW-FAST PIB2602229361993298 GENISTA LANE PTE. LT OTHR Transfer - UEN"
+    assert extract_display_name(raw_uen) == "GENISTA LANE PTE. LT"

@@ -18,9 +18,30 @@ export function fmtMonthLabel(ym: string): string {
   return new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'short' })
 }
 
+export function shiftMonth(ym: string, delta: number): string {
+  const [y, m] = ym.split('-').map(Number)
+  const idx = y * 12 + (m - 1) + delta
+  const y2 = Math.floor(idx / 12)
+  const m2 = idx % 12
+  return `${String(y2).padStart(4, '0')}-${String(m2 + 1).padStart(2, '0')}`
+}
+
+export function currentMonthKey(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
 export function fmtMonthYearLabel(ym: string): string {
   const [y, m] = ym.split('-').map(Number)
   return new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+}
+
+export function fmtMonthRangeLabel(from: string, to: string): string {
+  if (from === to) return fmtMonthYearLabel(from)
+  const fromYear = from.slice(0, 4)
+  const toYear = to.slice(0, 4)
+  const toLabel = fromYear === toYear ? `${fmtMonthLabel(to)} ${toYear}` : fmtMonthYearLabel(to)
+  return `${fmtMonthLabel(from)}${fromYear === toYear ? '' : ` ${fromYear}`} – ${toLabel}`
 }
 
 export function fmtCompact(n: number): string {

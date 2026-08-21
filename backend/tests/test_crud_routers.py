@@ -70,9 +70,9 @@ def test_accounts_and_transactions_after_commit(client):
 
 def test_transactions_month_filter(client):
     _upload_and_commit(client)
-    txs = client.get("/api/transactions", params={"month": "2026-05"}).json()
+    txs = client.get("/api/transactions", params={"date_from": "2026-05", "date_to": "2026-05"}).json()
     assert len(txs) == 39
-    txs_other = client.get("/api/transactions", params={"month": "2026-06"}).json()
+    txs_other = client.get("/api/transactions", params={"date_from": "2026-06", "date_to": "2026-06"}).json()
     assert txs_other == []
 
 
@@ -260,7 +260,8 @@ def test_relocate_moves_db_file_and_updates_config(tmp_path, monkeypatch):
 def test_dashboard_summary_metrics_match_manual_totals(client):
     _upload_and_commit(client)
     resp = client.get("/api/dashboard/summary").json()
-    assert resp["month"] == "2026-05"
+    assert resp["date_from"] == "2026-05"
+    assert resp["date_to"] == "2026-05"
 
     txs = client.get("/api/transactions").json()
     expected_inflow = round(sum(t["amount"] for t in txs if t["amount"] > 0), 2)
@@ -271,11 +272,32 @@ def test_dashboard_summary_metrics_match_manual_totals(client):
     assert resp["metrics"]["net_expenditure"] == round(expected_inflow - expected_outflow, 2)
 
 
-def test_dashboard_cash_flow_covers_six_months_including_current(client):
+def test_dashboard_defaults_to_single_latest_month(client):
     _upload_and_commit(client)
     resp = client.get("/api/dashboard/summary").json()
-    assert len(resp["cash_flow"]) == 6
+    assert len(resp["cash_flow"]) == 1
     assert resp["cash_flow"][-1]["month"] == "2026-05"
+    assert len(resp["spend_velocity"]) > 0  # single month - velocity is meaningful
+
+
+def test_dashboard_summary_spans_a_custom_month_range(client):
+    _upload_and_commit(client)
+    resp = client.get(
+        "/api/dashboard/summary", params={"date_from": "2026-03", "date_to": "2026-05"}
+    ).json()
+    assert resp["date_from"] == "2026-03"
+    assert resp["date_to"] == "2026-05"
+    assert [c["month"] for c in resp["cash_flow"]] == ["2026-03", "2026-04", "2026-05"]
+    assert resp["spend_velocity"] == []  # multi-month range - not a single day-of-month pace
+    # all 39 transactions fall in May, so the wider range's totals still match May alone
+    assert resp["metrics"]["total_outflow"] > 0
+
+
+def test_monthly_totals_endpoint(client):
+    _upload_and_commit(client)
+    resp = client.get("/api/dashboard/monthly-totals").json()
+    assert resp == [{"month": "2026-05", "inflow": resp[0]["inflow"], "outflow": resp[0]["outflow"]}]
+    assert resp[0]["outflow"] > 0
 
 
 def test_dashboard_category_breakdown_sums_to_total_outflow(client):

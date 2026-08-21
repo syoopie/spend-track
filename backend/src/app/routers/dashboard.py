@@ -12,6 +12,7 @@ from app.models import (
     CategoryBreakdownSlice,
     DashboardSummaryOut,
     MetricCards,
+    MonthlyTotal,
     TopEntry,
     VelocityPoint,
 )
@@ -26,11 +27,32 @@ def _shift_month(month: str, delta: int) -> str:
     return f"{y2:04d}-{m2 + 1:02d}"
 
 
+def _months_between(date_from: str, date_to: str) -> list[str]:
+    months = []
+    m = date_from
+    while m <= date_to:
+        months.append(m)
+        m = _shift_month(m, 1)
+    return months
+
+
 def _fetch_month_transactions(
     conn: sqlite3.Connection, month: str, account_id: str | None
 ) -> list[sqlite3.Row]:
     clauses = ["transaction_date LIKE ?", "is_excluded = 0"]
     params: list = [f"{month}%"]
+    if account_id:
+        clauses.append("account_id = ?")
+        params.append(account_id)
+    where = " AND ".join(clauses)
+    return conn.execute(f"SELECT * FROM transactions WHERE {where}", params).fetchall()
+
+
+def _fetch_range_transactions(
+    conn: sqlite3.Connection, date_from: str, date_to: str, account_id: str | None
+) -> list[sqlite3.Row]:
+    clauses = ["transaction_date >= ?", "transaction_date <= ?", "is_excluded = 0"]
+    params: list = [f"{date_from}-01", f"{date_to}-31"]
     if account_id:
         clauses.append("account_id = ?")
         params.append(account_id)
@@ -49,18 +71,10 @@ def _latest_month(conn: sqlite3.Connection, account_id: str | None) -> str:
 def _metrics(txs: list[sqlite3.Row]) -> MetricCards:
     inflow = sum(t["amount"] for t in txs if t["amount"] > 0)
     outflow = sum(-t["amount"] for t in txs if t["amount"] < 0)
-    paynow_total = sum(-t["amount"] for t in txs if t["amount"] < 0 and t["category"] == "PayNow Transfers")
-    card_total = outflow - paynow_total
-    paynow_pct = round(paynow_total / outflow * 100, 1) if outflow else 0.0
-    card_pct = round(100 - paynow_pct, 1) if outflow else 0.0
     return MetricCards(
         net_expenditure=round(inflow - outflow, 2),
         total_inflow=round(inflow, 2),
         total_outflow=round(outflow, 2),
-        paynow_total=round(paynow_total, 2),
-        card_total=round(card_total, 2),
-        paynow_pct=paynow_pct,
-        card_pct=card_pct,
     )
 
 
@@ -121,34 +135,73 @@ def _top_entries(txs: list[sqlite3.Row], contact_names: dict[int, str], *, payno
     return [TopEntry(name=name, amount=round(amt, 2)) for name, amt in ranked]
 
 
-@router.get("/summary", response_model=DashboardSummaryOut)
-def get_dashboard_summary(month: str | None = None, account_id: str | None = None):
+@router.get("/monthly-totals", response_model=list[MonthlyTotal])
+def get_monthly_totals(account_id: str | None = None):
+    """Per-month inflow/outflow for every month with at least one transaction -
+    powers the month-range calendar picker so each cell can show its totals."""
     with get_conn() as conn:
-        month = month or _latest_month(conn, account_id)
-        prev_month = _shift_month(month, -1)
+        clauses = ["is_excluded = 0"]
+        params: list = []
+        if account_id:
+            clauses.append("account_id = ?")
+            params.append(account_id)
+        where = " AND ".join(clauses)
+        rows = conn.execute(
+            f"SELECT transaction_date, amount FROM transactions WHERE {where}", params
+        ).fetchall()
 
-        txs = _fetch_month_transactions(conn, month, account_id)
+        totals: dict[str, list[float]] = defaultdict(lambda: [0.0, 0.0])  # [inflow, outflow]
+        for r in rows:
+            month = r["transaction_date"][:7]
+            if r["amount"] > 0:
+                totals[month][0] += r["amount"]
+            else:
+                totals[month][1] += -r["amount"]
+
+        return [
+            MonthlyTotal(month=month, inflow=round(inflow, 2), outflow=round(outflow, 2))
+            for month, (inflow, outflow) in sorted(totals.items())
+        ]
+
+
+@router.get("/summary", response_model=DashboardSummaryOut)
+def get_dashboard_summary(date_from: str | None = None, date_to: str | None = None, account_id: str | None = None):
+    with get_conn() as conn:
+        if not date_from and not date_to:
+            date_from = date_to = _latest_month(conn, account_id)
+        elif not date_to:
+            date_to = date_from
+        elif not date_from:
+            date_from = date_to
+        if date_from > date_to:
+            date_from, date_to = date_to, date_from
+
+        txs = _fetch_range_transactions(conn, date_from, date_to, account_id)
 
         cash_flow = []
-        for i in range(5, -1, -1):
-            m = _shift_month(month, -i)
+        for m in _months_between(date_from, date_to):
             m_txs = _fetch_month_transactions(conn, m, account_id)
             inflow = sum(t["amount"] for t in m_txs if t["amount"] > 0)
             outflow = sum(-t["amount"] for t in m_txs if t["amount"] < 0)
             cash_flow.append(CashFlowMonth(month=m, inflow=round(inflow, 2), outflow=round(outflow, 2)))
 
-        current_cum = _daily_cumulative_outflow(conn, month, account_id)
-        previous_cum = _daily_cumulative_outflow(conn, prev_month, account_id)
+        is_single_month = date_from == date_to
+        spend_velocity: list[VelocityPoint] = []
+        if is_single_month:
+            current_cum = _daily_cumulative_outflow(conn, date_from, account_id)
+            previous_cum = _daily_cumulative_outflow(conn, _shift_month(date_from, -1), account_id)
+            spend_velocity = _spend_velocity(current_cum, previous_cum)
 
         contact_rows = conn.execute("SELECT id, name FROM contacts").fetchall()
         contact_names = {r["id"]: r["name"] for r in contact_rows}
 
         return DashboardSummaryOut(
-            month=month,
+            date_from=date_from,
+            date_to=date_to,
             metrics=_metrics(txs),
             cash_flow=cash_flow,
             category_breakdown=_category_breakdown(txs),
-            spend_velocity=_spend_velocity(current_cum, previous_cum),
+            spend_velocity=spend_velocity,
             top_merchants=_top_entries(txs, contact_names, paynow=False),
             top_paynow_contacts=_top_entries(txs, contact_names, paynow=True),
         )

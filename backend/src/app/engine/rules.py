@@ -15,6 +15,8 @@ a phone/UEN identifier alone can't tell us who was paid or why.
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
+from app.engine.naming import extract_display_name
+
 PAYNOW_MARKERS = ("PAYNOW", "PIB")
 
 
@@ -31,6 +33,10 @@ class Categorization:
 
 def _is_paynow_like(desc_upper: str) -> bool:
     return any(marker in desc_upper for marker in PAYNOW_MARKERS)
+
+
+def _paynow_label(raw_description: str) -> str:
+    return f"PayNow to {extract_display_name(raw_description)}"
 
 
 def find_matching_contact(
@@ -65,27 +71,34 @@ def categorize(
                     needs_review=False,
                     matched_label=None,
                 )
+            category = rule["target_category"]
             display_label = rule["display_label"] if "display_label" in rule.keys() else None
+            label = _paynow_label(raw_description) if category == "PayNow Transfers" else (
+                display_label or rule["match_pattern"].title()
+            )
             return Categorization(
-                category=rule["target_category"],
+                category=category,
                 subcategory=rule["target_subcategory"],
                 contact_id=None,
                 is_excluded=False,
                 exclusion_reason=None,
                 needs_review=False,
-                matched_label=display_label or rule["match_pattern"].title(),
+                matched_label=label,
             )
 
     contact = find_matching_contact(raw_description, contact_identifiers)
     if contact is not None:
+        category = contact["default_category"]
+        name = contact["name"] if "name" in contact.keys() else None
+        label = f"PayNow to {name}" if category == "PayNow Transfers" and name else name
         return Categorization(
-            category=contact["default_category"],
+            category=category,
             subcategory=contact["default_subcategory"],
             contact_id=contact["contact_id"],
             is_excluded=False,
             exclusion_reason=None,
             needs_review=False,
-            matched_label=contact["name"] if "name" in contact.keys() else None,
+            matched_label=label,
         )
 
     is_paynow = _is_paynow_like(desc_upper)
@@ -96,5 +109,5 @@ def categorize(
         is_excluded=False,
         exclusion_reason=None,
         needs_review=is_paynow,
-        matched_label=None,
+        matched_label=_paynow_label(raw_description) if is_paynow else None,
     )

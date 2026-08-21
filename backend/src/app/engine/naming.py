@@ -13,6 +13,10 @@ import re
 NOISE_TOKENS = {
     "PAYNOW-FAST", "PAYNOW", "OTHR", "NETS", "DEBIT-CONSUMER", "TRANSFER",
     "GIRO", "INWARD", "DR", "CR", "FAST", "-",
+    # PayNow proxy-type suffixes (e.g. "... Transfer - Mobile") - identify
+    # the identifier type, not the payee, so they'd otherwise leak into the
+    # extracted name as "KW Mobile" instead of "KW".
+    "MOBILE", "UEN", "NRIC", "VPA",
 }
 REFCODE_RE = re.compile(r"^[A-Za-z0-9]{8,}$")
 
