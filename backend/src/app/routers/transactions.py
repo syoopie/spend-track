@@ -1,9 +1,11 @@
 import sqlite3
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Query
 
+from app import repo
 from app.db import get_conn
 from app.engine.rules import categorize
+from app.errors import api_error
 from app.models import (
     RecategorizeRequest,
     RecategorizeResult,
@@ -13,20 +15,6 @@ from app.models import (
 )
 
 router = APIRouter(prefix="/api/transactions", tags=["transactions"])
-
-
-def _fetch_active_rules(conn: sqlite3.Connection) -> list[sqlite3.Row]:
-    return conn.execute("SELECT * FROM rules ORDER BY priority ASC").fetchall()
-
-
-def _fetch_contact_identifiers(conn: sqlite3.Connection) -> list[sqlite3.Row]:
-    return conn.execute(
-        """
-        SELECT ci.identifier AS identifier, c.id AS contact_id, c.name AS name,
-               c.default_category AS default_category, c.default_subcategory AS default_subcategory
-        FROM contact_identifiers ci JOIN contacts c ON c.id = ci.contact_id
-        """
-    ).fetchall()
 
 
 def _paired_ids(conn: sqlite3.Connection) -> set[int]:
@@ -109,8 +97,8 @@ def recategorize_transactions(body: RecategorizeRequest):
     where = " AND ".join(clauses)
 
     with get_conn() as conn:
-        rules = _fetch_active_rules(conn)
-        contact_identifiers = _fetch_contact_identifiers(conn)
+        rules = repo.fetch_active_rules(conn)
+        contact_identifiers = repo.fetch_contact_identifiers(conn)
         has_card_account = conn.execute("SELECT 1 FROM accounts WHERE is_card = 1 LIMIT 1").fetchone() is not None
         rows = conn.execute(
             f"""
@@ -163,10 +151,7 @@ def update_transaction(transaction_id: int, body: TransactionUpdateRequest):
     with get_conn() as conn:
         existing = conn.execute("SELECT * FROM transactions WHERE id = ?", (transaction_id,)).fetchone()
         if existing is None:
-            raise HTTPException(
-                status_code=404,
-                detail={"code": "TRANSACTION_NOT_FOUND", "message": "No transaction with that id."},
-            )
+            raise api_error(404, "TRANSACTION_NOT_FOUND", "No transaction with that id.")
 
         is_excluded = body.is_excluded if body.is_excluded is not None else bool(existing["is_excluded"])
         # Unchecking "excluded" clears any stale reason from the last time it was excluded.
@@ -210,10 +195,7 @@ def get_refund_pairing(transaction_id: int):
             (transaction_id, transaction_id),
         ).fetchone()
         if pairing is None:
-            raise HTTPException(
-                status_code=404,
-                detail={"code": "NO_REFUND_PAIRING", "message": "This transaction has no refund pairing."},
-            )
+            raise api_error(404, "NO_REFUND_PAIRING", "This transaction has no refund pairing.")
         paired_ids = _paired_ids(conn)
 
         def fetch(tx_id: int) -> TransactionOut:

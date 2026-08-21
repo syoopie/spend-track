@@ -1,19 +1,22 @@
 from fastapi import APIRouter, HTTPException
 
+from app import repo
 from app.db import get_conn
+from app.errors import api_error, not_found_error
 from app.models import RuleCreateRequest, RuleOut, RuleReorderRequest, RuleUpdateRequest
 
 router = APIRouter(prefix="/api/rules", tags=["rules"])
 
 
-def _not_found() -> HTTPException:
-    return HTTPException(status_code=404, detail={"code": "RULE_NOT_FOUND", "message": "No rule with that id."})
-
-
 def _immutable() -> HTTPException:
-    return HTTPException(
-        status_code=403,
-        detail={"code": "RULE_IMMUTABLE", "message": "Default rules cannot be edited, deleted, or reordered."},
+    return api_error(403, "RULE_IMMUTABLE", "Default rules cannot be edited, deleted, or reordered.")
+
+
+def _reorder_mismatch() -> HTTPException:
+    return api_error(
+        400,
+        "REORDER_ID_MISMATCH",
+        "ordered_ids must contain exactly every non-default rule id, no more and no less.",
     )
 
 
@@ -42,26 +45,19 @@ def list_rules(include_default: bool = False):
 @router.post("", response_model=RuleOut)
 def create_rule(body: RuleCreateRequest):
     with get_conn() as conn:
-        priority = body.priority
-        if priority is None:
-            max_priority = conn.execute("SELECT MAX(priority) FROM rules WHERE is_default = 0").fetchone()[0]
-            priority = (max_priority or 0) + 1
+        priority = body.priority if body.priority is not None else repo.next_user_rule_priority(conn)
         # target_category is NOT NULL per TECHNICAL_SPEC.md's schema even
         # though exclusion rules don't use it - default to "Others" for those.
-        target_category = body.target_category or "Others"
-        cur = conn.execute(
-            "INSERT INTO rules (priority, match_pattern, target_category, target_subcategory, "
-            "is_exclusion_rule, exclusion_reason) VALUES (?, ?, ?, ?, ?, ?)",
-            (
-                priority,
-                body.match_pattern,
-                target_category,
-                body.target_subcategory,
-                body.is_exclusion_rule,
-                body.exclusion_reason,
-            ),
+        rule_id = repo.insert_rule(
+            conn,
+            priority=priority,
+            match_pattern=body.match_pattern,
+            target_category=body.target_category or "Others",
+            target_subcategory=body.target_subcategory,
+            is_exclusion_rule=body.is_exclusion_rule,
+            exclusion_reason=body.exclusion_reason,
         )
-        row = conn.execute("SELECT * FROM rules WHERE id = ?", (cur.lastrowid,)).fetchone()
+        row = conn.execute("SELECT * FROM rules WHERE id = ?", (rule_id,)).fetchone()
         return _row_to_out(row)
 
 
@@ -70,7 +66,7 @@ def update_rule(rule_id: int, body: RuleUpdateRequest):
     with get_conn() as conn:
         existing = conn.execute("SELECT * FROM rules WHERE id = ?", (rule_id,)).fetchone()
         if existing is None:
-            raise _not_found()
+            raise not_found_error("rule", "RULE_NOT_FOUND")
         if existing["is_default"]:
             raise _immutable()
         merged = {
@@ -105,16 +101,6 @@ def delete_rule(rule_id: int):
         if existing is not None and existing["is_default"]:
             raise _immutable()
         conn.execute("DELETE FROM rules WHERE id = ?", (rule_id,))
-
-
-def _reorder_mismatch() -> HTTPException:
-    return HTTPException(
-        status_code=400,
-        detail={
-            "code": "REORDER_ID_MISMATCH",
-            "message": "ordered_ids must contain exactly every non-default rule id, no more and no less.",
-        },
-    )
 
 
 @router.post("/reorder", response_model=list[RuleOut])
