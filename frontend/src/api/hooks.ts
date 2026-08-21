@@ -9,6 +9,8 @@ import type {
   ContactUpdateRequest,
   DashboardSummary,
   MonthlyTotal,
+  RecategorizeRequest,
+  RecategorizeResult,
   RefundPairing,
   Rule,
   RuleCreateRequest,
@@ -48,6 +50,18 @@ export function useUpdateTransaction() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['transactions'] })
       qc.invalidateQueries({ queryKey: ['dashboard-summary'] })
+    },
+  })
+}
+
+export function useRecategorizeTransactions() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: RecategorizeRequest) => api.post<RecategorizeResult>('/transactions/recategorize', body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['transactions'] })
+      qc.invalidateQueries({ queryKey: ['dashboard-summary'] })
+      qc.invalidateQueries({ queryKey: ['monthly-totals'] })
     },
   })
 }

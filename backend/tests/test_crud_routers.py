@@ -132,6 +132,37 @@ def test_update_missing_transaction_404s(client):
     assert resp.json()["detail"]["code"] == "TRANSACTION_NOT_FOUND"
 
 
+def test_recategorize_reruns_categorization_over_month_range(client):
+    _upload_and_commit(client)
+    tx = client.get("/api/transactions").json()[0]
+    client.patch(
+        f"/api/transactions/{tx['id']}",
+        json={"category": "Groceries", "matched_label": "Manual Override"},
+    )
+
+    def _fetch(tx_id):
+        rows = client.get("/api/transactions", params={"include_excluded": True}).json()
+        return next(t for t in rows if t["id"] == tx_id)
+
+    # out of range: untouched
+    resp_out = client.post(
+        "/api/transactions/recategorize", json={"date_from": "2026-06", "date_to": "2026-06"}
+    )
+    assert resp_out.json() == {"transactions_scanned": 0, "transactions_changed": 0}
+    assert _fetch(tx["id"])["category"] == "Groceries"
+
+    # in range: recomputed from the raw description, overwriting the manual edit
+    resp = client.post(
+        "/api/transactions/recategorize", json={"date_from": "2026-05", "date_to": "2026-05"}
+    )
+    body = resp.json()
+    assert body["transactions_scanned"] == 39
+    assert body["transactions_changed"] >= 1
+
+    reverted = _fetch(tx["id"])
+    assert (reverted["category"], reverted["matched_label"]) != ("Groceries", "Manual Override")
+
+
 # --- contacts -----------------------------------------------------------
 
 

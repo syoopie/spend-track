@@ -1,4 +1,4 @@
-import { Pencil } from 'lucide-react'
+import { Pencil, RefreshCw } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useAccounts, useCategories, useDashboardSummary, useMonthlyTotals, useTransactions } from '../api/hooks'
 import { categoryColor } from '../lib/categoryColor'
@@ -9,6 +9,7 @@ import { VelocityChart } from '../components/VelocityChart'
 import { RefundDrawer } from '../components/RefundDrawer'
 import { DateRangePicker } from '../components/DateRangePicker'
 import { TransactionEditPopover } from '../components/TransactionEditPopover'
+import { RecategorizeModal } from '../components/RecategorizeModal'
 import { useUploadDialog } from '../components/UploadProvider'
 
 function MetricCard({
@@ -40,6 +41,7 @@ export function Dashboard() {
   const [categoryFilter, setCategoryFilter] = useState('')
   const [refundTxId, setRefundTxId] = useState<number | null>(null)
   const [editingTxId, setEditingTxId] = useState<number | null>(null)
+  const [recategorizeOpen, setRecategorizeOpen] = useState(false)
 
   const accountsQ = useAccounts()
   const categoriesQ = useCategories()
@@ -164,6 +166,14 @@ export function Dashboard() {
             ))}
           </select>
           <button
+            onClick={() => setRecategorizeOpen(true)}
+            title="Re-run categorization rules over the selected range"
+            className="flex items-center gap-1.5 text-[13px] px-3 py-2 rounded-lg border border-border bg-input text-text cursor-pointer"
+          >
+            <RefreshCw size={14} />
+            Recategorize
+          </button>
+          <button
             onClick={openDialog}
             disabled={hasPendingBatch}
             className="text-[13px] font-semibold px-4 py-2 rounded-lg border-none bg-accent text-accent-fg cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
@@ -172,6 +182,14 @@ export function Dashboard() {
           </button>
         </div>
       </div>
+
+      {recategorizeOpen && (
+        <RecategorizeModal
+          range={{ from: s.date_from, to: s.date_to }}
+          accountId={accountId}
+          onClose={() => setRecategorizeOpen(false)}
+        />
+      )}
 
       {/* Metric cards */}
       <div className="grid grid-cols-4 gap-3.5 mb-5">

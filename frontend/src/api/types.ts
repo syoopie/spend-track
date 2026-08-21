@@ -85,6 +85,17 @@ export interface TransactionUpdateRequest {
   exclusion_reason?: string | null
 }
 
+export interface RecategorizeRequest {
+  date_from: string
+  date_to: string
+  account_id?: string | null
+}
+
+export interface RecategorizeResult {
+  transactions_scanned: number
+  transactions_changed: number
+}
+
 export interface RefundPairing {
   original: Transaction
   refund: Transaction
