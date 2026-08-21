@@ -6,7 +6,7 @@ Coverage comes from two tiers: (1) real merchant strings pulled from the
 user's own historical UOB transactions, and (2) common Singapore
 merchant/keyword knowledge for categories the real data didn't cover
 (Beauty, Sports & Hobbies, Home, Healthcare, Education). This bank never
-targets "Others" or "PayNow Transfers" - those are pure fallback outcomes
+targets "Others" or "Paynow" - those are pure fallback outcomes
 produced by the categorization engine itself (engine/rules.py), not rule
 matches. DEFAULT_PAYNOW_RULE_BANK is a separate, lower-precedence tier for
 matching PayNow recipient names (see its own docstring below).

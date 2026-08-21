@@ -166,6 +166,7 @@ async def upload_statement(files: list[UploadFile] = File(...), password: str | 
                         tx.raw_description,
                         rules,
                         contact_identifiers,
+                        amount=tx.amount,
                         has_card_account=has_card_account,
                         posting_account_is_card=parsed_account.is_card,
                     )

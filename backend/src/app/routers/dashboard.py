@@ -1,7 +1,7 @@
 import calendar
 import sqlite3
 from collections import defaultdict
-from datetime import date
+from datetime import date, timedelta
 
 from fastapi import APIRouter
 
@@ -92,38 +92,64 @@ def _category_breakdown(txs: list[sqlite3.Row]) -> list[CategoryBreakdownSlice]:
     ]
 
 
-def _daily_cumulative_outflow(conn: sqlite3.Connection, month: str, account_id: str | None) -> list[float]:
-    txs = _fetch_month_transactions(conn, month, account_id)
-    days_in_month = calendar.monthrange(int(month[:4]), int(month[5:7]))[1]
-    daily = [0.0] * (days_in_month + 1)  # 1-indexed by day
-    for t in txs:
-        if t["amount"] < 0:
-            day = int(t["transaction_date"][8:10])
-            daily[day] += -t["amount"]
+def _period_daily_cumulative_outflow(
+    conn: sqlite3.Connection, date_from: str, date_to: str, account_id: str | None
+) -> list[float]:
+    """date_from/date_to are month keys (YYYY-MM) - walks every calendar day
+    across all months in the range so this works for a single month or a
+    many-month range alike."""
+    last_day = calendar.monthrange(int(date_to[:4]), int(date_to[5:7]))[1]
+    start = date.fromisoformat(f"{date_from}-01")
+    end = date.fromisoformat(f"{date_to}-{last_day:02d}")
+
+    clauses = ["transaction_date >= ?", "transaction_date <= ?", "is_excluded = 0"]
+    params: list = [start.isoformat(), end.isoformat()]
+    if account_id:
+        clauses.append("account_id = ?")
+        params.append(account_id)
+    where = " AND ".join(clauses)
+    rows = conn.execute(f"SELECT transaction_date, amount FROM transactions WHERE {where}", params).fetchall()
+
+    daily: dict[str, float] = defaultdict(float)
+    for r in rows:
+        if r["amount"] < 0:
+            daily[r["transaction_date"]] += -r["amount"]
+
     cumulative = []
     running = 0.0
-    for day in range(1, days_in_month + 1):
-        running += daily[day]
+    d = start
+    while d <= end:
+        running += daily.get(d.isoformat(), 0.0)
         cumulative.append(round(running, 2))
+        d += timedelta(days=1)
     return cumulative
 
 
-def _spend_velocity(current: list[float], previous: list[float]) -> list[VelocityPoint]:
+def _spend_velocity(current: list[float], previous: list[float], period_start: date) -> list[VelocityPoint]:
     n = max(len(current), len(previous))
     points = []
     for i in range(n):
         cur = current[i] if i < len(current) else (current[-1] if current else 0.0)
         prev = previous[i] if i < len(previous) else (previous[-1] if previous else 0.0)
-        points.append(VelocityPoint(day=i + 1, current_month_cumulative=cur, previous_month_cumulative=prev))
+        points.append(
+            VelocityPoint(
+                day=i + 1,
+                date=(period_start + timedelta(days=i)).isoformat(),
+                current_period_cumulative=cur,
+                previous_period_cumulative=prev,
+            )
+        )
     return points
 
 
-_PAYNOW_LABEL_PREFIX = "PayNow to "
+_PAYNOW_LABEL_PREFIXES = ("PayNow to ", "PayNow from ")
 
 
 def _strip_paynow_prefix(label: str | None) -> str | None:
-    if label and label.startswith(_PAYNOW_LABEL_PREFIX):
-        return label[len(_PAYNOW_LABEL_PREFIX):]
+    if label:
+        for prefix in _PAYNOW_LABEL_PREFIXES:
+            if label.startswith(prefix):
+                return label[len(prefix):]
     return label
 
 
@@ -132,7 +158,7 @@ def _top_entries(txs: list[sqlite3.Row], contact_names: dict[int, str], *, payno
     for t in txs:
         if t["amount"] >= 0:
             continue
-        is_paynow_tx = t["category"] == "PayNow Transfers"
+        is_paynow_tx = t["category"] == "Paynow"
         if is_paynow_tx != paynow:
             continue
         if is_paynow_tx:
@@ -194,19 +220,20 @@ def get_dashboard_summary(date_from: str | None = None, date_to: str | None = No
 
         txs = _fetch_range_transactions(conn, date_from, date_to, account_id)
 
+        months_in_range = _months_between(date_from, date_to)
         cash_flow = []
-        for m in _months_between(date_from, date_to):
+        for m in months_in_range:
             m_txs = _fetch_month_transactions(conn, m, account_id)
             inflow = sum(t["amount"] for t in m_txs if t["amount"] > 0)
             outflow = sum(-t["amount"] for t in m_txs if t["amount"] < 0)
             cash_flow.append(CashFlowMonth(month=m, inflow=round(inflow, 2), outflow=round(outflow, 2)))
 
-        is_single_month = date_from == date_to
-        spend_velocity: list[VelocityPoint] = []
-        if is_single_month:
-            current_cum = _daily_cumulative_outflow(conn, date_from, account_id)
-            previous_cum = _daily_cumulative_outflow(conn, _shift_month(date_from, -1), account_id)
-            spend_velocity = _spend_velocity(current_cum, previous_cum)
+        months_count = len(months_in_range)
+        prev_date_from = _shift_month(date_from, -months_count)
+        prev_date_to = _shift_month(date_to, -months_count)
+        current_cum = _period_daily_cumulative_outflow(conn, date_from, date_to, account_id)
+        previous_cum = _period_daily_cumulative_outflow(conn, prev_date_from, prev_date_to, account_id)
+        spend_velocity = _spend_velocity(current_cum, previous_cum, date.fromisoformat(f"{date_from}-01"))
 
         contact_rows = conn.execute("SELECT id, name FROM contacts").fetchall()
         contact_names = {r["id"]: r["name"] for r in contact_rows}

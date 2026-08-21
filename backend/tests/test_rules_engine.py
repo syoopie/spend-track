@@ -58,27 +58,46 @@ def test_no_rule_match_falls_back_to_contact():
             "contact_id": 7,
             "name": "Auntie Mei",
             "identifier": "+65 9123 4567",
-            "default_category": "PayNow Transfers",
+            "default_category": "Paynow",
             "default_subcategory": None,
         }
     ]
-    result = categorize("PAYNOW-FAST PAYNOW OTHR +65 9123 4567", [], contacts)
-    assert result.category == "PayNow Transfers"
+    result = categorize("PAYNOW-FAST PAYNOW OTHR +65 9123 4567", [], contacts, amount=-25.00)
+    assert result.category == "Paynow"
     assert result.contact_id == 7
     assert result.matched_label == "PayNow to Auntie Mei"
 
 
+def test_contact_match_paynow_label_says_from_for_incoming_amount():
+    contacts = [
+        {
+            "contact_id": 7,
+            "name": "Auntie Mei",
+            "identifier": "+65 9123 4567",
+            "default_category": "Paynow",
+            "default_subcategory": None,
+        }
+    ]
+    result = categorize("PAYNOW-FAST PAYNOW OTHR +65 9123 4567", [], contacts, amount=25.00)
+    assert result.matched_label == "PayNow from Auntie Mei"
+
+
 def test_no_rule_or_contact_match_flags_paynow_for_review_in_its_own_category():
-    result = categorize("PAYNOW-FAST PIB2605050213183371 UNKNOWN PERSON", [], [])
-    assert result.category == "PayNow Transfers"
+    result = categorize("PAYNOW-FAST PIB2605050213183371 UNKNOWN PERSON", [], [], amount=-25.00)
+    assert result.category == "Paynow"
     assert result.subcategory == "PayNow"
     assert result.needs_review is True
     assert result.matched_label == "PayNow to UNKNOWN PERSON"
 
 
 def test_paynow_fallback_label_keeps_phone_number_when_no_name_present():
-    result = categorize("PAYNOW-FAST PAYNOW OTHR +65 9123 4567", [], [])
+    result = categorize("PAYNOW-FAST PAYNOW OTHR +65 9123 4567", [], [], amount=-25.00)
     assert result.matched_label == "PayNow to +65 9123 4567"
+
+
+def test_paynow_fallback_label_says_from_for_incoming_amount():
+    result = categorize("PAYNOW-FAST PAYNOW OTHR +65 9123 4567", [], [], amount=25.00)
+    assert result.matched_label == "PayNow from +65 9123 4567"
 
 
 def test_non_paynow_unmatched_defaults_to_others_unparsable_without_review_flag():
