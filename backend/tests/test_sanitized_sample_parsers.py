@@ -79,6 +79,46 @@ def test_card_statement_single_card_parses_correctly():
     assert all(t.amount < 0 for t in acc.transactions[1:])
 
 
+def test_jan_account_statement_chains_into_febs_fixed_opening_balance():
+    """Jan's opening balance is solved backwards (see
+    _opening_balance_for_closing in the generator) so this statement's
+    closing balance lands exactly on Feb's hardcoded opening_balance=5000.00,
+    making the two-month history continuous."""
+    result = _parse_account("SampleAccountStatement_Jan2024.pdf")
+    acc = result.accounts[0]
+    assert len(acc.transactions) == 12
+    assert acc.transactions[-1].balance == 5000.00
+
+
+def test_apr_may_jun_account_statements_parse_with_expected_transaction_counts():
+    for filename, count in [
+        ("SampleAccountStatement_Apr2024.pdf", 12),
+        ("SampleAccountStatement_May2024.pdf", 13),
+        ("SampleAccountStatement_Jun2024.pdf", 12),
+    ]:
+        result = _parse_account(filename)
+        acc = result.accounts[0]
+        assert len(acc.transactions) == count, filename
+
+
+def test_apr_statement_carries_insurance_and_investing_default_rule_bait():
+    """These lines exist to exercise the Bills & Fees insurance rule and the
+    Investing PayNow rule from engine/default_rules.py end to end."""
+    result = _parse_account("SampleAccountStatement_Apr2024.pdf")
+    descriptions = " ".join(t.raw_description for t in result.accounts[0].transactions)
+    assert "Income Insurance" in descriptions
+    assert "INTERACTIVE BR SG" in descriptions
+
+
+def test_jan_and_apr_card_statements_parse_correctly():
+    jan = _parse_card("SampleCardStatement_Jan2024.pdf")
+    assert len(jan.accounts[0].transactions) == 6
+
+    apr = _parse_card("SampleCardStatement_Apr2024.pdf")
+    assert len(apr.accounts[0].transactions) == 6
+    assert apr.accounts[0].transactions[0].amount == 180.00
+
+
 def test_card_statement_multi_card_attributes_transactions_to_the_right_card():
     """No real UOB sample had more than one card - this fixture exists
     specifically to exercise that path (see engine/naming.py backward-search
