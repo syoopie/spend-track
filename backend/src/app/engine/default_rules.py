@@ -218,6 +218,12 @@ DEFAULT_RULE_BANK: dict[str, list[tuple[str, str]]] = {
         ("PHARMACY", "Pharmacy"),
         ("CLINIC", "Clinic"),
     ],
+    "Salary": [
+        ("SALARY", "Salary"),
+        ("PAYROLL", "Payroll"),
+        ("GIRO SALARY", "Salary"),
+        ("MONTHLY SALARY", "Salary"),
+    ],
     "Education": [
         ("SKILLSFUTURE", "SkillsFuture"),
         ("COURSERA", "Coursera"),

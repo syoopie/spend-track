@@ -1,4 +1,5 @@
 import {
+  Banknote,
   Bus,
   Clapperboard,
   Dumbbell,
@@ -40,6 +41,7 @@ const ICON_COMPONENTS: Record<string, LucideIcon> = {
   'heart-pulse': HeartPulse,
   'graduation-cap': GraduationCap,
   'shopping-cart': ShoppingCart,
+  banknote: Banknote,
   send: Send,
   'more-horizontal': MoreHorizontal,
 }
