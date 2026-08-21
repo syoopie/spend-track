@@ -48,18 +48,24 @@ export function Sidebar() {
         className="absolute inset-y-0 left-0 z-30 w-16 group-hover:w-56 bg-sidebar text-muted flex flex-col p-3.5
           border-r border-border overflow-hidden transition-[width] duration-200 ease-out"
       >
-        {/* Labels have no opacity/visibility transition of their own - they're
-            plain whitespace-nowrap text that the rail's overflow-hidden
-            clips while collapsed and reveals as the rail's width animates
-            open. A separately-timed opacity fade here would show the text
-            before the rail finished widening, making it look like the icon
-            and label were jumping around independently of the expansion. */}
+        {/* Labels sit in a w-0 (collapsed) / group-hover:w-auto (expanded)
+            wrapper with its own overflow-hidden - explicit zero width at
+            rest, rather than relying on the leftover space after the icon
+            being tight enough to round down to nothing (it wasn't: a few px
+            of slack let a sliver of every label's first letters bleed
+            through while collapsed). The wrapper's width still snaps
+            instantly on hover rather than animating, but the *visible*
+            reveal stays governed entirely by the rail's own animated width
+            and overflow-hidden, same as before - this only fixes the
+            resting state's leak, not the transition. */}
         <NavLink to="/" end className="flex items-center gap-2.5 px-2 pt-1.5 pb-5.5">
           <div className="w-6.5 h-6.5 rounded-md bg-accent shrink-0" />
-          <div className="text-sm font-semibold font-display text-text leading-tight whitespace-nowrap">
-            Expenditure
-            <br />
-            Tracker
+          <div className="w-0 group-hover:w-auto overflow-hidden">
+            <div className="text-sm font-semibold font-display text-text leading-tight whitespace-nowrap">
+              Expenditure
+              <br />
+              Tracker
+            </div>
           </div>
         </NavLink>
 
@@ -74,14 +80,20 @@ export function Sidebar() {
           className="flex items-center justify-start gap-1.5 px-2.5 py-2.5 rounded-lg text-sm font-semibold border-none bg-accent text-accent-fg cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Upload size={15} className="shrink-0" />
-          <span className="whitespace-nowrap">Upload Bank Statement</span>
+          <span className="w-0 group-hover:w-auto overflow-hidden whitespace-nowrap">Upload Bank Statement</span>
         </button>
-        {/* Fixed width (independent of the rail's own collapsed/expanded
-            width) so this always wraps the same way - otherwise, while
-            collapsed, it wraps word-by-word against the 64px rail and the
-            (invisible but still laid-out) text balloons into many lines. */}
-        <div className="w-[190px] mx-auto text-[11px] text-muted-2 text-center leading-snug mt-1.5 mb-3.5">
-          or drag &amp; drop a PDF — anytime, anywhere in the app
+        {/* Outer wrapper is what's actually 0-width at rest (and centered
+            via mx-auto) - the inner div keeps its own fixed 190px so
+            wrapping/line-height stays constant once revealed, same reason
+            as before. Without the outer wrapper, a horizontally-centered
+            190px box inside a 64px rail overflows evenly on both sides, and
+            the rail's clipping boundary lands in the *middle* of that box -
+            letting a slice of text through even though the box as a whole
+            is "mostly" clipped. */}
+        <div className="w-0 group-hover:w-[190px] mx-auto overflow-hidden mt-1.5 mb-3.5">
+          <div className="w-[190px] text-[11px] text-muted-2 text-center leading-snug">
+            or drag &amp; drop a PDF — anytime, anywhere in the app
+          </div>
         </div>
 
         {NAV_ITEMS.map((item) => (
@@ -96,14 +108,16 @@ export function Sidebar() {
             }
           >
             {item.icon}
-            <span className="whitespace-nowrap">{item.label}</span>
+            <span className="w-0 group-hover:w-auto overflow-hidden whitespace-nowrap">{item.label}</span>
           </NavLink>
         ))}
 
         <div className="flex-1" />
         <div className="text-[11px] text-muted-2 px-2 pt-2.5 border-t border-border leading-relaxed whitespace-nowrap">
           <span className="inline-block w-1.5 h-1.5 rounded-full bg-success mr-1.5 shrink-0" />
-          <span>Local-only · no data leaves this device</span>
+          <span className="w-0 group-hover:w-auto overflow-hidden inline-block align-middle">
+            Local-only · no data leaves this device
+          </span>
         </div>
       </div>
     </div>
