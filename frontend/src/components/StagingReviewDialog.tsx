@@ -4,6 +4,7 @@ import { categoryColor } from '../lib/categoryColor'
 import { fmtDate, fmtSigned } from '../lib/format'
 import { Checkbox } from './Checkbox'
 import { Modal } from './Modal'
+import { Select } from './Select'
 import type { StagingRow } from '../api/types'
 
 const AMBER_BG = 'oklch(20% 0.02 70)'
@@ -32,17 +33,13 @@ function StagingRowPopover({
     >
       <div className="flex-1">
         <div className="text-[11px] text-muted mb-1">Assign category</div>
-        <select
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          className="w-full text-[13px] px-2.5 py-1.5 rounded-md border border-border bg-input text-text"
-        >
+        <Select uiSize="sm" value={category} onChange={(e) => setCategory(e.target.value)} className="w-full">
           {(categoriesQ.data ?? []).map((c) => (
             <option key={c.id} value={c.name}>
               {c.name}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
       <label className="flex items-center gap-1.5 text-[12px] text-text pb-2 cursor-pointer">
         <Checkbox checked={saveAsRule} onChange={setSaveAsRule} />

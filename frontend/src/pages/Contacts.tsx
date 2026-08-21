@@ -6,6 +6,7 @@ import {
   useImportContactsCsv,
 } from '../api/hooks'
 import { Modal } from '../components/Modal'
+import { Select } from '../components/Select'
 import { fmtPlain } from '../lib/format'
 
 function AddContactModal({ onClose }: { onClose: () => void }) {
@@ -42,18 +43,14 @@ function AddContactModal({ onClose }: { onClose: () => void }) {
       />
 
       <div className="text-xs text-muted mb-1">Default Category</div>
-      <select
-        value={category}
-        onChange={(e) => setCategory(e.target.value)}
-        className="w-full box-border px-3 py-2.5 rounded-lg border border-border bg-input text-text text-[13px] mb-3.5"
-      >
+      <Select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full mb-3.5">
         <option value="">Select category…</option>
         {(categoriesQ.data ?? []).map((c) => (
           <option key={c.id} value={c.name}>
             {c.name}
           </option>
         ))}
-      </select>
+      </Select>
 
       <div className="text-xs text-muted mb-1.5">Linked Identifiers</div>
       {identifiers.map((identifier, i) => (
