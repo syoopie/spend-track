@@ -1,8 +1,9 @@
 import { NavLink } from 'react-router-dom'
+import { useUploadDialog } from './UploadProvider'
 
 const NAV_ITEMS = [
   {
-    to: '/dashboard',
+    to: '/',
     label: 'Dashboard',
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" className="shrink-0">
@@ -64,9 +65,11 @@ const NAV_ITEMS = [
 ]
 
 export function Sidebar() {
+  const { openDialog } = useUploadDialog()
+
   return (
     <div className="w-56 shrink-0 bg-sidebar text-muted flex flex-col p-3.5 border-r border-border">
-      <NavLink to="/" className="flex items-center gap-2.5 px-2 pt-1.5 pb-5.5">
+      <NavLink to="/" end className="flex items-center gap-2.5 px-2 pt-1.5 pb-5.5">
         <div className="w-6.5 h-6.5 rounded-md bg-accent shrink-0" />
         <div className="text-sm font-semibold text-text leading-tight">
           Expenditure
@@ -75,10 +78,18 @@ export function Sidebar() {
         </div>
       </NavLink>
 
+      <button
+        onClick={openDialog}
+        className="flex items-center justify-center gap-1.5 px-2.5 py-2.5 rounded-lg text-sm font-semibold mb-3.5 border-none bg-accent text-accent-fg cursor-pointer"
+      >
+        + Upload Statement
+      </button>
+
       {NAV_ITEMS.map((item) => (
         <NavLink
           key={item.to}
           to={item.to}
+          end={item.to === '/'}
           className={({ isActive }) =>
             `flex items-center gap-2.5 px-2.5 py-2.5 rounded-lg text-sm font-medium mb-0.5 ${
               isActive ? 'text-text bg-accent/12' : 'text-nav hover:bg-nav-hover'

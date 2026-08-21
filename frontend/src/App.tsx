@@ -1,6 +1,6 @@
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import { Sidebar } from './components/Sidebar'
-import { Onboarding } from './pages/Onboarding'
+import { UploadProvider } from './components/UploadProvider'
 import { Dashboard } from './pages/Dashboard'
 import { Staging } from './pages/Staging'
 import { Contacts } from './pages/Contacts'
@@ -20,17 +20,19 @@ function MainLayout() {
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/" element={<Onboarding />} />
-      <Route element={<MainLayout />}>
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/staging" element={<Staging />} />
-        <Route path="/staging/:batchId" element={<Staging />} />
-        <Route path="/contacts" element={<Contacts />} />
-        <Route path="/rules" element={<Rules />} />
-        <Route path="/settings" element={<Settings />} />
-      </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <UploadProvider>
+      <Routes>
+        <Route element={<MainLayout />}>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/dashboard" element={<Navigate to="/" replace />} />
+          <Route path="/staging" element={<Staging />} />
+          <Route path="/staging/:batchId" element={<Staging />} />
+          <Route path="/contacts" element={<Contacts />} />
+          <Route path="/rules" element={<Rules />} />
+          <Route path="/settings" element={<Settings />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </UploadProvider>
   )
 }
