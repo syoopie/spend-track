@@ -1,5 +1,5 @@
 import type { CashFlowMonth, MonthlyTotal } from '../api/types'
-import { fmtCompact, fmtMonthLabel, fmtMonthRangeLabel } from '../lib/format'
+import { fmtCompact, fmtMonthLabel } from '../lib/format'
 
 const MIN_MONTHS = 6
 const MAX_MONTHS = 12
@@ -26,8 +26,11 @@ export function CashFlowChart({
   const truncated = !padded && data.length > MAX_MONTHS
 
   const max = Math.max(1, ...chartData.flatMap((d) => [d.inflow, d.outflow]))
+  // The selected range is already shown in the sticky header above - this
+  // only needs to say when it's padding out to more months than that
+  // range covers, not restate the range itself.
   const title = padded
-    ? `Cash Flow — Trend into ${fmtMonthRangeLabel(rangeFrom, rangeTo)}`
+    ? 'Cash Flow — Recent Trend'
     : `Cash Flow — Inflow vs Outflow${truncated ? ' (most recent 12 months)' : ''}`
 
   // Bars used to sit in flex-1 columns with a fixed 36px min-width, which
