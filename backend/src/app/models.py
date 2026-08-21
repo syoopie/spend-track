@@ -98,6 +98,17 @@ class RefundPairingOut(BaseModel):
     refund: TransactionOut
 
 
+class RecategorizeRequest(BaseModel):
+    date_from: str  # YYYY-MM
+    date_to: str  # YYYY-MM
+    account_id: str | None = None
+
+
+class RecategorizeResult(BaseModel):
+    transactions_scanned: int
+    transactions_changed: int
+
+
 class ContactIdentifierIn(BaseModel):
     identifier: str
 
