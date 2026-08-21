@@ -1,5 +1,6 @@
 import { ChevronDown } from 'lucide-react'
 import { Children, isValidElement, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { KeyboardEvent as ReactKeyboardEvent, OptionHTMLAttributes, ReactNode } from 'react'
 
 interface SelectOption {
@@ -44,6 +45,11 @@ export function Select({
   // of DOM focus. That's what lets Escape/Tab/selecting an option all just
   // work without any explicit "return focus to the trigger" step.
   const [activeIndex, setActiveIndex] = useState(0)
+  // The panel is portaled to <body> (see render below) so it can't be
+  // clipped by an overflow-hidden ancestor (e.g. the Transaction Feed card
+  // when the feed is short/empty) - position is computed from the
+  // trigger's viewport rect instead of relying on CSS `absolute`.
+  const [panelStyle, setPanelStyle] = useState({ top: 0, left: 0, minWidth: 0 })
   const containerRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
@@ -51,10 +57,32 @@ export function Select({
   useEffect(() => {
     if (!open) return
     function onPointerDown(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false)
+      const target = e.target as Node
+      // The panel is portaled to <body>, so it's not a DOM descendant of
+      // containerRef - it needs its own exemption or every option click
+      // would close (and unmount) the panel on mousedown, before the
+      // option button's own click handler ever fires.
+      if (containerRef.current?.contains(target)) return
+      if (listRef.current?.contains(target)) return
+      setOpen(false)
     }
     window.addEventListener('mousedown', onPointerDown)
-    return () => window.removeEventListener('mousedown', onPointerDown)
+    // Closing on scroll (rather than repositioning) matches how most
+    // portaled dropdowns behave and avoids the panel drifting out of sync
+    // with a trigger that scrolled off inside a nested scroll container.
+    // Capture-phase scroll fires for every ancestor up to window regardless
+    // of the target's own bubbling, so the panel's own internal
+    // overflow-y-auto scroll needs an explicit exemption or scrolling the
+    // option list would immediately close it.
+    function onScroll(e: Event) {
+      if (listRef.current && listRef.current.contains(e.target as Node)) return
+      setOpen(false)
+    }
+    window.addEventListener('scroll', onScroll, true)
+    return () => {
+      window.removeEventListener('mousedown', onPointerDown)
+      window.removeEventListener('scroll', onScroll, true)
+    }
   }, [open])
 
   useEffect(() => {
@@ -62,6 +90,16 @@ export function Select({
   }, [open, activeIndex])
 
   function openAt(index: number) {
+    const rect = triggerRef.current?.getBoundingClientRect()
+    if (rect) {
+      const panelMaxHeight = 256 // matches max-h-64 below
+      const openUpward = window.innerHeight - rect.bottom < panelMaxHeight && rect.top > panelMaxHeight
+      setPanelStyle({
+        top: openUpward ? rect.top - panelMaxHeight - 4 : rect.bottom + 4,
+        left: rect.left,
+        minWidth: rect.width,
+      })
+    }
     setActiveIndex(Math.max(0, Math.min(options.length - 1, index)))
     setOpen(true)
   }
@@ -139,33 +177,36 @@ export function Select({
         size={uiSize === 'sm' ? 12 : 14}
         className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-2"
       />
-      {open && (
-        <div
-          ref={listRef}
-          role="listbox"
-          className="absolute left-0 top-[calc(100%+4px)] z-40 min-w-full w-max max-w-[320px] max-h-64 overflow-y-auto bg-card border border-border rounded-lg shadow-xl py-1"
-        >
-          {options.map((o, i) => (
-            <button
-              key={o.value}
-              type="button"
-              role="option"
-              tabIndex={-1}
-              aria-selected={o.value === value}
-              data-active={i === activeIndex}
-              disabled={o.disabled}
-              onMouseEnter={() => setActiveIndex(i)}
-              onClick={() => commit(i)}
-              className={`w-full flex items-center gap-1.5 text-left px-3 py-1.5 text-[13px] whitespace-nowrap cursor-pointer border-0 bg-transparent
-                disabled:opacity-40 disabled:cursor-not-allowed
-                ${i === activeIndex ? 'bg-accent/12' : ''}
-                ${o.value === value ? 'text-accent font-semibold' : 'text-text'}`}
-            >
-              {o.label}
-            </button>
-          ))}
-        </div>
-      )}
+      {open &&
+        createPortal(
+          <div
+            ref={listRef}
+            role="listbox"
+            style={{ position: 'fixed', top: panelStyle.top, left: panelStyle.left, minWidth: panelStyle.minWidth }}
+            className="z-50 w-max max-w-[320px] max-h-64 overflow-y-auto bg-card border border-border rounded-lg shadow-xl py-1"
+          >
+            {options.map((o, i) => (
+              <button
+                key={o.value}
+                type="button"
+                role="option"
+                tabIndex={-1}
+                aria-selected={o.value === value}
+                data-active={i === activeIndex}
+                disabled={o.disabled}
+                onMouseEnter={() => setActiveIndex(i)}
+                onClick={() => commit(i)}
+                className={`w-full flex items-center gap-1.5 text-left px-3 py-1.5 text-[13px] whitespace-nowrap cursor-pointer border-0 bg-transparent
+                  disabled:opacity-40 disabled:cursor-not-allowed
+                  ${i === activeIndex ? 'bg-accent/12' : ''}
+                  ${o.value === value ? 'text-accent font-semibold' : 'text-text'}`}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )}
     </div>
   )
 }
