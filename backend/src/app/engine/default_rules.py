@@ -29,6 +29,30 @@ DEFAULT_RULE_BANK: dict[str, list[tuple[str, str]]] = {
         ("MAIXIANG", "Maixiang"),
         ("IJOOZ", "iJooz"),
         ("BIRDS OF PARADISE", "Birds of Paradise"),
+        ("LUCKINCOFFEE", "Luckin Coffee"),
+        ("LUCKIN COFFEE", "Luckin Coffee"),
+        ("YAMAZAKI", "Yamazaki"),
+        ("GOKOKU", "Gokoku"),
+        ("TAMAGO EN", "Tamago En"),
+        ("CHICHA SAN CHEN", "Chicha San Chen"),
+        ("ICHIKOKUDO", "Ichikokudo"),
+        ("COCO ICHIBANYA", "CoCo Ichibanya"),
+        ("NYLON COFFEE", "Nylon Coffee"),
+        ("SONG FA", "Song Fa"),
+        ("TORI-Q", "Tori-Q"),
+        ("MESSINA", "Gelato Messina"),
+        ("BROTHERBIRD", "Brotherbird"),
+        ("TAMOYA UDON", "Tamoya Udon"),
+        ("HUONG PHO", "Huong Pho"),
+        ("APARTMENT COFFEE", "Apartment Coffee"),
+        ("LAO HUO TANG", "Lao Huo Tang"),
+        ("AVENUE CREAMERY", "Avenue Creamery"),
+        ("EVERTON CREAMERY", "Everton Creamery"),
+        ("YOLE", "Yolé"),
+        ("FIELDNOTES", "Fieldnotes Coffee"),
+        ("PASTAGO", "PastaGo"),
+        ("MALA XIANG", "Mala Xiang Guo"),
+        ("DAILY CHICKEN", "Daily Chicken"),
         # General SG knowledge
         ("STARBUCKS", "Starbucks"),
         ("MCDONALD", "McDonald's"),
@@ -63,6 +87,8 @@ DEFAULT_RULE_BANK: dict[str, list[tuple[str, str]]] = {
         # From the user's real transaction history
         ("BUS/MRT", "Public Transport"),
         ("PARKING.SG", "Parking.sg"),
+        ("CHARGESPOT", "ChargeSpot"),
+        ("REFUEL.SG", "Refuel.sg"),
         # General SG knowledge - specific ride-hailing services before bare "GRAB"
         ("GRABPAY", "GrabPay"),
         ("GRABCAR", "GrabCar"),
@@ -111,11 +137,15 @@ DEFAULT_RULE_BANK: dict[str, list[tuple[str, str]]] = {
         ("METRO", "METRO"),
         ("BEST DENKI", "Best Denki"),
         ("AMAZON", "Amazon"),
+        ("DAISO", "Daiso"),
+        ("MARKS & SPENCER", "Marks & Spencer"),
     ],
     "Bills & Fees": [
         # From the user's real transaction history
         ("APPLE.COM/BILL", "Apple"),
         ("GOMO BY SINGTEL", "Gomo by Singtel"),
+        ("GOMO MOBILE PLAN", "GOMO Mobile Plan"),
+        ("MEMBERSHIP FEE", "Card Membership Fee"),
         # General SG knowledge
         ("SINGTEL", "Singtel"),
         ("STARHUB", "StarHub"),
@@ -151,6 +181,7 @@ DEFAULT_RULE_BANK: dict[str, list[tuple[str, str]]] = {
         ("ROAD TAX", "Road Tax"),
     ],
     "Investing": [
+        ("INTEREST CREDIT", "Bank Interest"),
         ("INTERACTIVE BROKERS", "Interactive Brokers"),
         ("TIGER BROKERS", "Tiger Brokers"),
         ("MOOMOO", "moomoo"),
@@ -169,6 +200,8 @@ DEFAULT_RULE_BANK: dict[str, list[tuple[str, str]]] = {
         # From the user's real transaction history
         ("NETFLIX", "Netflix"),
         ("GARDENS BY THE BAY", "Gardens by the Bay"),
+        ("SISTIC", "SISTIC"),
+        ("DROPOUT.TV", "Dropout"),
         # General SG knowledge
         ("SPOTIFY", "Spotify"),
         ("DISNEY+", "Disney+"),
@@ -189,6 +222,7 @@ DEFAULT_RULE_BANK: dict[str, list[tuple[str, str]]] = {
         ("MARINA BAY SANDS", "Marina Bay Sands"),
     ],
     "Beauty": [
+        ("LE MANUCURE", "Le Manucure"),
         ("SEPHORA", "Sephora"),
         ("WATSONS", "Watsons"),
         ("GUARDIAN", "Guardian"),
