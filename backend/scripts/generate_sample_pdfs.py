@@ -84,7 +84,22 @@ class AccountTxn:
     lines: list[str]  # first line + continuation lines
     withdrawal: float | None = None
     deposit: float | None = None
-    balance: float = 0.0
+    balance: float = 0.0  # filled in by _apply_running_balance
+
+
+def _apply_running_balance(opening_balance: float, txns: list[AccountTxn]) -> float:
+    """Computes each txn's running balance (and returns the closing balance)
+    from opening_balance + each txn's effect, instead of requiring every
+    balance/total to be hand-computed and kept in sync by whoever edits the
+    transaction list."""
+    running = opening_balance
+    for txn in txns:
+        if txn.withdrawal is not None:
+            running -= txn.withdrawal
+        if txn.deposit is not None:
+            running += txn.deposit
+        txn.balance = round(running, 2)
+    return round(running, 2)
 
 
 def generate_account_statement(
@@ -95,10 +110,10 @@ def generate_account_statement(
     account_number: str,
     opening_balance: float,
     txns: list[AccountTxn],
-    closing_balance: float,
-    total_withdrawals: float,
-    total_deposits: float,
 ):
+    closing_balance = _apply_running_balance(opening_balance, txns)
+    total_withdrawals = round(sum(t.withdrawal or 0 for t in txns), 2)
+    total_deposits = round(sum(t.deposit or 0 for t in txns), 2)
     path = OUT_DIR / "Account Statements" / filename
     doc = Doc(path)
 
@@ -167,7 +182,7 @@ def generate_account_statement(
     doc.text_right(ACC_BALANCE_RIGHT, top, f"{closing_balance:,.2f}")
 
     doc.save()
-    return path
+    return path, closing_balance
 
 
 # --------------------------------------------------------------------------
@@ -196,7 +211,13 @@ class Card:
     holder: str
     previous_balance: float
     txns: list[CardTxn]
-    sub_total: float
+    sub_total: float = field(init=False)  # PREVIOUS BALANCE + charges - credits, computed below
+
+    def __post_init__(self):
+        # amount: negative = charge (adds to what's owed), positive = credit
+        # (reduces it) - see CLAUDE.md's note that SUB TOTAL is a running
+        # balance, not just this statement's net charges.
+        self.sub_total = round(self.previous_balance - sum(t.amount for t in self.txns), 2)
 
 
 def generate_card_statement(filename: str, statement_date: str, due_date: str, cards: list[Card]):
@@ -291,23 +312,58 @@ def ref(n: int) -> str:
     return f"Ref No. : {n:024d}"
 
 
+def _opening_balance_for_closing(txns: list[AccountTxn], target_closing: float) -> float:
+    """Solves for the opening balance that makes this txn list close at
+    target_closing, so a new statement can be chained to land exactly on an
+    existing, already-committed statement's fixed opening balance without
+    hand-computing the running total."""
+    net = sum(t.deposit or 0 for t in txns) - sum(t.withdrawal or 0 for t in txns)
+    return round(target_closing - net, 2)
+
+
 def main():
     OUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    # ---- Account statement 0: Jan 2024 (chained to close exactly at Feb's
+    # fixed opening_balance below, so the two-month history is continuous) ----
+    txns0 = [
+        AccountTxn("02 Jan", ["NETS Debit-Consumer", "NTUC FAIRPRICE 00000010", "xxxxxx0000"], withdrawal=32.50),
+        AccountTxn("04 Jan", ["Bill Payment", "mBK-UOB Cards", "0000111122223333"], withdrawal=110.00),
+        AccountTxn("06 Jan", ["PAYNOW-FAST", "PIB0000000000000010", "SAMPLE PAYEE A", "OTHR Transfer - Mobile"], withdrawal=20.00),
+        AccountTxn("08 Jan", ["NETS Debit-Consumer", "STARBUCKS 00000011", "xxxxxx0000"], withdrawal=7.80),
+        AccountTxn("10 Jan", ["GRAB* RIDE SINGAPORE"], withdrawal=14.20),
+        AccountTxn("12 Jan", ["NETFLIX.COM"], withdrawal=15.98),
+        AccountTxn("15 Jan", ["Inward CR - GIRO", "SALA Salary Payment", "SAMPLE EMPLOYER PTE LTD", "SALARY"], deposit=3200.00),
+        AccountTxn("18 Jan", ["SHOPEE *ORDER 00000012"], withdrawal=38.60),
+        AccountTxn("20 Jan", ["PAYNOW-FAST", "PAYNOW OTHR", "SAMPLE PAYEE B", "SAMPLE PAYEE B"], withdrawal=18.50),
+        AccountTxn("24 Jan", ["DECATHLON SINGAPORE"], withdrawal=45.00),
+        AccountTxn("27 Jan", ["Inward DR - GIRO", "TAXS S0000000B", "IRAS", "Income Tax"], withdrawal=95.00),
+        AccountTxn("29 Jan", ["Interest Credit"], deposit=1.08),
+    ]
+    generate_account_statement(
+        "SampleAccountStatement_Jan2024.pdf",
+        "01 Jan 2024 to 31 Jan 2024",
+        "01 Jan",
+        "One Account",
+        "000-111-222-3",
+        opening_balance=_opening_balance_for_closing(txns0, target_closing=5000.00),
+        txns=txns0,
+    )
 
     # ---- Account statement 1: Feb 2024 (ordinary month, includes a
     # refund pair and the self-transfer-to-own-card exclusion scenario) ----
     txns = [
-        AccountTxn("02 Feb", ["NETS Debit-Consumer", "SAMPLE MART 00000001", "xxxxxx0000"], withdrawal=12.40, balance=4987.60),
-        AccountTxn("03 Feb", ["PAYNOW-FAST", "PIB0000000000000001", "SAMPLE PAYEE A", "OTHR Transfer - Mobile"], withdrawal=25.00, balance=4962.60),
-        AccountTxn("04 Feb", ["Bill Payment", "mBK-UOB Cards", "0000111122223333"], withdrawal=150.00, balance=4812.60),
-        AccountTxn("05 Feb", ["SAMPLE ONLINE STORE"], withdrawal=49.90, balance=4762.70),
-        AccountTxn("07 Feb", ["Inward CR - GIRO", "SALA Salary Payment", "SAMPLE EMPLOYER PTE LTD", "SALARY"], deposit=3200.00, balance=7962.70),
-        AccountTxn("09 Feb", ["PAYNOW-FAST", "PAYNOW OTHR", "SAMPLE PAYEE B", "SAMPLE PAYEE B"], withdrawal=18.50, balance=7944.20),
-        AccountTxn("11 Feb", ["SAMPLE ONLINE STORE REFUND"], deposit=49.90, balance=7994.10),
-        AccountTxn("14 Feb", ["NETS Debit-Consumer", "SAMPLE CAFE 00000002", "xxxxxx0000"], withdrawal=6.80, balance=7987.30),
-        AccountTxn("18 Feb", ["Inward DR - GIRO", "TAXS S0000000A", "IRAS", "Income Tax"], withdrawal=120.00, balance=7867.30),
-        AccountTxn("22 Feb", ["PAYNOW-FAST", "PIB0000000000000002", "SAMPLE PAYEE A", "OTHR Transfer - Mobile"], withdrawal=25.00, balance=7842.30),
-        AccountTxn("29 Feb", ["Interest Credit"], deposit=1.15, balance=7843.45),
+        AccountTxn("02 Feb", ["NETS Debit-Consumer", "SAMPLE MART 00000001", "xxxxxx0000"], withdrawal=12.40),
+        AccountTxn("03 Feb", ["PAYNOW-FAST", "PIB0000000000000001", "SAMPLE PAYEE A", "OTHR Transfer - Mobile"], withdrawal=25.00),
+        AccountTxn("04 Feb", ["Bill Payment", "mBK-UOB Cards", "0000111122223333"], withdrawal=150.00),
+        AccountTxn("05 Feb", ["SAMPLE ONLINE STORE"], withdrawal=49.90),
+        AccountTxn("07 Feb", ["Inward CR - GIRO", "SALA Salary Payment", "SAMPLE EMPLOYER PTE LTD", "SALARY"], deposit=3200.00),
+        AccountTxn("09 Feb", ["PAYNOW-FAST", "PAYNOW OTHR", "SAMPLE PAYEE B", "SAMPLE PAYEE B"], withdrawal=18.50),
+        AccountTxn("11 Feb", ["SAMPLE ONLINE STORE REFUND"], deposit=49.90),
+        AccountTxn("14 Feb", ["NETS Debit-Consumer", "SAMPLE CAFE 00000002", "xxxxxx0000"], withdrawal=6.80),
+        AccountTxn("18 Feb", ["Inward DR - GIRO", "TAXS S0000000A", "IRAS", "Income Tax"], withdrawal=120.00),
+        AccountTxn("22 Feb", ["PAYNOW-FAST", "PIB0000000000000002", "SAMPLE PAYEE A", "OTHR Transfer - Mobile"], withdrawal=25.00),
+        AccountTxn("29 Feb", ["Interest Credit"], deposit=1.15),
     ]
     generate_account_statement(
         "SampleAccountStatement_Feb2024.pdf",
@@ -317,22 +373,19 @@ def main():
         "000-111-222-3",
         opening_balance=5000.00,
         txns=txns,
-        closing_balance=7843.45,
-        total_withdrawals=sum(t.withdrawal or 0 for t in txns),
-        total_deposits=sum(t.deposit or 0 for t in txns),
     )
 
     # ---- Account statement 2: Mar 2024 (different month, same account -
     # exercises duplicate-detection across statements when both are loaded) ----
     txns2 = [
-        AccountTxn("01 Mar", ["NETS Debit-Consumer", "SAMPLE MART 00000003", "xxxxxx0000"], withdrawal=15.20, balance=7828.25),
-        AccountTxn("05 Mar", ["PAYNOW-FAST", "PIB0000000000000003", "SAMPLE PAYEE C", "OTHR Transfer - UEN"], withdrawal=88.00, balance=7740.25),
-        AccountTxn("08 Mar", ["Bill Payment", "mBK-UOB Cards", "0000111122223333"], withdrawal=95.40, balance=7644.85),
-        AccountTxn("12 Mar", ["Inward CR - GIRO", "SALA Salary Payment", "SAMPLE EMPLOYER PTE LTD", "SALARY"], deposit=3200.00, balance=10844.85),
-        AccountTxn("20 Mar", ["PAYNOW-FAST", "PAYNOW OTHR", "SAMPLE PAYEE B", "SAMPLE PAYEE B"], withdrawal=18.50, balance=10826.35),
-        AccountTxn("31 Mar", ["Interest Credit"], deposit=1.42, balance=10827.77),
+        AccountTxn("01 Mar", ["NETS Debit-Consumer", "SAMPLE MART 00000003", "xxxxxx0000"], withdrawal=15.20),
+        AccountTxn("05 Mar", ["PAYNOW-FAST", "PIB0000000000000003", "SAMPLE PAYEE C", "OTHR Transfer - UEN"], withdrawal=88.00),
+        AccountTxn("08 Mar", ["Bill Payment", "mBK-UOB Cards", "0000111122223333"], withdrawal=95.40),
+        AccountTxn("12 Mar", ["Inward CR - GIRO", "SALA Salary Payment", "SAMPLE EMPLOYER PTE LTD", "SALARY"], deposit=3200.00),
+        AccountTxn("20 Mar", ["PAYNOW-FAST", "PAYNOW OTHR", "SAMPLE PAYEE B", "SAMPLE PAYEE B"], withdrawal=18.50),
+        AccountTxn("31 Mar", ["Interest Credit"], deposit=1.42),
     ]
-    generate_account_statement(
+    _, mar_closing = generate_account_statement(
         "SampleAccountStatement_Mar2024.pdf",
         "01 Mar 2024 to 31 Mar 2024",
         "01 Mar",
@@ -340,10 +393,105 @@ def main():
         "000-111-222-3",
         opening_balance=7843.45,
         txns=txns2,
-        closing_balance=10827.77,
-        total_withdrawals=sum(t.withdrawal or 0 for t in txns2),
-        total_deposits=sum(t.deposit or 0 for t in txns2),
     )
+
+    # ---- Account statement 3: Apr 2024 (insurance GIRO deduction + an
+    # Interactive Brokers PayNow transfer, chained from Mar's closing) ----
+    txns3 = [
+        AccountTxn("02 Apr", ["NETS Debit-Consumer", "COLD STORAGE 00000013", "xxxxxx0000"], withdrawal=58.40),
+        AccountTxn("04 Apr", ["Bill Payment", "mBK-UOB Cards", "0000111122223333"], withdrawal=180.00),
+        AccountTxn("06 Apr", ["Inward Dr Giro Othr", "E18127522491", "Income Insurance Lim", "1812752249"], withdrawal=210.50),
+        AccountTxn("09 Apr", ["SAMPLE ONLINE STORE"], withdrawal=59.90),
+        AccountTxn("11 Apr", ["PAYNOW-FAST", "PIB0000000000000020", "INTERACTIVE BR SG- R", "OTHR Transfer - Mobile"], withdrawal=500.00),
+        AccountTxn("13 Apr", ["IKEA SINGAPORE"], withdrawal=89.90),
+        AccountTxn("15 Apr", ["Inward CR - GIRO", "SALA Salary Payment", "SAMPLE EMPLOYER PTE LTD", "SALARY"], deposit=3200.00),
+        AccountTxn("17 Apr", ["WATSONS SINGAPORE"], withdrawal=22.30),
+        AccountTxn("20 Apr", ["KINOKUNIYA SINGAPORE"], withdrawal=48.00),
+        AccountTxn("24 Apr", ["PAYNOW-FAST", "PAYNOW OTHR", "SAMPLE PAYEE B", "SAMPLE PAYEE B"], withdrawal=18.50),
+        AccountTxn("26 Apr", ["SAMPLE ONLINE STORE REFUND"], deposit=59.90),
+        AccountTxn("30 Apr", ["Interest Credit"], deposit=1.62),
+    ]
+    _, apr_closing = generate_account_statement(
+        "SampleAccountStatement_Apr2024.pdf",
+        "01 Apr 2024 to 30 Apr 2024",
+        "01 Apr",
+        "One Account",
+        "000-111-222-3",
+        opening_balance=mar_closing,
+        txns=txns3,
+    )
+
+    # ---- Account statement 4: May 2024 (property tax + more merchant
+    # variety, chained from Apr's closing) ----
+    txns4 = [
+        AccountTxn("03 May", ["NETS Debit-Consumer", "SHENG SIONG 00000014", "xxxxxx0000"], withdrawal=41.20),
+        AccountTxn("05 May", ["SP GROUP"], withdrawal=145.60),
+        AccountTxn("07 May", ["Bill Payment", "mBK-UOB Cards", "0000111122223333"], withdrawal=150.00),
+        AccountTxn("09 May", ["GRABCAR SINGAPORE"], withdrawal=16.80),
+        AccountTxn("11 May", ["MCDONALDS SINGAPORE"], withdrawal=9.40),
+        AccountTxn("13 May", ["PAYNOW-FAST", "PIB0000000000000030", "SAMPLE PAYEE C", "OTHR Transfer - UEN"], withdrawal=65.00),
+        AccountTxn("15 May", ["Inward CR - GIRO", "SALA Salary Payment", "SAMPLE EMPLOYER PTE LTD", "SALARY"], deposit=3200.00),
+        AccountTxn("18 May", ["RAFFLES MEDICAL CLINIC"], withdrawal=88.00),
+        AccountTxn("20 May", ["COURSERA SINGAPORE"], withdrawal=52.00),
+        AccountTxn("22 May", ["Inward DR - GIRO", "TAXS S0000000C", "IRAS", "Property Tax"], withdrawal=310.00),
+        AccountTxn("25 May", ["PAYNOW-FAST", "PAYNOW OTHR", "SAMPLE PAYEE B", "SAMPLE PAYEE B"], withdrawal=18.50),
+        AccountTxn("28 May", ["NETS Debit-Consumer", "SAMPLE CAFE 00000015", "xxxxxx0000"], withdrawal=6.50),
+        AccountTxn("31 May", ["Interest Credit"], deposit=1.89),
+    ]
+    _, may_closing = generate_account_statement(
+        "SampleAccountStatement_May2024.pdf",
+        "01 May 2024 to 31 May 2024",
+        "01 May",
+        "One Account",
+        "000-111-222-3",
+        opening_balance=apr_closing,
+        txns=txns4,
+    )
+
+    # ---- Account statement 5: Jun 2024 (a second insurance + investing
+    # month, chained from May's closing) ----
+    txns5 = [
+        AccountTxn("02 Jun", ["NETS Debit-Consumer", "NTUC FAIRPRICE 00000016", "xxxxxx0000"], withdrawal=37.90),
+        AccountTxn("04 Jun", ["Bill Payment", "mBK-UOB Cards", "0000111122223333"], withdrawal=165.00),
+        AccountTxn("06 Jun", ["ANYTIME FITNESS SINGAPORE"], withdrawal=120.00),
+        AccountTxn("08 Jun", ["GOLDEN VILLAGE VIVOCITY"], withdrawal=32.00),
+        AccountTxn("10 Jun", ["Inward Dr Giro Othr", "E18127522500", "Income Insurance Lim", "1812752260"], withdrawal=210.50),
+        AccountTxn("12 Jun", ["PAYNOW-FAST", "PIB0000000000000040", "INTERACTIVE BR SG- R", "OTHR Transfer - Mobile"], withdrawal=400.00),
+        AccountTxn("15 Jun", ["Inward CR - GIRO", "SALA Salary Payment", "SAMPLE EMPLOYER PTE LTD", "SALARY"], deposit=3200.00),
+        AccountTxn("18 Jun", ["LAZADA SINGAPORE"], withdrawal=64.30),
+        AccountTxn("20 Jun", ["NAIL SPA SINGAPORE"], withdrawal=58.00),
+        AccountTxn("23 Jun", ["PAYNOW-FAST", "PAYNOW OTHR", "SAMPLE PAYEE B", "SAMPLE PAYEE B"], withdrawal=18.50),
+        AccountTxn("26 Jun", ["HOME-FIX SINGAPORE"], withdrawal=45.60),
+        AccountTxn("30 Jun", ["Interest Credit"], deposit=2.10),
+    ]
+    generate_account_statement(
+        "SampleAccountStatement_Jun2024.pdf",
+        "01 Jun 2024 to 30 Jun 2024",
+        "01 Jun",
+        "One Account",
+        "000-111-222-3",
+        opening_balance=may_closing,
+        txns=txns5,
+    )
+
+    # ---- Card statement 0: single card, Jan 2024 (first statement of the
+    # card's history in this dataset - no PAYMT credit yet) ----
+    card0_txns = [
+        CardTxn("04 JAN", "04 JAN", ["PAYMT THRU E-BANK/HOMEB/CYBERB (SAMPLE)"], amount=110.00),
+        CardTxn("06 JAN", "05 JAN", ["BUS/MRT 000000010 SINGAPORE", ref(11)], amount=-3.20),
+        CardTxn("09 JAN", "08 JAN", ["NTUC FAIRPRICE SINGAPORE", ref(12)], amount=-28.50),
+        CardTxn("14 JAN", "13 JAN", ["SPOTIFY SINGAPORE", ref(13)], amount=-11.98),
+        CardTxn("18 JAN", "17 JAN", ["KOI THE SINGAPORE", ref(14)], amount=-6.20),
+        CardTxn("22 JAN", "21 JAN", ["LAZADA SINGAPORE", ref(15)], amount=-41.52),
+    ]
+    card0 = Card(
+        name="UOB SAMPLE CARD",
+        number="0000-1111-2222-3333",
+        holder="SAMPLE CUSTOMER",
+        previous_balance=110.00,
+        txns=card0_txns,
+    )
+    generate_card_statement("SampleCardStatement_Jan2024.pdf", "20 JAN 2024", "12 FEB 2024", [card0])
 
     # ---- Card statement 1: single card, Feb 2024 (mirrors the account
     # statement's mBK-UOB Cards bill payment as the matching CR side) ----
@@ -361,7 +509,6 @@ def main():
         holder="SAMPLE CUSTOMER",
         previous_balance=95.40,
         txns=card1_txns,
-        sub_total=95.40 - 150.00 + sum(-t.amount for t in card1_txns if t.amount < 0),
     )
     generate_card_statement("SampleCardStatement_Feb2024.pdf", "20 FEB 2024", "12 MAR 2024", [card1])
 
@@ -378,7 +525,6 @@ def main():
         holder="SAMPLE CUSTOMER",
         previous_balance=0.00,
         txns=cardA_txns,
-        sub_total=sum(-t.amount for t in cardA_txns),
     )
     cardB_txns = [
         CardTxn("05 MAR", "04 MAR", ["SAMPLE AIRLINE BOOKING", ref(9)], amount=-410.00),
@@ -391,11 +537,64 @@ def main():
         holder="SAMPLE CUSTOMER",
         previous_balance=200.00,
         txns=cardB_txns,
-        sub_total=200.00 - 200.00 + sum(-t.amount for t in cardB_txns if t.amount < 0),
     )
     generate_card_statement(
         "SampleCardStatement_MultiCard_Mar2024.pdf", "20 MAR 2024", "12 APR 2024", [cardA, cardB]
     )
+
+    # ---- Card statement 3: single card, Apr 2024 ----
+    card3_txns = [
+        CardTxn("04 APR", "04 APR", ["PAYMT THRU E-BANK/HOMEB/CYBERB (SAMPLE)"], amount=180.00),
+        CardTxn("06 APR", "05 APR", ["GRABCAR SINGAPORE", ref(16)], amount=-13.50),
+        CardTxn("10 APR", "09 APR", ["MCDONALDS SINGAPORE", ref(17)], amount=-8.90),
+        CardTxn("14 APR", "13 APR", ["SEPHORA SINGAPORE", ref(18)], amount=-64.00),
+        CardTxn("18 APR", "17 APR", ["DECATHLON SINGAPORE", ref(19)], amount=-55.00),
+        CardTxn("22 APR", "21 APR", ["GYMBOXX SINGAPORE", ref(20)], amount=-88.00),
+    ]
+    card3 = Card(
+        name="UOB SAMPLE CARD",
+        number="0000-1111-2222-3333",
+        holder="SAMPLE CUSTOMER",
+        previous_balance=90.00,
+        txns=card3_txns,
+    )
+    generate_card_statement("SampleCardStatement_Apr2024.pdf", "20 APR 2024", "12 MAY 2024", [card3])
+
+    # ---- Card statement 4: single card, May 2024 ----
+    card4_txns = [
+        CardTxn("07 MAY", "07 MAY", ["PAYMT THRU E-BANK/HOMEB/CYBERB (SAMPLE)"], amount=150.00),
+        CardTxn("09 MAY", "08 MAY", ["COMFORTDELGRO SINGAPORE", ref(21)], amount=-18.40),
+        CardTxn("12 MAY", "11 MAY", ["KFC SINGAPORE", ref(22)], amount=-11.50),
+        CardTxn("16 MAY", "15 MAY", ["WATSONS SINGAPORE", ref(23)], amount=-19.90),
+        CardTxn("20 MAY", "19 MAY", ["UNITY PHARMACY SINGAPORE", ref(24)], amount=-24.60),
+        CardTxn("24 MAY", "23 MAY", ["SPOTIFY SINGAPORE", ref(25)], amount=-11.98),
+    ]
+    card4 = Card(
+        name="UOB SAMPLE CARD",
+        number="0000-1111-2222-3333",
+        holder="SAMPLE CUSTOMER",
+        previous_balance=70.00,
+        txns=card4_txns,
+    )
+    generate_card_statement("SampleCardStatement_May2024.pdf", "20 MAY 2024", "12 JUN 2024", [card4])
+
+    # ---- Card statement 5: single card, Jun 2024 ----
+    card5_txns = [
+        CardTxn("04 JUN", "04 JUN", ["PAYMT THRU E-BANK/HOMEB/CYBERB (SAMPLE)"], amount=165.00),
+        CardTxn("06 JUN", "05 JUN", ["GYMBOXX SINGAPORE", ref(26)], amount=-45.00),
+        CardTxn("10 JUN", "09 JUN", ["GOLDEN VILLAGE VIVOCITY", ref(27)], amount=-16.00),
+        CardTxn("14 JUN", "13 JUN", ["TOAST BOX SINGAPORE", ref(28)], amount=-5.60),
+        CardTxn("18 JUN", "17 JUN", ["SHOPEE *ORDER SINGAPORE", ref(29)], amount=-33.20),
+        CardTxn("22 JUN", "21 JUN", ["HOME-FIX SINGAPORE", ref(30)], amount=-22.00),
+    ]
+    card5 = Card(
+        name="UOB SAMPLE CARD",
+        number="0000-1111-2222-3333",
+        holder="SAMPLE CUSTOMER",
+        previous_balance=50.00,
+        txns=card5_txns,
+    )
+    generate_card_statement("SampleCardStatement_Jun2024.pdf", "20 JUN 2024", "12 JUL 2024", [card5])
 
     print("Generated sample PDFs in", OUT_DIR)
 
