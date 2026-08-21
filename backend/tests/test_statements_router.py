@@ -21,7 +21,7 @@ def _upload(client, path=ACCOUNT_SAMPLE, password=None):
         data = {"password": password} if password else {}
         return client.post(
             "/api/statements/upload",
-            files={"file": ("statement.pdf", f, "application/pdf")},
+            files={"files": ("statement.pdf", f, "application/pdf")},
             data=data,
         )
 
@@ -43,7 +43,7 @@ def test_upload_parses_and_stages(client):
 def test_upload_rejects_non_pdf(client):
     resp = client.post(
         "/api/statements/upload",
-        files={"file": ("statement.csv", io.BytesIO(b"date,desc,amount"), "text/csv")},
+        files={"files": ("statement.csv", io.BytesIO(b"date,desc,amount"), "text/csv")},
     )
     assert resp.status_code == 422
     assert resp.json()["detail"]["code"] == "UNPARSEABLE_STATEMENT_FORMAT"
@@ -57,7 +57,7 @@ def test_upload_rejects_unrecognized_pdf(client):
     buf.seek(0)
     resp = client.post(
         "/api/statements/upload",
-        files={"file": ("statement.pdf", buf, "application/pdf")},
+        files={"files": ("statement.pdf", buf, "application/pdf")},
     )
     assert resp.status_code == 422
     assert resp.json()["detail"]["code"] == "UNPARSEABLE_STATEMENT_FORMAT"
@@ -75,7 +75,7 @@ def test_upload_requires_password_for_encrypted_pdf(client):
     buf.seek(0)
     resp = client.post(
         "/api/statements/upload",
-        files={"file": ("statement.pdf", buf, "application/pdf")},
+        files={"files": ("statement.pdf", buf, "application/pdf")},
     )
     assert resp.status_code == 422
     assert resp.json()["detail"]["code"] == "ENCRYPTED_PDF_PASSWORD_REQUIRED"
@@ -142,6 +142,47 @@ def test_current_staging_batch(client):
     assert current["batch_id"] == body["batch_id"]
 
     client.delete(f"/api/statements/staging/{body['batch_id']}")
+    assert client.get("/api/statements/staging/current").status_code == 404
+
+
+def test_upload_multiple_files_merges_into_one_batch(client):
+    feb = "../PDF Examples (Sanitized)/UOB/Account Statements/SampleAccountStatement_Feb2024.pdf"
+    mar = "../PDF Examples (Sanitized)/UOB/Account Statements/SampleAccountStatement_Mar2024.pdf"
+    with open(feb, "rb") as f1, open(mar, "rb") as f2:
+        resp = client.post(
+            "/api/statements/upload",
+            files=[
+                ("files", ("feb.pdf", f1, "application/pdf")),
+                ("files", ("mar.pdf", f2, "application/pdf")),
+            ],
+        )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["source_filenames"] == ["feb.pdf", "mar.pdf"]
+    # one shared account across both statements - not duplicated in the merged batch
+    assert len(body["accounts"]) == 1
+    assert body["duplicates_skipped"] == 0
+    assert len(body["rows"]) == body["new_extracted"]
+
+    commit_resp = client.post(f"/api/statements/staging/{body['batch_id']}/commit")
+    assert commit_resp.status_code == 200
+    assert commit_resp.json()["accounts_provisioned"] == 1
+    assert commit_resp.json()["transactions_committed"] == body["new_extracted"]
+
+
+def test_upload_multiple_files_aborts_batch_on_any_failure(client):
+    feb = "../PDF Examples (Sanitized)/UOB/Account Statements/SampleAccountStatement_Feb2024.pdf"
+    with open(feb, "rb") as f1:
+        resp = client.post(
+            "/api/statements/upload",
+            files=[
+                ("files", ("feb.pdf", f1, "application/pdf")),
+                ("files", ("bad.csv", io.BytesIO(b"not a pdf"), "text/csv")),
+            ],
+        )
+    assert resp.status_code == 422
+    assert resp.json()["detail"]["code"] == "UNPARSEABLE_STATEMENT_FORMAT"
+    # no partial batch should have been staged
     assert client.get("/api/statements/staging/current").status_code == 404
 
 

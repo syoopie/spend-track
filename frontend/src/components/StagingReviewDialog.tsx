@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useCategories, useCommitBatch, useCurrentStagingBatch, useDiscardBatch, useUpdateStagingRow } from '../api/hooks'
 import { categoryColor } from '../lib/categoryColor'
 import { fmtDate, fmtSigned } from '../lib/format'
+import { Checkbox } from './Checkbox'
 import { Modal } from './Modal'
 import type { StagingRow } from '../api/types'
 
@@ -44,11 +45,11 @@ function StagingRowPopover({
         </select>
       </div>
       <label className="flex items-center gap-1.5 text-[12px] text-text pb-2 cursor-pointer">
-        <input type="checkbox" checked={saveAsRule} onChange={(e) => setSaveAsRule(e.target.checked)} />
+        <Checkbox checked={saveAsRule} onChange={setSaveAsRule} />
         Save as rule
       </label>
       <label className="flex items-center gap-1.5 text-[12px] text-text pb-2 cursor-pointer">
-        <input type="checkbox" checked={saveAsContact} onChange={(e) => setSaveAsContact(e.target.checked)} />
+        <Checkbox checked={saveAsContact} onChange={setSaveAsContact} />
         Save as contact mapping
       </label>
       <button
@@ -105,7 +106,7 @@ export function StagingReviewDialog({ onClose }: { onClose: () => void }) {
         <div>
           <div className="text-lg font-bold">Staging &amp; Pre-Commit Review</div>
           <div className="text-[13px] text-muted mt-0.5 mb-4">
-            {batch.source_filename} — parsed, awaiting commit
+            {batch.source_filenames.join(', ')} — parsed, awaiting commit
           </div>
         </div>
         <button

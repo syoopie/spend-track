@@ -8,7 +8,9 @@ commit - acceptable for a local single-user tool.
 
 Only one batch may be staged at a time - a second upload is rejected until
 the pending one is committed or discarded (see routers/statements.py), so
-the review UI never has to juggle more than a single pending statement.
+the review UI never has to juggle more than a single pending statement. A
+single upload can bundle multiple PDF files (see upload_statement); those
+are merged into one batch here rather than tracked as separate batches.
 """
 
 import uuid
@@ -44,7 +46,7 @@ class StagingRow:
 
 @dataclass
 class StagingBatch:
-    source_filename: str
+    source_filenames: list[str]
     bank_name: str
     accounts: list[StagingAccount]
     rows: list[StagingRow]

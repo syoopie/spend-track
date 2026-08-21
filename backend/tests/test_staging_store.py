@@ -5,7 +5,7 @@ from app.engine.staging_store import StagingAccount, StagingBatch, StagingRow, S
 
 def make_batch():
     return StagingBatch(
-        source_filename="statement.pdf",
+        source_filenames=["statement.pdf"],
         bank_name="UOB",
         accounts=[
             StagingAccount(

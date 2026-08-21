@@ -43,7 +43,8 @@ function PasswordModal({
       <div className="text-base font-bold mb-2.5">Password Protected</div>
       <div className="text-[13px] text-muted mb-4 leading-relaxed">
         <span className="text-text font-medium">{filename}</span> is encrypted. Enter its password to unlock it -
-        processing happens locally and the password is never saved.
+        processing happens locally and the password is never saved. The same password is tried against every file
+        in this upload.
       </div>
       <input
         autoFocus
@@ -84,35 +85,38 @@ export function UploadProvider({ children }: { children: ReactNode }) {
   const [dragActive, setDragActive] = useState(false)
   const dragCounter = useRef(0)
 
-  const [pendingFile, setPendingFile] = useState<File | null>(null)
+  const [pendingFiles, setPendingFiles] = useState<File[]>([])
   const [passwordModalOpen, setPasswordModalOpen] = useState(false)
   const [passwordError, setPasswordError] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
-  async function handleFile(file: File, password?: string) {
-    if (hasPendingBatch) return
-    if (!password && !isPdfFile(file)) {
-      setErrorMessage('Only PDF statements are supported.')
-      setDialogOpen(true)
-      return
+  async function handleFiles(files: File[], password?: string) {
+    if (hasPendingBatch || files.length === 0) return
+    if (!password) {
+      const nonPdf = files.find((f) => !isPdfFile(f))
+      if (nonPdf) {
+        setErrorMessage(`"${nonPdf.name}" is not a PDF - only PDF statements are supported.`)
+        setDialogOpen(true)
+        return
+      }
     }
     setErrorMessage(null)
     setPasswordError(null)
     try {
-      await upload.mutateAsync({ file, password })
+      await upload.mutateAsync({ files, password })
       setDialogOpen(false)
       setPasswordModalOpen(false)
-      setPendingFile(null)
+      setPendingFiles([])
       setReviewOpen(true)
     } catch (e) {
       if (e instanceof ApiError) {
         if (e.code === 'ENCRYPTED_PDF_PASSWORD_REQUIRED') {
-          setPendingFile(file)
+          setPendingFiles(files)
           setPasswordModalOpen(true)
           return
         }
         if (e.code === 'INCORRECT_PDF_PASSWORD') {
-          setPendingFile(file)
+          setPendingFiles(files)
           setPasswordModalOpen(true)
           setPasswordError(e.message)
           return
@@ -120,7 +124,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
         setErrorMessage(e.message)
         setDialogOpen(true)
       } else {
-        setErrorMessage('Something went wrong uploading this file.')
+        setErrorMessage('Something went wrong uploading these files.')
         setDialogOpen(true)
       }
     }
@@ -128,8 +132,8 @@ export function UploadProvider({ children }: { children: ReactNode }) {
 
   // Kept fresh via ref so the window listeners (registered once) always call
   // the latest closure without needing to re-attach on every render.
-  const handleFileRef = useRef(handleFile)
-  handleFileRef.current = handleFile
+  const handleFilesRef = useRef(handleFiles)
+  handleFilesRef.current = handleFiles
   const hasPendingBatchRef = useRef(hasPendingBatch)
   hasPendingBatchRef.current = hasPendingBatch
 
@@ -155,8 +159,8 @@ export function UploadProvider({ children }: { children: ReactNode }) {
       e.preventDefault()
       dragCounter.current = 0
       setDragActive(false)
-      const file = e.dataTransfer?.files?.[0]
-      if (file) handleFileRef.current(file)
+      const files = Array.from(e.dataTransfer?.files ?? [])
+      if (files.length) handleFilesRef.current(files)
     }
     window.addEventListener('dragenter', onDragEnter)
     window.addEventListener('dragover', onDragOver)
@@ -189,7 +193,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
       {dragActive && (
         <div className="fixed inset-0 z-[70] pointer-events-none flex items-center justify-center bg-accent/10 backdrop-blur-[2px]">
           <div className="border-2 border-dashed border-accent rounded-2xl px-16 py-12 bg-card/90 text-center">
-            <div className="text-lg font-semibold text-text mb-1.5">Drop to upload statement</div>
+            <div className="text-lg font-semibold text-text mb-1.5">Drop to upload statement(s)</div>
             <div className="text-[13px] text-muted">PDF e-statements · processed locally, never uploaded</div>
           </div>
         </div>
@@ -214,10 +218,11 @@ export function UploadProvider({ children }: { children: ReactNode }) {
               ref={fileInputRef}
               type="file"
               accept="application/pdf"
+              multiple
               className="hidden"
               onChange={(e) => {
-                const file = e.target.files?.[0]
-                if (file) handleFile(file)
+                const files = Array.from(e.target.files ?? [])
+                if (files.length) handleFiles(files)
                 e.target.value = ''
               }}
             />
@@ -228,7 +233,9 @@ export function UploadProvider({ children }: { children: ReactNode }) {
                 <rect x="2" y="12.5" width="12" height="2" fill="none" stroke="#e35fd0" strokeWidth="1.6" />
               </svg>
             </div>
-            <div className="text-sm font-semibold text-text mb-1.5">Drag &amp; drop a PDF anywhere in the app</div>
+            <div className="text-sm font-semibold text-text mb-1.5">
+              Drag &amp; drop one or more PDFs anywhere in the app
+            </div>
             <div className="text-[12px] text-muted mb-4">DBS, OCBC, or UOB e-statements · processed locally, never uploaded</div>
             <button
               disabled={upload.isPending}
@@ -241,15 +248,15 @@ export function UploadProvider({ children }: { children: ReactNode }) {
         </Modal>
       )}
 
-      {passwordModalOpen && pendingFile && (
+      {passwordModalOpen && pendingFiles.length > 0 && (
         <PasswordModal
-          filename={pendingFile.name}
+          filename={pendingFiles.length === 1 ? pendingFiles[0].name : `${pendingFiles.length} files`}
           errorMessage={passwordError}
           onCancel={() => {
             setPasswordModalOpen(false)
-            setPendingFile(null)
+            setPendingFiles([])
           }}
-          onSubmit={(password) => handleFile(pendingFile, password)}
+          onSubmit={(password) => handleFiles(pendingFiles, password)}
         />
       )}
     </UploadContext.Provider>

@@ -118,6 +118,15 @@ def _spend_velocity(current: list[float], previous: list[float]) -> list[Velocit
     return points
 
 
+_PAYNOW_LABEL_PREFIX = "PayNow to "
+
+
+def _strip_paynow_prefix(label: str | None) -> str | None:
+    if label and label.startswith(_PAYNOW_LABEL_PREFIX):
+        return label[len(_PAYNOW_LABEL_PREFIX):]
+    return label
+
+
 def _top_entries(txs: list[sqlite3.Row], contact_names: dict[int, str], *, paynow: bool, limit: int = 5) -> list[TopEntry]:
     totals: dict[str, float] = defaultdict(float)
     for t in txs:
@@ -126,10 +135,17 @@ def _top_entries(txs: list[sqlite3.Row], contact_names: dict[int, str], *, payno
         is_paynow_tx = t["category"] == "PayNow Transfers"
         if is_paynow_tx != paynow:
             continue
-        if is_paynow_tx and t["contact_id"] is not None:
-            name = contact_names.get(t["contact_id"], normalize_merchant(t["raw_description"]).title())
+        if is_paynow_tx:
+            # matched_label is already "PayNow to {name}" (see engine/rules.py)
+            # - the contact's own name wins when we have one, otherwise fall
+            # back to whatever name was extracted from the raw description.
+            name = (
+                contact_names.get(t["contact_id"])
+                if t["contact_id"] is not None
+                else None
+            ) or _strip_paynow_prefix(t["matched_label"]) or normalize_merchant(t["raw_description"]).title()
         else:
-            name = normalize_merchant(t["raw_description"]).title() or t["raw_description"]
+            name = t["matched_label"] or normalize_merchant(t["raw_description"]).title() or t["raw_description"]
         totals[name] += -t["amount"]
     ranked = sorted(totals.items(), key=lambda kv: -kv[1])[:limit]
     return [TopEntry(name=name, amount=round(amt, 2)) for name, amt in ranked]
