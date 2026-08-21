@@ -170,9 +170,9 @@ export function Rules() {
               onDragStart={() => setDraggedId(r.id)}
               onDragOver={(e) => e.preventDefault()}
               onDrop={() => handleDrop(r.id)}
-              className="flex items-center gap-3.5 px-5 py-3.5 border-b border-[#24252e] group"
+              className="flex items-center gap-3.5 px-5 py-3.5 border-b border-divider group"
             >
-              <span className="text-[#3a3b48] text-sm cursor-grab tracking-widest">⠿</span>
+              <span className="text-dim text-sm cursor-grab tracking-widest">⠿</span>
               <div className="w-6.5 h-6.5 rounded-md bg-input text-muted text-xs font-bold flex items-center justify-center shrink-0">
                 {r.priority}
               </div>

@@ -51,20 +51,20 @@ export function VelocityChart({
           const y = TOP_PAD + PLOT_H - f * PLOT_H
           return (
             <g key={f}>
-              <line x1={LEFT_PAD} y1={y} x2={LEFT_PAD + PLOT_W} y2={y} stroke="#24252e" strokeWidth="1" />
-              <text x={LEFT_PAD - 6} y={y + 3} textAnchor="end" fontSize="9" fill="#6b6c78">
+              <line x1={LEFT_PAD} y1={y} x2={LEFT_PAD + PLOT_W} y2={y} stroke="var(--color-divider)" strokeWidth="1" />
+              <text x={LEFT_PAD - 6} y={y + 3} textAnchor="end" fontSize="9" fill="var(--color-muted-2)">
                 {fmtCompact(f * max)}
               </text>
             </g>
           )
         })}
         {tickIdxs.map((i) => (
-          <text key={i} x={scaleX(i)} y={TOP_PAD + PLOT_H + 13} textAnchor="middle" fontSize="9" fill="#6b6c78">
+          <text key={i} x={scaleX(i)} y={TOP_PAD + PLOT_H + 13} textAnchor="middle" fontSize="9" fill="var(--color-muted-2)">
             {fmtDate(data[i].date)}
           </text>
         ))}
         {areaPath && <path d={areaPath} fill="var(--color-accent)" fillOpacity="0.1" stroke="none" />}
-        <polyline points={prevPoints} fill="none" stroke="#3a3b48" strokeWidth="2" />
+        <polyline points={prevPoints} fill="none" stroke="var(--color-dim)" strokeWidth="2" />
         <polyline points={currentPoints} fill="none" stroke="var(--color-accent)" strokeWidth="2.5" />
         {n > 0 && (
           <circle cx={scaleX(n - 1)} cy={scaleY(finalCurrent)} r="3" fill="var(--color-accent)" />
@@ -76,7 +76,7 @@ export function VelocityChart({
             <span className="text-accent">━</span> {periodLabel} (current)
           </span>
           <span>
-            <span className="text-[#3a3b48]">━</span> {prevPeriodLabel}
+            <span className="text-dim">━</span> {prevPeriodLabel}
           </span>
         </div>
         <div className="text-[11px] font-mono">

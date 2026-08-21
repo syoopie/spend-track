@@ -19,7 +19,7 @@ export function CategoryDonut({
     cumulative += s.pct
     return `${categoryDotColor(categories, s.category)} ${from}% ${cumulative}%`
   })
-  const gradient = stops.length ? `conic-gradient(${stops.join(', ')})` : '#3a3b48'
+  const gradient = stops.length ? `conic-gradient(${stops.join(', ')})` : 'var(--color-dim)'
   const total = data.reduce((sum, s) => sum + s.amount, 0)
 
   const content = (
@@ -36,7 +36,7 @@ export function CategoryDonut({
           {data.map((s) => {
             const Icon = categoryIcon(categories, s.category)
             return (
-              <div key={s.category} className="flex items-center gap-1.5 text-[#c6c6cf]">
+              <div key={s.category} className="flex items-center gap-1.5 text-text-2">
                 <Icon size={12} color={categoryDotColor(categories, s.category)} className="shrink-0" />
                 {s.category} <span className="text-muted-2">{s.pct}%</span>
               </div>

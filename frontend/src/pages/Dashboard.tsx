@@ -250,9 +250,9 @@ export function Dashboard() {
             <>
               {s.top_merchants.length === 0 && <div className="text-xs text-muted-2 py-1">No spending yet</div>}
               {s.top_merchants.map((m) => (
-                <div key={m.name} className="flex justify-between text-[13px] py-1.5 border-b border-[#24252e]">
+                <div key={m.name} className="flex justify-between text-[13px] py-1.5 border-b border-divider">
                   <span>{m.name}</span>
-                  <span className="font-mono text-[#c6c6cf]">{fmtPlain(m.amount)}</span>
+                  <span className="font-mono text-text-2">{fmtPlain(m.amount)}</span>
                 </div>
               ))}
             </>
@@ -261,9 +261,9 @@ export function Dashboard() {
             <>
               {s.top_paynow_contacts.length === 0 && <div className="text-xs text-muted-2 py-1">No PayNow transfers yet</div>}
               {s.top_paynow_contacts.map((p) => (
-                <div key={p.name} className="flex justify-between text-[13px] py-1.5 border-b border-[#24252e]">
+                <div key={p.name} className="flex justify-between text-[13px] py-1.5 border-b border-divider">
                   <span>{p.name}</span>
-                  <span className="font-mono text-[#c6c6cf]">{fmtPlain(p.amount)}</span>
+                  <span className="font-mono text-text-2">{fmtPlain(p.amount)}</span>
                 </div>
               ))}
             </>
@@ -301,7 +301,7 @@ export function Dashboard() {
             </label>
           </div>
         </div>
-        <div className="grid grid-cols-[80px_1fr_140px_130px_110px_30px_30px] px-5 py-2.5 text-[11px] text-muted-2 uppercase tracking-wide border-b border-[#24252e]">
+        <div className="grid grid-cols-[80px_1fr_140px_130px_110px_30px_30px] px-5 py-2.5 text-[11px] text-muted-2 uppercase tracking-wide border-b border-divider">
           <div>Date</div>
           <div>Description</div>
           <div>Category</div>
@@ -322,7 +322,7 @@ export function Dashboard() {
           return (
             <div key={tx.id}>
               <div
-                className="grid grid-cols-[80px_1fr_140px_130px_110px_30px_30px] items-center px-5 py-3 text-[13px] border-b border-[#24252e] group"
+                className="grid grid-cols-[80px_1fr_140px_130px_110px_30px_30px] items-center px-5 py-3 text-[13px] border-b border-divider group"
                 style={{ opacity: tx.is_excluded ? 0.5 : 1 }}
               >
                 <div className="text-muted font-mono text-xs">{fmtDate(tx.transaction_date)}</div>
