@@ -51,7 +51,7 @@ export function Sidebar() {
         className="flex items-center justify-center gap-1.5 px-2.5 py-2.5 rounded-lg text-sm font-semibold mb-3.5 border-none bg-accent text-accent-fg cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <Upload size={15} className="shrink-0" />
-        Upload Statement
+        Upload Bank Statement
       </button>
 
       {NAV_ITEMS.map((item) => (

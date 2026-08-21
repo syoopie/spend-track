@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useCategories, useCreateRule, useDeleteRule, useReorderRules, useRules } from '../api/hooks'
+import { CategoryBadge } from '../components/CategoryBadge'
 import { Checkbox } from '../components/Checkbox'
 import { Modal } from '../components/Modal'
 import { Select } from '../components/Select'
-import { categoryColor } from '../lib/categoryColor'
+import { categoryIcon } from '../lib/categoryColor'
 import type { Rule } from '../api/types'
 
 function RuleBuilderModal({ onClose }: { onClose: () => void }) {
@@ -57,11 +58,14 @@ function RuleBuilderModal({ onClose }: { onClose: () => void }) {
             <div className="text-xs text-muted mb-1">Category</div>
             <Select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full">
               <option value="">Select category…</option>
-              {(categoriesQ.data ?? []).map((c) => (
-                <option key={c.id} value={c.name}>
-                  {c.name}
-                </option>
-              ))}
+              {(categoriesQ.data ?? []).map((c) => {
+                const Icon = categoryIcon(categoriesQ.data, c.name)
+                return (
+                  <option key={c.id} value={c.name}>
+                    <Icon size={12} className="shrink-0" /> {c.name}
+                  </option>
+                )
+              })}
             </Select>
           </div>
         )}
@@ -162,7 +166,6 @@ export function Rules() {
           <div className="p-5 text-muted text-sm">No rules yet — transactions fall back to contact matching, then "Others".</div>
         )}
         {rules.map((r) => {
-          const cc = categoryColor(categoriesQ.data, r.target_category ?? '')
           return (
             <div
               key={r.id}
@@ -192,9 +195,7 @@ export function Rules() {
                     <span className="text-muted-2 text-xs"> — {r.exclusion_reason}</span>
                   </>
                 ) : (
-                  <span className="text-[11px] px-2 py-0.5 rounded-md" style={{ background: cc.bg, color: cc.fg }}>
-                    {r.target_category}
-                  </span>
+                  <CategoryBadge category={r.target_category ?? ''} categories={categoriesQ.data} />
                 )}
               </div>
               <button
