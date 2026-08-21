@@ -1,19 +1,37 @@
 # SG Expenditure Tracker
 
-A local-only personal finance tool: upload DBS/OCBC/UOB bank statement PDFs, get transactions auto-categorized via a rules engine, refunds netted against their originals, and a post-mortem spending dashboard. Nothing leaves the machine — SQLite on disk, no external services.
+A local-only personal finance tool for Singapore bank statements. Upload a PDF, get every transaction auto-categorized, refunds automatically netted against their originals, and a post-mortem spending dashboard — without a single byte leaving your machine.
 
-Currently: **UOB PDF parsing is fully implemented** (Account Statements + Card Statements) and tested against real sample statements. DBS/OCBC are detected but not yet parsed (no sample statements were available to build against — see `CLAUDE.md`).
+![Dashboard](docs/screenshots/dashboard.jpg)
 
-## Stack
+## What it does
 
-- **Backend**: Python 3.12, FastAPI, SQLite (stdlib `sqlite3`), `pdfplumber` for PDF parsing, `pypdf` for encrypted-PDF handling. Managed with [`uv`](https://docs.astral.sh/uv/).
-- **Frontend**: React + TypeScript, Vite, Tailwind CSS v4, TanStack Query, React Router.
+- **Upload** UOB account and credit card e-statement PDFs (password-protected ones too) — one at a time or several at once, mixing months and statement types freely.
+- **Review before committing.** Every parsed transaction is staged first, pre-categorized, with anything ambiguous (like an unmapped PayNow transfer) flagged for a quick manual call.
+- **Categorize automatically**, via a priority-ordered rules engine: your own rules first, then a large built-in word bank of common SG merchants, then contact-based PayNow matching. Nothing you do is ever silently overridden — you can always see, and re-run, exactly why a transaction landed where it did.
+- **Catch duplicates and refunds.** Re-uploading an overlapping statement is safe — duplicate transactions are detected and skipped. Refunds are paired against their original purchase automatically (merchant-name matching, not just amount-matching, to avoid false positives).
+- **Avoid double-counting.** If you upload both a credit card statement and the linked bank account's statement, the GIRO payment settling the card bill is recognized and excluded — the spending is already counted on the card's own statement.
+- **Visualize it**: cash flow, category breakdown, spend velocity (this period's pace vs. the last), top merchants, and top PayNow contacts, all filterable by date range and account.
 
-## Running it
+Everything is stored in a single SQLite file on disk. There's no account system, no server to talk to, and no telemetry — see the [design decisions](#design-decisions) below for what that trade-off actually means in the code.
 
-**Easiest**: double-click `start.bat` (or run `powershell -ExecutionPolicy Bypass -File start.ps1`) from the repo root. It installs dependencies if needed, launches the backend and frontend each in their own window, waits for both to come up, and opens your browser. Safe to re-run - it detects servers that are already up and won't start duplicates.
+## Install & Run
 
-**Manual**: two dev servers, run in separate terminals.
+Requires [`uv`](https://docs.astral.sh/uv/) (Python 3.12 package/env manager) and Node.js 18+. If you don't have real UOB statements handy, the repo ships sanitized synthetic ones you can try immediately — see below.
+
+### One command (Windows)
+
+```
+git clone https://github.com/syoopie/spend-track.git
+cd spend-track
+start.bat
+```
+
+This installs dependencies on first run, launches the backend and frontend each in their own window, waits for both to come up, and opens your browser. Safe to re-run — it detects servers that are already up and won't start duplicates.
+
+### Manual (any OS)
+
+Two dev servers, run in separate terminals.
 
 **Backend** (from `backend/`):
 
@@ -22,7 +40,7 @@ uv sync
 uv run uvicorn app.main:app --reload
 ```
 
-Serves on `http://127.0.0.1:8000`. The SQLite DB defaults to `~/.sg-expenditure-tracker/data.db` (override with the `SG_TRACKER_DB_PATH` env var).
+Serves the API on `http://127.0.0.1:8000`. The SQLite database defaults to `~/.sg-expenditure-tracker/data.db` (override with the `SG_TRACKER_DB_PATH` env var — handy for pointing a second instance at a scratch database).
 
 **Frontend** (from `frontend/`):
 
@@ -31,31 +49,69 @@ npm install
 npm run dev
 ```
 
-Serves on `http://localhost:5173` and proxies `/api/*` to the backend.
+Serves the UI on `http://localhost:5173` and proxies `/api/*` requests to the backend.
 
-Open `http://localhost:5173` and drop in a UOB e-statement PDF to try it end to end - no real statement handy? Use one of the files in `PDF Examples (Sanitized)/UOB/`.
+### Trying it without a real statement
 
-## Testing
+Open the app and upload any PDF from `PDF Examples (Sanitized)/UOB/` — six months (Jan–Jun 2024) of synthetic account and card statements for one fictional "SAMPLE CUSTOMER", with realistic-looking transactions across every category. They're generated by `backend/scripts/generate_sample_pdfs.py` at the exact column positions the real parser expects, so they parse through the same code path as a genuine statement — this isn't a mocked demo mode, it's the real thing pointed at fake data.
+
+### Running the tests
 
 ```bash
 cd backend && uv run pytest
 ```
 
-128 tests, including parser regression tests run against every sample PDF in `PDF Examples/UOB/` (real statements, gitignored, cross-validated against each statement's own printed totals) and `PDF Examples (Sanitized)/UOB/` (synthetic, committed) and full API integration tests via FastAPI's `TestClient`.
+168 tests: parser regression tests run against every sample PDF (both the sanitized fixtures above and, if present, real statements in the gitignored `PDF Examples/UOB/`, cross-validated against each statement's own printed totals), plus full API integration tests via FastAPI's `TestClient`. The frontend has no automated test suite yet — verified manually in-browser, with `npx tsc -b` and `npm run build` for type/build checks.
 
-The frontend has no test suite yet — verified manually in-browser; `npx tsc -b` and `npm run build` for type/build checks.
+## Design Decisions
 
-## Layout
+A few choices in here aren't obvious from reading the code cold, so they're written down.
+
+**Everything local, on purpose.** This isn't "local-first with a cloud option later" — there is no server component beyond the FastAPI process running on your own machine, no auth, no accounts. The trade-off: no multi-device sync, no backup beyond whatever you set up yourself for the SQLite file (`Settings → Change Database Path` at least lets you point it at a synced folder). For a tool that ingests full bank statements, that trade felt like the right default rather than a limitation to work around.
+
+**PDF parsing is whitespace clustering, not table extraction.** UOB's statements have no table gridlines, so the usual "detect table structure" approach in PDF libraries doesn't apply. Instead, words are clustered into physical lines by vertical proximity, then bucketed into columns by hardcoded x-ranges calibrated against real statements. This is more fragile to a genuine layout change from the bank than table detection would be, but it's the only approach that actually works against a gridline-free layout — and it's covered by both real-statement regression tests and the synthetic fixtures, so a future layout change would fail loudly rather than silently misparse.
+
+**Rules beat merchant knowledge beat contacts, in a specific order.** Categorization checks, in sequence: your own rules (by priority), then a card-bill-payment heuristic (see below), then contact-identifier matches, then a large built-in merchant/keyword word bank, then a PayNow-marker fallback that flags for manual review rather than guessing. User rules always win over the built-in bank — they're seeded at a priority number far below any rule you'd realistically create by hand, so there's no scenario where the built-in knowledge silently overrides a choice you made.
+
+**The built-in rule bank is reconciled, not seeded once.** Early on, default rules were inserted once at first startup and never touched again — which meant a rule added to the codebase in a later update would never reach a database that already existed. It's now fully deleted and re-inserted from the source list on every startup, which is what lets the rule bank keep growing over time without a migration script for every addition.
+
+**Card-bill double-counting is a heuristic, gated conservatively.** A transaction that looks like "pay my own credit card bill" is only ever excluded if a credit card account is actually known — either already committed, or parsed earlier in the same multi-file upload. If you've never uploaded a card statement, that GIRO payment is left as real, visible outflow, because for all the app knows, it might be the only record of that money leaving. The alternative (a static text-pattern rule) would either hide real spending for card-less users or require cross-account context a plain rule can't express — so it's a small piece of code in the categorization engine instead of a data-driven rule.
+
+**Refund pairing isn't amount-only.** Naively matching any two transactions of equal-and-opposite amount produces false positives constantly (two unrelated transactions happening to net to zero is common). Pairing also requires merchant-name similarity after stripping suffix noise like "REFUND" or "REVERSAL".
+
+**Staging is in-memory, not a database table.** A batch of parsed-but-not-yet-committed transactions lives in a process-local store, not SQLite. Pre-commit review is inherently transient — you either commit it or you don't — so persisting it durably would add a table, a cleanup story for abandoned batches, and migration surface for a feature that shouldn't outlive the review page anyway. The real trade-off: a batch is lost if the server restarts mid-review. Acceptable for a local, single-user tool; worth knowing if you're wondering why a page refresh mid-review can lose your progress.
+
+**Schema migrations are column-existence checks, not a version-gated migration runner.** `PRAGMA user_version` is bumped for humans reading the schema's history, but nothing branches on its value — every migration function checks whether its own column already exists before adding it, so re-running the full migration set on an up-to-date database is always a safe no-op. Simpler than a real migration framework, and sufficient for a schema that only ever grows additively.
+
+### Stack
+
+- **Backend**: Python 3.12, FastAPI, SQLite (stdlib `sqlite3`, no ORM), `pdfplumber` for PDF parsing, `pypdf` for encrypted-PDF handling. Managed with `uv`.
+- **Frontend**: React + TypeScript, Vite, Tailwind CSS v4, TanStack Query, React Router. No charting library — every chart is hand-rolled SVG.
+
+### Layout
 
 ```text
 backend/src/app/
   parsing/       per-bank statement parsers (uob/, dbs/, ocbc/) behind a shared registry
-  engine/        fingerprinting, rules engine, refund pairing, in-memory staging store
+  engine/        categorization rules, fingerprinting/dedup, refund pairing, in-memory staging store
   routers/       FastAPI routes, one file per resource
+  repo.py        DB-query helpers shared across routers
+  errors.py      shared API error-response construction
+  migrations.py  schema DDL migration + default-rule/category reconciliation
 frontend/src/
   api/           fetch client + typed React Query hooks
-  pages/         one file per screen (mirrors the UI mockup)
+  pages/         one file per screen
   components/    shared UI (charts, modals, sidebar)
 ```
 
-`TECHNICAL_SPEC.md` and `UX.md` are the original design docs. `UI mockup/` is the visual reference the frontend was built to match. `PDF Examples/UOB/` are real sample statements the parsers are tested against (gitignored - contains real personal/financial info). `PDF Examples (Sanitized)/UOB/` are synthetic statements with the same structure and obviously-fake data (generated by `backend/scripts/generate_sample_pdfs.py`) - safe to commit, and what a fresh clone actually has to test/try against.
+`TECHNICAL_SPEC.md` and `UX.md` are the original design docs; `UI mockup/` is the visual reference the frontend was built to match. `PDF Examples/UOB/` holds real sample statements the parsers are tested against (gitignored — contains real personal/financial info). `PDF Examples (Sanitized)/UOB/` are the synthetic statements mentioned above — safe to commit, and what a fresh clone actually has to test against.
+
+## A closer look
+
+| Rules — your own categorization logic, evaluated top to bottom | Default Rules — the built-in word bank, read-only |
+|---|---|
+| ![Rules](docs/screenshots/rules.jpg) | ![Default Rules](docs/screenshots/default-rules.jpg) |
+
+**Contacts** map a PayNow identifier (phone, UEN, or account number) to a name and default category, so transfers to people you pay regularly categorize themselves instead of sitting in "needs review":
+
+![Contacts](docs/screenshots/contacts.jpg)
