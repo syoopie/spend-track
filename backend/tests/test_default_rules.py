@@ -23,7 +23,7 @@ def test_insurance_and_tax_rules_target_bills_and_fees():
 
 def test_default_rule_bank_never_targets_others_or_paynow_transfers():
     for _pattern, category, _label in iter_default_rules():
-        assert category not in ("Others", "PayNow Transfers")
+        assert category not in ("Others", "Paynow")
 
 
 def test_reconcile_default_rules_picks_up_new_patterns_without_wiping_dbs(tmp_path, monkeypatch):

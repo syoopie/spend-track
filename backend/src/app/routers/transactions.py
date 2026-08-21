@@ -127,6 +127,7 @@ def recategorize_transactions(body: RecategorizeRequest):
                 row["raw_description"],
                 rules,
                 contact_identifiers,
+                amount=row["amount"],
                 has_card_account=has_card_account,
                 posting_account_is_card=bool(row["account_is_card"]),
             )

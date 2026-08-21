@@ -232,8 +232,9 @@ class CategoryBreakdownSlice(BaseModel):
 
 class VelocityPoint(BaseModel):
     day: int
-    current_month_cumulative: float
-    previous_month_cumulative: float
+    date: str
+    current_period_cumulative: float
+    previous_period_cumulative: float
 
 
 class TopEntry(BaseModel):

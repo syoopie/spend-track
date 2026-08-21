@@ -7,9 +7,9 @@ which are given a priority far below any user rule so user rules always win
 on the same description (see db.py::_seed_default_rules). If no rule
 matches, fall back to a contact-identifier match, then to a PayNow-marker
 check, then to 'Others'/'Unparsable'. Unmatched rows that look like a
-PayNow transfer get their own 'PayNow Transfers' category (not 'Others')
-and are flagged `needs_review` so the staging UI can highlight them, since
-a phone/UEN identifier alone can't tell us who was paid or why.
+PayNow transfer get their own 'Paynow' category (not 'Others') and are
+flagged `needs_review` so the staging UI can highlight them, since a
+phone/UEN identifier alone can't tell us who was paid or why.
 """
 
 from dataclasses import dataclass
@@ -40,8 +40,12 @@ def _is_paynow_like(desc_upper: str) -> bool:
     return any(marker in desc_upper for marker in PAYNOW_MARKERS)
 
 
-def _paynow_label(raw_description: str) -> str:
-    return f"PayNow to {extract_display_name(raw_description)}"
+def _paynow_direction(amount: float) -> str:
+    return "from" if amount > 0 else "to"
+
+
+def _paynow_label(raw_description: str, amount: float) -> str:
+    return f"PayNow {_paynow_direction(amount)} {extract_display_name(raw_description)}"
 
 
 def find_matching_contact(
@@ -62,6 +66,7 @@ def categorize(
     rules: Sequence[Mapping[str, Any]],
     contact_identifiers: Sequence[Mapping[str, Any]],
     *,
+    amount: float = 0.0,
     has_card_account: bool = False,
     posting_account_is_card: bool = False,
 ) -> Categorization:
@@ -69,7 +74,9 @@ def categorize(
     committed, or parsed in the same upload batch. posting_account_is_card:
     True if the transaction being categorized itself lives on a card
     account (never auto-excluded as a "pay my card bill" transfer - a card
-    can't pay itself)."""
+    can't pay itself). amount: signed transaction amount, used only to pick
+    "PayNow from" (incoming, amount > 0) vs "PayNow to" (outgoing) in the
+    generated label - defaults to the outgoing phrasing when not given."""
     desc_upper = raw_description.upper()
 
     for rule in rules:  # must already be sorted by priority ASC
@@ -86,7 +93,7 @@ def categorize(
                 )
             category = rule["target_category"]
             display_label = rule["display_label"] if "display_label" in rule.keys() else None
-            label = _paynow_label(raw_description) if category == "PayNow Transfers" else (
+            label = _paynow_label(raw_description, amount) if category == "Paynow" else (
                 display_label or rule["match_pattern"].title()
             )
             return Categorization(
@@ -114,7 +121,7 @@ def categorize(
     if contact is not None:
         category = contact["default_category"]
         name = contact["name"] if "name" in contact.keys() else None
-        label = f"PayNow to {name}" if category == "PayNow Transfers" and name else name
+        label = f"PayNow {_paynow_direction(amount)} {name}" if category == "Paynow" and name else name
         return Categorization(
             category=category,
             subcategory=contact["default_subcategory"],
@@ -127,11 +134,11 @@ def categorize(
 
     is_paynow = _is_paynow_like(desc_upper)
     return Categorization(
-        category="PayNow Transfers" if is_paynow else "Others",
+        category="Paynow" if is_paynow else "Others",
         subcategory="PayNow" if is_paynow else "Unparsable",
         contact_id=None,
         is_excluded=False,
         exclusion_reason=None,
         needs_review=is_paynow,
-        matched_label=_paynow_label(raw_description) if is_paynow else None,
+        matched_label=_paynow_label(raw_description, amount) if is_paynow else None,
     )

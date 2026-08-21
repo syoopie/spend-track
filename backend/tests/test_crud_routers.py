@@ -33,7 +33,7 @@ def test_categories_seeded_with_defaults(client):
     names = [c["name"] for c in resp.json()]
     assert names == [
         "Sports & Hobbies", "Beauty", "Food & Drink", "Shopping", "Transport", "Home", "Bills & Fees",
-        "Entertainment", "Healthcare", "Education", "Groceries", "Salary", "Investing", "PayNow Transfers",
+        "Entertainment", "Healthcare", "Education", "Groceries", "Salary", "Investing", "Paynow",
     ]
 
 
@@ -171,7 +171,7 @@ def test_create_list_update_delete_contact(client):
         "/api/contacts",
         json={
             "name": "Auntie Mei",
-            "default_category": "PayNow Transfers",
+            "default_category": "Paynow",
             "identifiers": ["+65 9123 4567"],
         },
     ).json()
@@ -193,7 +193,7 @@ def test_create_list_update_delete_contact(client):
 
 
 def test_import_contacts_csv(client):
-    csv_content = "Name,Identifier,Category\nBoon Heng,BOON HENG PTE,PayNow Transfers\nMum,+65 9345 1234,PayNow Transfers\n"
+    csv_content = "Name,Identifier,Category\nBoon Heng,BOON HENG PTE,Paynow\nMum,+65 9345 1234,Paynow\n"
     resp = client.post(
         "/api/contacts/import",
         files={"file": ("contacts.csv", io.BytesIO(csv_content.encode()), "text/csv")},
@@ -207,7 +207,7 @@ def test_import_contacts_csv(client):
 
 
 def test_import_contacts_csv_skips_already_mapped_identifier(client):
-    csv_content = "Name,Identifier,Category\nBoon Heng,BOON HENG PTE,PayNow Transfers\n"
+    csv_content = "Name,Identifier,Category\nBoon Heng,BOON HENG PTE,Paynow\n"
     client.post(
         "/api/contacts/import",
         files={"file": ("contacts.csv", io.BytesIO(csv_content.encode()), "text/csv")},
@@ -358,7 +358,11 @@ def test_dashboard_summary_spans_a_custom_month_range(client):
     assert resp["date_from"] == "2026-03"
     assert resp["date_to"] == "2026-05"
     assert [c["month"] for c in resp["cash_flow"]] == ["2026-03", "2026-04", "2026-05"]
-    assert resp["spend_velocity"] == []  # multi-month range - not a single day-of-month pace
+    # velocity is meaningful for multi-month ranges too - compares the whole
+    # selected range's cumulative pace against the immediately preceding
+    # same-length range (2025-12 to 2026-02 here)
+    assert len(resp["spend_velocity"]) > 0
+    assert resp["spend_velocity"][0]["date"] == "2026-03-01"
     # all 39 transactions fall in May, so the wider range's totals still match May alone
     assert resp["metrics"]["total_outflow"] > 0
 
