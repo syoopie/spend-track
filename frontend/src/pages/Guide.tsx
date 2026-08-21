@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   BarChart3,
   BookOpen,
@@ -34,6 +34,25 @@ function Kbd({ children }: { children: React.ReactNode }) {
 
 export function Guide() {
   const [activeId, setActiveId] = useState('overview')
+
+  // Nav highlight tracked clicks only, so manually scrolling past a section
+  // (rather than clicking its nav entry) left the highlight stuck on
+  // whatever was last clicked. This keeps it in sync with whatever's
+  // actually in view, regardless of how the user got there.
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.filter((e) => e.isIntersecting)
+        if (visible.length === 0) return
+        const topMost = visible.reduce((a, b) => (a.boundingClientRect.top < b.boundingClientRect.top ? a : b))
+        setActiveId(topMost.target.id)
+      },
+      { rootMargin: '-96px 0px -70% 0px', threshold: 0 },
+    )
+    const elements = SECTIONS.map((s) => document.getElementById(s.id)).filter((el): el is HTMLElement => el != null)
+    for (const el of elements) observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
 
   function scrollTo(id: string) {
     setActiveId(id)
