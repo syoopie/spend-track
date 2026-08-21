@@ -83,28 +83,13 @@ export function Sidebar() {
               ? 'Review the pending statement before uploading another'
               : 'Upload a bank statement PDF - or drag & drop one anywhere in the app, anytime'
           }
-          className="flex items-center gap-1.5 py-2.5 rounded-lg text-sm font-semibold border-none bg-accent text-accent-fg cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center gap-1.5 py-2.5 mb-4 rounded-lg text-sm font-semibold border-none bg-accent text-accent-fg cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <div className="w-9 flex items-center justify-center shrink-0">
             <Upload size={15} />
           </div>
           <span className="w-0 group-hover:w-auto overflow-hidden shrink-0 whitespace-nowrap">Upload Bank Statement</span>
         </button>
-        {/* Left-anchored the same way as every label (spacer matching the
-            icon slot width, then a w-0/group-hover:w-auto wrapper) instead
-            of centered with mx-auto - a centered box's position depends on
-            the row's *current* width, so as the rail animates from 64px to
-            240px, a centered caption visibly drifts sideways every frame.
-            Left-anchoring makes its position fixed, same as the icons and
-            every other label - only its clipped visible width changes. */}
-        <div className="flex mt-1.5 mb-3.5">
-          <div className="w-9 shrink-0" />
-          <div className="w-0 group-hover:w-auto overflow-hidden shrink-0">
-            <div className="w-[170px] text-[11px] text-muted-2 leading-snug">
-              or drag &amp; drop a PDF — anytime, anywhere in the app
-            </div>
-          </div>
-        </div>
 
         {NAV_ITEMS.map((item) => (
           <NavLink
