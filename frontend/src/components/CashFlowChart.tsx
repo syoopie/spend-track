@@ -50,7 +50,7 @@ export function CashFlowChart({
                   {m.outflow > 0 && <div className="text-[10px] font-mono text-muted-2 mb-0.5">{fmtCompact(m.outflow)}</div>}
                   <div
                     className="w-3.5 rounded-t-[3px]"
-                    style={{ height: `${Math.max(1, (m.outflow / max) * 120)}px`, background: isSelected ? 'var(--color-accent)' : '#3a3b48' }}
+                    style={{ height: `${Math.max(1, (m.outflow / max) * 120)}px`, background: isSelected ? 'var(--color-accent)' : 'var(--color-dim)' }}
                   />
                 </div>
               </div>
@@ -66,11 +66,11 @@ export function CashFlowChart({
           <span className="text-success">■</span> Inflow
         </span>
         <span>
-          <span className={padded ? 'text-accent' : 'text-[#3a3b48]'}>■</span> Outflow{padded ? ' (selected range)' : ''}
+          <span className={padded ? 'text-accent' : 'text-dim'}>■</span> Outflow{padded ? ' (selected range)' : ''}
         </span>
         {padded && (
           <span>
-            <span className="text-[#3a3b48]">■</span> Outflow (prior months)
+            <span className="text-dim">■</span> Outflow (prior months)
           </span>
         )}
       </div>

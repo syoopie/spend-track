@@ -14,7 +14,11 @@
   --color-muted-2: #6d6d7a;
   --color-nav: #8a8a97;
   --color-nav-hover: #24252e;
+  --color-divider: #24252e;
+  --color-dim: #3a3b48;
+  --color-text-2: #c6c6cf;
   --color-danger: oklch(55% 0.19 25);
+  --color-danger-fg: #fff;
   --color-danger-text: oklch(72% 0.16 25);
   --color-success: oklch(72% 0.17 150);
   --font-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;

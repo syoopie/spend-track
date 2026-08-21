@@ -37,7 +37,7 @@ export function TransactionEditPopover({
   }
 
   return (
-    <div className="px-5 py-4 flex flex-col gap-3 border-b border-[#24252e] bg-input">
+    <div className="px-5 py-4 flex flex-col gap-3 border-b border-divider bg-input">
       <div className="flex items-end gap-3">
         <div className="flex-1">
           <div className="text-[11px] text-muted mb-1">Display Name</div>

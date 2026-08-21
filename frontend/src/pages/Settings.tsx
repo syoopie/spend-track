@@ -150,8 +150,8 @@ function NuclearResetModal({ onClose }: { onClose: () => void }) {
           disabled={!canReset || reset.isPending}
           className="text-[13px] font-semibold px-4 py-2.5 rounded-lg border-none cursor-pointer"
           style={{
-            background: canReset ? 'oklch(55% 0.19 25)' : '#2c2d38',
-            color: canReset ? '#fff' : 'var(--color-muted-2)',
+            background: canReset ? 'var(--color-danger)' : 'var(--color-border)',
+            color: canReset ? 'var(--color-danger-fg)' : 'var(--color-muted-2)',
             cursor: canReset ? 'pointer' : 'not-allowed',
           }}
         >

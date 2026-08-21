@@ -158,7 +158,7 @@ export function StagingReviewDialog({ onClose }: { onClose: () => void }) {
                 className={`grid grid-cols-[80px_1fr_180px_110px] items-center px-5 py-3 text-[13px] border-b border-border/70 ${
                   row.needs_review ? 'cursor-pointer' : ''
                 }`}
-                style={{ background: row.needs_review ? AMBER_BG : isOpen ? '#22232c' : undefined }}
+                style={{ background: row.needs_review ? AMBER_BG : isOpen ? 'var(--color-input)' : undefined }}
               >
                 <div className="text-muted font-mono text-xs">{fmtDate(row.transaction_date)}</div>
                 <div className="truncate pr-2" title={row.raw_description}>

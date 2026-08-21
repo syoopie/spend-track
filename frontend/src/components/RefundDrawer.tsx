@@ -36,7 +36,7 @@ export function RefundDrawer({ transactionId, onClose }: { transactionId: number
             <div className="mb-3">
               <TxCard tx={data.original} />
             </div>
-            <div className="text-center text-[#3a3b48] text-base mb-3">↓ netted against ↓</div>
+            <div className="text-center text-dim text-base mb-3">↓ netted against ↓</div>
             <TxCard tx={data.refund} />
           </>
         )}

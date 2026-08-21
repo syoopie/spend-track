@@ -144,7 +144,7 @@ export function Contacts() {
       )}
 
       <div className="bg-card border border-border rounded-xl overflow-hidden">
-        <div className="grid grid-cols-[1fr_1.6fr_160px_140px] px-5 py-2.5 text-[11px] text-muted-2 uppercase tracking-wide border-b border-[#24252e]">
+        <div className="grid grid-cols-[1fr_1.6fr_160px_140px] px-5 py-2.5 text-[11px] text-muted-2 uppercase tracking-wide border-b border-divider">
           <div>Contact</div>
           <div>Linked Identifiers</div>
           <div>Default Category</div>
@@ -157,14 +157,14 @@ export function Contacts() {
         {(contactsQ.data ?? []).map((c) => (
           <div
             key={c.id}
-            className="grid grid-cols-[1fr_1.6fr_160px_140px] items-center px-5 py-3.5 text-[13px] border-b border-[#24252e]"
+            className="grid grid-cols-[1fr_1.6fr_160px_140px] items-center px-5 py-3.5 text-[13px] border-b border-divider"
           >
             <div className="font-semibold">{c.name}</div>
             <div className="flex gap-1.5 flex-wrap">
               {c.identifiers.map((id) => (
                 <span
                   key={id}
-                  className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-input text-[#c6c6cf]"
+                  className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-input text-text-2"
                 >
                   {id}
                 </span>
