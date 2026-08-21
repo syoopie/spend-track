@@ -56,6 +56,7 @@ def test_no_rule_match_falls_back_to_contact():
     contacts = [
         {
             "contact_id": 7,
+            "name": "Auntie Mei",
             "identifier": "+65 9123 4567",
             "default_category": "PayNow Transfers",
             "default_subcategory": None,
@@ -64,6 +65,7 @@ def test_no_rule_match_falls_back_to_contact():
     result = categorize("PAYNOW-FAST PAYNOW OTHR +65 9123 4567", [], contacts)
     assert result.category == "PayNow Transfers"
     assert result.contact_id == 7
+    assert result.matched_label == "PayNow to Auntie Mei"
 
 
 def test_no_rule_or_contact_match_flags_paynow_for_review_in_its_own_category():
@@ -71,7 +73,12 @@ def test_no_rule_or_contact_match_flags_paynow_for_review_in_its_own_category():
     assert result.category == "PayNow Transfers"
     assert result.subcategory == "PayNow"
     assert result.needs_review is True
-    assert result.matched_label is None
+    assert result.matched_label == "PayNow to UNKNOWN PERSON"
+
+
+def test_paynow_fallback_label_keeps_phone_number_when_no_name_present():
+    result = categorize("PAYNOW-FAST PAYNOW OTHR +65 9123 4567", [], [])
+    assert result.matched_label == "PayNow to +65 9123 4567"
 
 
 def test_non_paynow_unmatched_defaults_to_others_unparsable_without_review_flag():

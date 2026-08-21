@@ -1,0 +1,77 @@
+import { useEffect, useRef, useState } from 'react'
+import type { MonthlyTotal } from '../api/types'
+import { fmtMonthRangeLabel } from '../lib/format'
+import { MonthRangeCalendar } from './MonthRangeCalendar'
+
+export function DateRangePicker({
+  value,
+  onChange,
+  monthlyTotals,
+}: {
+  value: { from: string; to: string }
+  onChange: (range: { from: string; to: string }) => void
+  monthlyTotals: MonthlyTotal[]
+}) {
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    window.addEventListener('mousedown', onClickOutside)
+    return () => window.removeEventListener('mousedown', onClickOutside)
+  }, [open])
+
+  const allMonths = monthlyTotals.map((t) => t.month)
+  const earliest = allMonths.length ? allMonths.reduce((a, b) => (a < b ? a : b)) : value.from
+  const latest = allMonths.length ? allMonths.reduce((a, b) => (a > b ? a : b)) : value.to
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="text-[13px] px-3 py-2 rounded-lg border border-border bg-input text-text cursor-pointer flex items-center gap-1.5"
+      >
+        {fmtMonthRangeLabel(value.from, value.to)}
+        <span className="text-muted-2 text-[10px]">▾</span>
+      </button>
+      {open && (
+        <div className="absolute right-0 top-[calc(100%+6px)] z-40 bg-card border border-border rounded-xl p-3.5 shadow-xl w-[420px]">
+          <MonthRangeCalendar
+            monthlyTotals={monthlyTotals}
+            value={value}
+            onChange={(range) => {
+              onChange(range)
+              setOpen(false)
+            }}
+          />
+          <div className="flex gap-3 mt-2.5 pt-2.5 border-t border-border">
+            <button
+              type="button"
+              onClick={() => {
+                onChange({ from: latest, to: latest })
+                setOpen(false)
+              }}
+              className="text-[12px] text-accent hover:text-accent-hover bg-transparent border-none cursor-pointer p-0"
+            >
+              Latest month
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onChange({ from: earliest, to: latest })
+                setOpen(false)
+              }}
+              className="text-[12px] text-accent hover:text-accent-hover bg-transparent border-none cursor-pointer p-0"
+            >
+              All time
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

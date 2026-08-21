@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
-import { useAccounts, useCategories, useDashboardSummary, useTransactions } from '../api/hooks'
+import { useAccounts, useCategories, useDashboardSummary, useMonthlyTotals, useTransactions } from '../api/hooks'
 import { categoryColor } from '../lib/categoryColor'
-import { fmtDate, fmtMonthYearLabel, fmtPlain, fmtSigned } from '../lib/format'
+import { fmtDate, fmtMonthRangeLabel, fmtMonthYearLabel, fmtPlain, fmtSigned, shiftMonth } from '../lib/format'
 import { CashFlowChart } from '../components/CashFlowChart'
 import { CategoryDonut } from '../components/CategoryDonut'
 import { VelocityChart } from '../components/VelocityChart'
 import { RefundDrawer } from '../components/RefundDrawer'
+import { DateRangePicker } from '../components/DateRangePicker'
 import { useUploadDialog } from '../components/UploadProvider'
 
 function MetricCard({
@@ -30,28 +31,40 @@ function MetricCard({
 
 export function Dashboard() {
   const { openDialog, hasPendingBatch, openReview } = useUploadDialog()
-  const [month, setMonth] = useState<string | undefined>(undefined)
+  const [range, setRange] = useState<{ from: string; to: string } | undefined>(undefined)
   const [accountId, setAccountId] = useState<string | undefined>(undefined)
   const [excludedVisible, setExcludedVisible] = useState(true)
+  const [searchText, setSearchText] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState('')
   const [refundTxId, setRefundTxId] = useState<number | null>(null)
 
   const accountsQ = useAccounts()
   const categoriesQ = useCategories()
-  const summaryQ = useDashboardSummary({ month, account_id: accountId })
-  const resolvedMonth = month ?? summaryQ.data?.month
-  const txQ = useTransactions({ month: resolvedMonth, account_id: accountId, include_excluded: true })
-
-  const prevCashFlow = summaryQ.data ? summaryQ.data.cash_flow[summaryQ.data.cash_flow.length - 2] : undefined
-  const curCashFlow = summaryQ.data ? summaryQ.data.cash_flow[summaryQ.data.cash_flow.length - 1] : undefined
-  const outflowChangePct =
-    prevCashFlow && curCashFlow && prevCashFlow.outflow > 0
-      ? Math.round(((curCashFlow.outflow - prevCashFlow.outflow) / prevCashFlow.outflow) * 100)
-      : null
+  const monthlyTotalsQ = useMonthlyTotals(accountId)
+  const summaryQ = useDashboardSummary({ date_from: range?.from, date_to: range?.to, account_id: accountId })
+  const resolvedRange = range ?? (summaryQ.data ? { from: summaryQ.data.date_from, to: summaryQ.data.date_to } : undefined)
+  const txQ = useTransactions({
+    date_from: resolvedRange?.from,
+    date_to: resolvedRange?.to,
+    account_id: accountId,
+    include_excluded: true,
+  })
 
   const visibleTransactions = useMemo(
     () => (txQ.data ?? []).filter((t) => excludedVisible || !t.is_excluded),
     [txQ.data, excludedVisible],
   )
+  const filteredTransactions = useMemo(() => {
+    const q = searchText.trim().toLowerCase()
+    return visibleTransactions.filter((t) => {
+      if (categoryFilter && t.category !== categoryFilter) return false
+      if (q) {
+        const haystack = `${t.matched_label ?? ''} ${t.raw_description}`.toLowerCase()
+        if (!haystack.includes(q)) return false
+      }
+      return true
+    })
+  }, [visibleTransactions, searchText, categoryFilter])
   const inflowCount = (txQ.data ?? []).filter((t) => t.amount > 0).length
   const distinctAccounts = new Set((txQ.data ?? []).map((t) => t.account_id)).size
 
@@ -112,8 +125,10 @@ export function Dashboard() {
   }
 
   const s = summaryQ.data
-  const monthLabel = fmtMonthYearLabel(s.month)
-  const prevMonthLabel = prevCashFlow ? fmtMonthYearLabel(prevCashFlow.month) : 'previous month'
+  const rangeLabel = fmtMonthRangeLabel(s.date_from, s.date_to)
+  const rangeMonthCount = s.cash_flow.length
+  const showVelocity = s.spend_velocity.length > 0
+  const topCategory = s.category_breakdown[0]
 
   return (
     <div className="px-9 pt-7 pb-15">
@@ -124,11 +139,10 @@ export function Dashboard() {
           <div className="text-[13px] text-muted mt-0.5">Post-mortem view of where the money went</div>
         </div>
         <div className="flex gap-2.5 items-center">
-          <input
-            type="month"
-            value={resolvedMonth ?? ''}
-            onChange={(e) => setMonth(e.target.value || undefined)}
-            className="text-[13px] px-3 py-2 rounded-lg border border-border bg-input text-text"
+          <DateRangePicker
+            value={resolvedRange ?? { from: s.date_from, to: s.date_to }}
+            onChange={setRange}
+            monthlyTotals={monthlyTotalsQ.data ?? []}
           />
           <select
             value={accountId ?? ''}
@@ -155,15 +169,6 @@ export function Dashboard() {
       {/* Metric cards */}
       <div className="grid grid-cols-4 gap-3.5 mb-5">
         <MetricCard
-          label="Net Expenditure"
-          value={fmtPlain(s.metrics.net_expenditure)}
-          hint={
-            outflowChangePct === null
-              ? undefined
-              : `${outflowChangePct >= 0 ? '▲' : '▼'} ${Math.abs(outflowChangePct)}% vs ${prevMonthLabel}`
-          }
-        />
-        <MetricCard
           label="Total Inflow"
           value={fmtPlain(s.metrics.total_inflow)}
           valueClassName="text-success"
@@ -172,34 +177,36 @@ export function Dashboard() {
         <MetricCard
           label="Total Outflow"
           value={fmtPlain(s.metrics.total_outflow)}
+          valueClassName="text-danger-text"
           hint={`across ${distinctAccounts} account${distinctAccounts === 1 ? '' : 's'}`}
         />
-        <div className="bg-card border border-border rounded-xl p-4.5">
-          <div className="text-xs text-muted mb-2.5">PayNow vs Card Spend</div>
-          <div className="flex h-2 rounded overflow-hidden mb-2">
-            <div className="bg-[oklch(72%_0.14_20)]" style={{ width: `${s.metrics.paynow_pct}%` }} />
-            <div className="bg-[oklch(72%_0.14_230)]" style={{ width: `${s.metrics.card_pct}%` }} />
-          </div>
-          <div className="flex flex-wrap justify-between gap-1 text-xs text-muted">
-            <span className="whitespace-nowrap">
-              <span className="text-[oklch(72%_0.14_20)] font-semibold">●</span> PayNow {s.metrics.paynow_pct}%
-            </span>
-            <span className="whitespace-nowrap">
-              <span className="text-[oklch(72%_0.14_230)] font-semibold">●</span> Card {s.metrics.card_pct}%
-            </span>
-          </div>
-        </div>
+        <MetricCard
+          label="Net Expenditure"
+          value={fmtPlain(s.metrics.net_expenditure)}
+          hint={`over ${rangeMonthCount} month${rangeMonthCount === 1 ? '' : 's'}`}
+        />
+        <MetricCard
+          label="Top Category"
+          value={topCategory ? topCategory.category : '—'}
+          hint={topCategory ? `${fmtPlain(topCategory.amount)} · ${topCategory.pct}% of outflow` : 'No spending yet'}
+        />
       </div>
 
       {/* Charts row 1 */}
       <div className="grid grid-cols-[1.3fr_1fr] gap-3.5 mb-3.5">
         <CashFlowChart data={s.cash_flow} />
-        <CategoryDonut data={s.category_breakdown} categories={categoriesQ.data} monthLabel={monthLabel} />
+        <CategoryDonut data={s.category_breakdown} categories={categoriesQ.data} rangeLabel={rangeLabel} />
       </div>
 
       {/* Charts row 2 */}
-      <div className="grid grid-cols-[1.3fr_1fr] gap-3.5 mb-5">
-        <VelocityChart data={s.spend_velocity} monthLabel={monthLabel} prevMonthLabel={prevMonthLabel} />
+      <div className={`grid gap-3.5 mb-5 ${showVelocity ? 'grid-cols-[1.3fr_1fr]' : 'grid-cols-1'}`}>
+        {showVelocity && (
+          <VelocityChart
+            data={s.spend_velocity}
+            monthLabel={fmtMonthYearLabel(s.date_from)}
+            prevMonthLabel={fmtMonthYearLabel(shiftMonth(s.date_from, -1))}
+          />
+        )}
         <div className="bg-card border border-border rounded-xl p-5">
           <div className="text-[13px] font-semibold mb-3">Top Merchants &amp; PayNow Contacts</div>
           <div className="text-[11px] text-muted-2 mb-1.5 uppercase tracking-wide">Merchants</div>
@@ -223,16 +230,36 @@ export function Dashboard() {
 
       {/* Transaction feed */}
       <div className="bg-card border border-border rounded-xl overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-          <div className="text-[13px] font-semibold">Transaction Feed</div>
-          <label className="flex items-center gap-1.5 text-xs text-muted cursor-pointer">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border gap-3 flex-wrap">
+          <div className="text-[13px] font-semibold shrink-0">Transaction Feed</div>
+          <div className="flex items-center gap-2.5 flex-wrap">
             <input
-              type="checkbox"
-              checked={excludedVisible}
-              onChange={(e) => setExcludedVisible(e.target.checked)}
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              placeholder="Search transactions…"
+              className="text-[13px] px-3 py-1.5 rounded-lg border border-border bg-input text-text w-[200px]"
             />
-            Show excluded transactions
-          </label>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="text-[13px] px-2.5 py-1.5 rounded-lg border border-border bg-input text-text"
+            >
+              <option value="">All Categories</option>
+              {(categoriesQ.data ?? []).map((c) => (
+                <option key={c.id} value={c.name}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            <label className="flex items-center gap-1.5 text-xs text-muted cursor-pointer whitespace-nowrap">
+              <input
+                type="checkbox"
+                checked={excludedVisible}
+                onChange={(e) => setExcludedVisible(e.target.checked)}
+              />
+              Show excluded
+            </label>
+          </div>
         </div>
         <div className="grid grid-cols-[80px_1fr_140px_130px_110px_30px] px-5 py-2.5 text-[11px] text-muted-2 uppercase tracking-wide border-b border-[#24252e]">
           <div>Date</div>
@@ -243,10 +270,12 @@ export function Dashboard() {
           <div />
         </div>
         {txQ.isLoading && <div className="p-5 text-muted text-sm">Loading transactions…</div>}
-        {!txQ.isLoading && visibleTransactions.length === 0 && (
-          <div className="p-5 text-muted text-sm">No transactions for this month yet.</div>
+        {!txQ.isLoading && filteredTransactions.length === 0 && (
+          <div className="p-5 text-muted text-sm">
+            {searchText || categoryFilter ? 'No transactions match your filters.' : 'No transactions for this range yet.'}
+          </div>
         )}
-        {visibleTransactions.map((tx) => {
+        {filteredTransactions.map((tx) => {
           const cc = categoryColor(categoriesQ.data, tx.category)
           return (
             <div
@@ -255,17 +284,12 @@ export function Dashboard() {
               style={{ opacity: tx.is_excluded ? 0.5 : 1 }}
             >
               <div className="text-muted font-mono text-xs">{fmtDate(tx.transaction_date)}</div>
-              <div className="truncate pr-2">
-                <div className="truncate">
-                  {tx.matched_label ?? tx.raw_description}
-                  {tx.is_excluded && (
-                    <span className="text-[10px] text-muted-2 border border-border rounded px-1.5 py-0.5 ml-1.5">
-                      excluded
-                    </span>
-                  )}
-                </div>
-                {tx.matched_label && (
-                  <div className="truncate text-[11px] text-muted-2">{tx.raw_description}</div>
+              <div className="truncate pr-2" title={tx.raw_description}>
+                {tx.matched_label ?? tx.raw_description}
+                {tx.is_excluded && (
+                  <span className="text-[10px] text-muted-2 border border-border rounded px-1.5 py-0.5 ml-1.5">
+                    excluded
+                  </span>
                 )}
               </div>
               <div>

@@ -38,15 +38,19 @@ def _row_to_out(row: sqlite3.Row, paired_ids: set[int]) -> TransactionOut:
 
 @router.get("", response_model=list[TransactionOut])
 def list_transactions(
-    month: str | None = Query(default=None, description="YYYY-MM"),
+    date_from: str | None = Query(default=None, description="YYYY-MM"),
+    date_to: str | None = Query(default=None, description="YYYY-MM"),
     account_id: str | None = None,
     include_excluded: bool = False,
 ):
     clauses = []
     params: list = []
-    if month:
-        clauses.append("t.transaction_date LIKE ?")
-        params.append(f"{month}%")
+    if date_from:
+        clauses.append("t.transaction_date >= ?")
+        params.append(f"{date_from}-01")
+    if date_to:
+        clauses.append("t.transaction_date <= ?")
+        params.append(f"{date_to}-31")
     if account_id:
         clauses.append("t.account_id = ?")
         params.append(account_id)

@@ -149,13 +149,15 @@ export interface MetricCards {
   net_expenditure: number
   total_inflow: number
   total_outflow: number
-  paynow_total: number
-  card_total: number
-  paynow_pct: number
-  card_pct: number
 }
 
 export interface CashFlowMonth {
+  month: string
+  inflow: number
+  outflow: number
+}
+
+export interface MonthlyTotal {
   month: string
   inflow: number
   outflow: number
@@ -179,7 +181,8 @@ export interface TopEntry {
 }
 
 export interface DashboardSummary {
-  month: string
+  date_from: string
+  date_to: string
   metrics: MetricCards
   cash_flow: CashFlowMonth[]
   category_breakdown: CategoryBreakdownSlice[]

@@ -8,6 +8,7 @@ import type {
   ContactImportResult,
   ContactUpdateRequest,
   DashboardSummary,
+  MonthlyTotal,
   RefundPairing,
   Rule,
   RuleCreateRequest,
@@ -26,7 +27,12 @@ export function useAccounts() {
 
 // --- transactions ---------------------------------------------------------
 
-export function useTransactions(params: { month?: string; account_id?: string; include_excluded?: boolean }) {
+export function useTransactions(params: {
+  date_from?: string
+  date_to?: string
+  account_id?: string
+  include_excluded?: boolean
+}) {
   return useQuery({
     queryKey: ['transactions', params],
     queryFn: () => api.get<Transaction[]>('/transactions', params),
@@ -43,10 +49,17 @@ export function useRefundPairing(transactionId: number | null) {
 
 // --- dashboard --------------------------------------------------------------
 
-export function useDashboardSummary(params: { month?: string; account_id?: string }) {
+export function useDashboardSummary(params: { date_from?: string; date_to?: string; account_id?: string }) {
   return useQuery({
     queryKey: ['dashboard-summary', params],
     queryFn: () => api.get<DashboardSummary>('/dashboard/summary', params),
+  })
+}
+
+export function useMonthlyTotals(accountId?: string) {
+  return useQuery({
+    queryKey: ['monthly-totals', accountId],
+    queryFn: () => api.get<MonthlyTotal[]>('/dashboard/monthly-totals', { account_id: accountId }),
   })
 }
 
