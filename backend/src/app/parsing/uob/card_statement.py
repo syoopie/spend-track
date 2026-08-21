@@ -91,6 +91,7 @@ def parse(pages) -> ParsedStatement:
                         account_number=card_number,
                         account_number_masked="••" + re.sub(r"\D", "", card_number)[-4:],
                         account_type=card_name,
+                        is_card=True,
                     )
                 finalize_tx()
                 current_account = accounts_by_number[card_number]

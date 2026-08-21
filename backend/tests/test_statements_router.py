@@ -186,6 +186,40 @@ def test_upload_multiple_files_aborts_batch_on_any_failure(client):
     assert client.get("/api/statements/staging/current").status_code == 404
 
 
+def test_card_bill_payment_excluded_when_card_statement_uploaded_in_same_batch(client):
+    """Uploading the account statement and the matching card statement
+    together must not double-count the GIRO payment settling the card bill
+    as spending on top of the card's own line-item purchases."""
+    account = "../PDF Examples (Sanitized)/UOB/Account Statements/SampleAccountStatement_Feb2024.pdf"
+    card = "../PDF Examples (Sanitized)/UOB/Card Statements/SampleCardStatement_Feb2024.pdf"
+    with open(account, "rb") as f1, open(card, "rb") as f2:
+        resp = client.post(
+            "/api/statements/upload",
+            files=[
+                ("files", ("account.pdf", f1, "application/pdf")),
+                ("files", ("card.pdf", f2, "application/pdf")),
+            ],
+        )
+    assert resp.status_code == 200
+    body = resp.json()
+    bill_payment_rows = [r for r in body["rows"] if "mBK-UOB Cards" in r["raw_description"]]
+    assert len(bill_payment_rows) == 1
+    assert bill_payment_rows[0]["is_excluded"] is True
+    assert "already counted" in bill_payment_rows[0]["exclusion_reason"]
+
+
+def test_card_bill_payment_not_excluded_without_a_card_statement(client):
+    """The same GIRO payment line, uploaded on its own (no card statement
+    ever provided) - it must stay counted since it's the only record of
+    that money leaving."""
+    account = "../PDF Examples (Sanitized)/UOB/Account Statements/SampleAccountStatement_Feb2024.pdf"
+    resp = _upload(client, path=account)
+    body = resp.json()
+    bill_payment_rows = [r for r in body["rows"] if "mBK-UOB Cards" in r["raw_description"]]
+    assert len(bill_payment_rows) == 1
+    assert bill_payment_rows[0]["is_excluded"] is False
+
+
 def test_second_upload_rejected_while_one_is_pending(client):
     first = _upload(client).json()
     resp = _upload(client)

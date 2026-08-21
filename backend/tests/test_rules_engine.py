@@ -101,3 +101,53 @@ def test_rules_take_priority_over_contact_match():
     result = categorize("GRAB Ride", rules, contacts)
     assert result.category == "Transport"
     assert result.contact_id is None
+
+
+# --- credit card bill payment double-counting (has_card_account) -----------
+
+
+def test_card_bill_payment_excluded_when_a_card_account_exists():
+    """Real UOB account statement text for GIRO-paying one's own UOB card."""
+    result = categorize(
+        "Bill Payment mBK-UOB Cards 4265884081509100",
+        [],
+        [],
+        has_card_account=True,
+        posting_account_is_card=False,
+    )
+    assert result.is_excluded
+    assert "already counted" in result.exclusion_reason
+
+
+def test_card_bill_payment_not_excluded_without_a_known_card_account():
+    """No card statement uploaded (has_card_account=False, the default) -
+    the payment is the only record of this money leaving, so it must not
+    be silently hidden from totals."""
+    result = categorize("Bill Payment mBK-UOB Cards 4265884081509100", [], [])
+    assert not result.is_excluded
+    assert result.category == "Others"
+
+
+def test_card_bill_payment_heuristic_never_applies_to_a_card_account_itself():
+    result = categorize(
+        "Bill Payment mBK-UOB Cards 4265884081509100",
+        [],
+        [],
+        has_card_account=True,
+        posting_account_is_card=True,
+    )
+    assert not result.is_excluded
+
+
+def test_explicit_rule_overrides_card_bill_payment_heuristic():
+    rules = [rule(1, "UOB CARDS", "Bills & Fees", display_label="UOB Card Bill")]
+    result = categorize(
+        "Bill Payment mBK-UOB Cards 4265884081509100",
+        rules,
+        [],
+        has_card_account=True,
+        posting_account_is_card=False,
+    )
+    assert not result.is_excluded
+    assert result.category == "Bills & Fees"
+    assert result.matched_label == "UOB Card Bill"

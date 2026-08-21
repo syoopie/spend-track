@@ -13,6 +13,7 @@ import {
   ShoppingCart,
   Sparkles,
   Tag,
+  TrendingUp,
   Utensils,
   type LucideIcon,
 } from 'lucide-react'
@@ -42,6 +43,7 @@ const ICON_COMPONENTS: Record<string, LucideIcon> = {
   'graduation-cap': GraduationCap,
   'shopping-cart': ShoppingCart,
   banknote: Banknote,
+  'trending-up': TrendingUp,
   send: Send,
   'more-horizontal': MoreHorizontal,
 }

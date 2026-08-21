@@ -1,10 +1,11 @@
-PRAGMA user_version = 3;
+PRAGMA user_version = 4;
 
 CREATE TABLE IF NOT EXISTS accounts (
     id TEXT PRIMARY KEY,
     bank_name TEXT NOT NULL,
     account_number_masked TEXT NOT NULL,
     account_type TEXT NOT NULL,
+    is_card BOOLEAN DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

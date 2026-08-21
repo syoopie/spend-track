@@ -23,6 +23,7 @@ DEFAULT_CATEGORIES = [
     ("Education", 220, "graduation-cap", False),
     ("Groceries", 230, "shopping-cart", False),
     ("Salary", 130, "banknote", False),
+    ("Investing", 170, "trending-up", False),
     ("PayNow Transfers", 20, "send", False),
     ("Others", None, "more-horizontal", True),
 ]
@@ -52,6 +53,7 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
     _add_column_if_missing(conn, "transactions", "matched_label", "matched_label TEXT")
     _add_column_if_missing(conn, "categories", "icon", "icon TEXT")
     _add_column_if_missing(conn, "categories", "is_hidden", "is_hidden BOOLEAN DEFAULT 0")
+    _add_column_if_missing(conn, "accounts", "is_card", "is_card BOOLEAN DEFAULT 0")
 
 
 def _reconcile_categories(conn: sqlite3.Connection) -> None:
@@ -70,10 +72,12 @@ def _reconcile_categories(conn: sqlite3.Connection) -> None:
     )
 
 
-def _seed_default_rules(conn: sqlite3.Connection) -> None:
-    existing = conn.execute("SELECT COUNT(*) FROM rules WHERE is_default = 1").fetchone()[0]
-    if existing:
-        return
+def _reconcile_default_rules(conn: sqlite3.Connection) -> None:
+    """Default rules are a pure function of default_rules.py, not user data -
+    fully replacing them on every startup (rather than seeding once and
+    skipping thereafter) is what lets adding a new pattern to the bank reach
+    already-initialized DBs without a one-off migration script."""
+    conn.execute("DELETE FROM rules WHERE is_default = 1")
     conn.executemany(
         "INSERT INTO rules (priority, match_pattern, target_category, is_exclusion_rule, is_default, display_label) "
         "VALUES (?, ?, ?, 0, 1, ?)",
@@ -92,7 +96,7 @@ def init_db(db_path: Path | None = None) -> None:
         conn.executescript(schema_sql)
         _migrate_schema(conn)
         _reconcile_categories(conn)
-        _seed_default_rules(conn)
+        _reconcile_default_rules(conn)
         conn.commit()
     finally:
         conn.close()

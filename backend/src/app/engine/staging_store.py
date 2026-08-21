@@ -24,6 +24,7 @@ class StagingAccount:
     account_number_masked: str
     account_type: str
     is_new: bool  # True if no matching row exists in `accounts` yet
+    is_card: bool = False
 
 
 @dataclass

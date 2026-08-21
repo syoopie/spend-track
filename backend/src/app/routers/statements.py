@@ -71,6 +71,7 @@ def _batch_to_response(batch: StagingBatch) -> StagingBatchOut:
                 account_number_masked=a.account_number_masked,
                 account_type=a.account_type,
                 is_new=a.is_new,
+                is_card=a.is_card,
             )
             for a in batch.accounts
         ],
@@ -119,6 +120,13 @@ async def upload_statement(files: list[UploadFile] = File(...), password: str | 
     with get_conn() as conn:
         rules = _fetch_active_rules(conn)
         contact_identifiers = _fetch_contact_identifiers(conn)
+        # Any card account already committed, or parsed anywhere in this same
+        # multi-file batch, is enough to treat a "pay my card bill" line on a
+        # bank account as already counted elsewhere - see engine/card_payments.py.
+        has_card_account = (
+            conn.execute("SELECT 1 FROM accounts WHERE is_card = 1 LIMIT 1").fetchone() is not None
+            or any(pa.is_card for _f, parsed in parsed_files for pa in parsed.accounts)
+        )
 
         staging_accounts: list[StagingAccount] = []
         account_ids_by_key: dict[tuple[str, str], str] = {}  # (bank_name, account_number) -> account_id
@@ -140,6 +148,7 @@ async def upload_statement(files: list[UploadFile] = File(...), password: str | 
                             account_number_masked=parsed_account.account_number_masked,
                             account_type=parsed_account.account_type,
                             is_new=existing is None,
+                            is_card=parsed_account.is_card,
                         )
                     )
                 account_id = account_ids_by_key[key]
@@ -153,7 +162,13 @@ async def upload_statement(files: list[UploadFile] = File(...), password: str | 
                         is not None
                     )
                     seen_fingerprints.add(fingerprint)
-                    cat = categorize(tx.raw_description, rules, contact_identifiers)
+                    cat = categorize(
+                        tx.raw_description,
+                        rules,
+                        contact_identifiers,
+                        has_card_account=has_card_account,
+                        posting_account_is_card=parsed_account.is_card,
+                    )
                     staging_rows.append(
                         StagingRow(
                             index=row_index,
@@ -277,9 +292,9 @@ def commit_staging_batch(batch_id: str):
             account_id_by_number[acc.account_number] = account_id
             if acc.is_new:
                 conn.execute(
-                    "INSERT OR IGNORE INTO accounts (id, bank_name, account_number_masked, account_type) "
-                    "VALUES (?, ?, ?, ?)",
-                    (account_id, acc.bank_name, acc.account_number_masked, acc.account_type),
+                    "INSERT OR IGNORE INTO accounts (id, bank_name, account_number_masked, account_type, is_card) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (account_id, acc.bank_name, acc.account_number_masked, acc.account_type, acc.is_card),
                 )
                 accounts_provisioned += 1
 
