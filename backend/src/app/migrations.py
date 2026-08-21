@@ -76,6 +76,26 @@ def _migrate_ambiguous_category_directions(conn: sqlite3.Connection) -> None:
         )
 
 
+def _migrate_direction_mismatched_transactions(conn: sqlite3.Connection) -> None:
+    """Catch-all for every other category a transaction can be stuck under
+    that contradicts its own amount's direction (e.g. a pre-direction-lock
+    rule matched "Transport" on a refund credit) - unlike the three
+    categories above, there's no natural same-topic sibling to redirect to,
+    so this falls back to the generic hidden Others/Other Income bucket."""
+    outflow_names = [name for name, *_, direction in DEFAULT_CATEGORIES if direction == "outflow"]
+    inflow_names = [name for name, *_, direction in DEFAULT_CATEGORIES if direction == "inflow"]
+    conn.execute(
+        f"UPDATE transactions SET category = 'Other Income' "
+        f"WHERE amount > 0 AND category IN ({','.join('?' * len(outflow_names))})",
+        outflow_names,
+    )
+    conn.execute(
+        f"UPDATE transactions SET category = 'Others' "
+        f"WHERE amount <= 0 AND category IN ({','.join('?' * len(inflow_names))})",
+        inflow_names,
+    )
+
+
 def _add_column_if_missing(conn: sqlite3.Connection, table: str, column: str, ddl: str) -> None:
     existing_columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
     if column not in existing_columns:
@@ -136,5 +156,6 @@ def run_all(conn: sqlite3.Connection) -> None:
     migrate_schema(conn)
     _apply_category_renames(conn)
     _migrate_ambiguous_category_directions(conn)
+    _migrate_direction_mismatched_transactions(conn)
     reconcile_categories(conn)
     reconcile_default_rules(conn)
