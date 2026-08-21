@@ -3,7 +3,7 @@ import sqlite3
 from fastapi import APIRouter, HTTPException, Query
 
 from app.db import get_conn
-from app.models import RefundPairingOut, TransactionOut
+from app.models import RefundPairingOut, TransactionOut, TransactionUpdateRequest
 
 router = APIRouter(prefix="/api/transactions", tags=["transactions"])
 
@@ -70,6 +70,49 @@ def list_transactions(
         ).fetchall()
         paired_ids = _paired_ids(conn)
         return [_row_to_out(r, paired_ids) for r in rows]
+
+
+@router.patch("/{transaction_id}", response_model=TransactionOut)
+def update_transaction(transaction_id: int, body: TransactionUpdateRequest):
+    with get_conn() as conn:
+        existing = conn.execute("SELECT * FROM transactions WHERE id = ?", (transaction_id,)).fetchone()
+        if existing is None:
+            raise HTTPException(
+                status_code=404,
+                detail={"code": "TRANSACTION_NOT_FOUND", "message": "No transaction with that id."},
+            )
+
+        is_excluded = body.is_excluded if body.is_excluded is not None else bool(existing["is_excluded"])
+        # Unchecking "excluded" clears any stale reason from the last time it was excluded.
+        exclusion_reason = (
+            None
+            if body.is_excluded is False
+            else (body.exclusion_reason if body.exclusion_reason is not None else existing["exclusion_reason"])
+        )
+        conn.execute(
+            "UPDATE transactions SET category = ?, subcategory = ?, matched_label = ?, contact_id = ?, "
+            "is_excluded = ?, exclusion_reason = ? WHERE id = ?",
+            (
+                body.category if body.category is not None else existing["category"],
+                body.subcategory if body.subcategory is not None else existing["subcategory"],
+                body.matched_label if body.matched_label is not None else existing["matched_label"],
+                body.contact_id if body.contact_id is not None else existing["contact_id"],
+                is_excluded,
+                exclusion_reason,
+                transaction_id,
+            ),
+        )
+
+        row = conn.execute(
+            """
+            SELECT t.*, a.bank_name AS bank_name, a.account_number_masked AS account_number_masked
+            FROM transactions t JOIN accounts a ON a.id = t.account_id
+            WHERE t.id = ?
+            """,
+            (transaction_id,),
+        ).fetchone()
+        paired_ids = _paired_ids(conn)
+        return _row_to_out(row, paired_ids)
 
 
 @router.get("/{transaction_id}/refund-pairing", response_model=RefundPairingOut)

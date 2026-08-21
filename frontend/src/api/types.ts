@@ -76,6 +76,15 @@ export interface Transaction {
   has_refund_link: boolean
 }
 
+export interface TransactionUpdateRequest {
+  category?: string
+  subcategory?: string | null
+  matched_label?: string | null
+  contact_id?: number | null
+  is_excluded?: boolean
+  exclusion_reason?: string | null
+}
+
 export interface RefundPairing {
   original: Transaction
   refund: Transaction

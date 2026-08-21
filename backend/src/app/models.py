@@ -84,6 +84,15 @@ class TransactionOut(BaseModel):
     has_refund_link: bool
 
 
+class TransactionUpdateRequest(BaseModel):
+    category: str | None = None
+    subcategory: str | None = None
+    matched_label: str | None = None
+    contact_id: int | None = None
+    is_excluded: bool | None = None
+    exclusion_reason: str | None = None
+
+
 class RefundPairingOut(BaseModel):
     original: TransactionOut
     refund: TransactionOut
