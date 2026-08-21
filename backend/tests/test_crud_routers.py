@@ -343,6 +343,28 @@ def test_delete_contacts_removes_all_contacts_and_identifiers(client):
     assert client.get("/api/contacts").json() == []
 
 
+def test_delete_contacts_nulls_out_contact_id_on_linked_transactions(client):
+    """schema.sql declares transactions.contact_id ON DELETE SET NULL, but no
+    existing test actually links a transaction to a contact before deleting
+    it - this exercises that path end to end rather than just trusting the
+    schema declaration."""
+    _upload_and_commit(client)
+    tx_id = client.get("/api/transactions").json()[0]["id"]
+    contact = client.post(
+        "/api/contacts",
+        json={"name": "Auntie Mei", "default_category": "Paynow", "identifiers": ["+65 9123 4567"]},
+    ).json()
+    client.patch(f"/api/transactions/{tx_id}", json={"contact_id": contact["id"]})
+    linked = next(t for t in client.get("/api/transactions").json() if t["id"] == tx_id)
+    assert linked["contact_id"] == contact["id"]
+
+    resp = client.post("/api/settings/delete-contacts", json={"confirm": "DELETE"})
+    assert resp.status_code == 200
+
+    survivor = next(t for t in client.get("/api/transactions").json() if t["id"] == tx_id)
+    assert survivor["contact_id"] is None  # SET NULL, not left dangling and not an FK error
+
+
 def test_delete_transactions_clears_transactions_but_keeps_accounts(client):
     _upload_and_commit(client)
     resp = client.post("/api/settings/delete-transactions", json={"confirm": "DELETE"})
