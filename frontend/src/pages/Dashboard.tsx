@@ -1,10 +1,10 @@
 import { FileUp, Pencil, RefreshCw } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useAccounts, useCategories, useDashboardSummary, useMonthlyTotals, useTransactions } from '../api/hooks'
-import { categoryIcon } from '../lib/categoryColor'
 import { amountIntensityColor, fmtDate, fmtMonthRangeLabel, fmtPlain, shiftMonth } from '../lib/format'
 import { CashFlowChart } from '../components/CashFlowChart'
 import { CategoryBadge } from '../components/CategoryBadge'
+import { categoryOptionElements } from '../components/CategoryOptions'
 import { CategoryDonut } from '../components/CategoryDonut'
 import { VelocityChart } from '../components/VelocityChart'
 import { RefundDrawer } from '../components/RefundDrawer'
@@ -290,14 +290,7 @@ export function Dashboard() {
               className="w-[160px]"
             >
               <option value="">All Categories</option>
-              {(categoriesQ.data ?? []).map((c) => {
-                const Icon = categoryIcon(categoriesQ.data, c.name)
-                return (
-                  <option key={c.id} value={c.name}>
-                    <Icon size={12} className="shrink-0" /> {c.name}
-                  </option>
-                )
-              })}
+              {categoryOptionElements(categoriesQ.data)}
             </Select>
             <label className="flex items-center gap-1.5 text-xs text-muted cursor-pointer whitespace-nowrap">
               <Checkbox checked={excludedVisible} onChange={setExcludedVisible} />

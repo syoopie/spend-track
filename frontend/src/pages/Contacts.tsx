@@ -6,9 +6,9 @@ import {
   useImportContactsCsv,
 } from '../api/hooks'
 import { CategoryBadge } from '../components/CategoryBadge'
+import { categoryOptionElements } from '../components/CategoryOptions'
 import { Modal } from '../components/Modal'
 import { Select } from '../components/Select'
-import { categoryIcon } from '../lib/categoryColor'
 import { fmtPlain } from '../lib/format'
 
 function AddContactModal({ onClose }: { onClose: () => void }) {
@@ -47,14 +47,7 @@ function AddContactModal({ onClose }: { onClose: () => void }) {
       <div className="text-xs text-muted mb-1">Default Category</div>
       <Select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full mb-3.5">
         <option value="">Select category…</option>
-        {(categoriesQ.data ?? []).map((c) => {
-          const Icon = categoryIcon(categoriesQ.data, c.name)
-          return (
-            <option key={c.id} value={c.name}>
-              <Icon size={12} className="shrink-0" /> {c.name}
-            </option>
-          )
-        })}
+        {categoryOptionElements(categoriesQ.data)}
       </Select>
 
       <div className="text-xs text-muted mb-1.5">Linked Identifiers</div>

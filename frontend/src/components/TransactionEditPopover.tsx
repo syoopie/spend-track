@@ -19,7 +19,12 @@ export function TransactionEditPopover({
   const [isExcluded, setIsExcluded] = useState(transaction.is_excluded)
   const [exclusionReason, setExclusionReason] = useState(transaction.exclusion_reason ?? '')
 
-  const categoryOptions = categoriesQ.data ?? []
+  // Categories are direction-locked (see api/types.ts's CategoryDirection) -
+  // an inflow transaction (a refund, a salary credit, ...) can only be
+  // reassigned to an inflow category, and vice versa, so the picker only
+  // ever offers the set that actually matches this transaction's sign.
+  const direction = transaction.amount > 0 ? 'inflow' : 'outflow'
+  const categoryOptions = (categoriesQ.data ?? []).filter((c) => c.direction === direction)
   const currentCategoryKnown = categoryOptions.some((c) => c.name === category)
 
   function handleSave() {
@@ -50,7 +55,7 @@ export function TransactionEditPopover({
           />
         </div>
         <div className="w-[220px]">
-          <div className="text-[11px] text-muted mb-1">Category</div>
+          <div className="text-[11px] text-muted mb-1">Category · {direction === 'inflow' ? 'Inflow' : 'Outflow'}</div>
           <Select uiSize="sm" bg="card" value={category} onChange={(e) => setCategory(e.target.value)} className="w-full">
             {!currentCategoryKnown && <option value={category}>{category}</option>}
             {categoryOptions.map((c) => {

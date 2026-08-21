@@ -27,15 +27,20 @@ function StagingRowPopover({
   const [saveAsRule, setSaveAsRule] = useState(false)
   const [saveAsContact, setSaveAsContact] = useState(false)
 
+  // Same direction-lock as TransactionEditPopover - this row's amount sign
+  // decides which half of the category list it can be assigned into.
+  const direction = row.amount > 0 ? 'inflow' : 'outflow'
+  const categoryOptions = (categoriesQ.data ?? []).filter((c) => c.direction === direction)
+
   return (
     <div
       className="px-5 py-4 flex items-end gap-3 border-b border-border"
       style={{ background: AMBER_BG }}
     >
       <div className="flex-1">
-        <div className="text-[11px] text-muted mb-1">Assign category</div>
+        <div className="text-[11px] text-muted mb-1">Assign category · {direction === 'inflow' ? 'Inflow' : 'Outflow'}</div>
         <Select uiSize="sm" value={category} onChange={(e) => setCategory(e.target.value)} className="w-full">
-          {(categoriesQ.data ?? []).map((c) => {
+          {categoryOptions.map((c) => {
             const Icon = categoryIcon(categoriesQ.data, c.name)
             return (
               <option key={c.id} value={c.name}>

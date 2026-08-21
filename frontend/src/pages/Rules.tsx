@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { useCategories, useCreateRule, useDeleteRule, useReorderRules, useRules } from '../api/hooks'
 import { CategoryBadge } from '../components/CategoryBadge'
+import { categoryOptionElements } from '../components/CategoryOptions'
 import { Checkbox } from '../components/Checkbox'
 import { Modal } from '../components/Modal'
 import { Select } from '../components/Select'
-import { categoryIcon } from '../lib/categoryColor'
 import type { Rule } from '../api/types'
 
 function RuleBuilderModal({ onClose }: { onClose: () => void }) {
@@ -58,14 +58,7 @@ function RuleBuilderModal({ onClose }: { onClose: () => void }) {
             <div className="text-xs text-muted mb-1">Category</div>
             <Select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full">
               <option value="">Select category…</option>
-              {(categoriesQ.data ?? []).map((c) => {
-                const Icon = categoryIcon(categoriesQ.data, c.name)
-                return (
-                  <option key={c.id} value={c.name}>
-                    <Icon size={12} className="shrink-0" /> {c.name}
-                  </option>
-                )
-              })}
+              {categoryOptionElements(categoriesQ.data)}
             </Select>
           </div>
         )}
