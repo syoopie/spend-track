@@ -83,6 +83,16 @@ def test_parse_suggestions_drops_unknown_index():
     assert parse_suggestions(raw, CANDIDATES, CATEGORIES) == []
 
 
+def test_parse_suggestions_drops_null_category_as_deliberate_abstention():
+    """The prompt explicitly permits "category": null for a generic
+    funds-transfer/bill-payment line with no identifiable payee (e.g.
+    "PAYMT THRU E-BANK/HOMEB/CYBERB") - a model using that escape hatch
+    should be silently dropped, same as any other unusable category, not
+    treated as an error."""
+    raw = '[{"index": 0, "category": null, "display_label": "Bank Transfer", "rule_pattern": null}]'
+    assert parse_suggestions(raw, CANDIDATES, CATEGORIES) == []
+
+
 def test_parse_suggestions_falls_back_to_noise_stripped_label_when_model_omits_one():
     """A model that skips display_label shouldn't leave raw reference codes
     and masked card numbers as the label - see naming.py's noise-stripping,
