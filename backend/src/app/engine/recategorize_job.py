@@ -1,17 +1,25 @@
-"""In-memory pending batch for a recategorize run - deliberately mirrors
-engine/staging_store.py's StagingStore/StagingBatch/StagingRow shape and
-contract almost exactly (create/get/get_by_id/update_row/delete, the same
-"only one pending batch at a time" rule, the same process-wide-singleton
-"single local user" caveat) because recategorize is meant to behave
-identically to an upload from the app's perspective: nothing is written to
-the transactions table until the batch is explicitly committed via
+"""In-memory pending batch for a recategorize run - the row/batch shape and
+lifecycle (create/get/get_by_id/update_row/delete/reset, "only one pending
+batch at a time") live in engine/pending_batch.py's PendingBatchStore, shared
+with engine/staging_store.py's StagingStore; only the RecategorizeRow/
+RecategorizeBatch shapes and this module's process-wide singleton slot are
+specific to a recategorize run. Recategorize is meant to behave identically
+to an upload from the app's perspective: nothing is written to the
+transactions table until the batch is explicitly committed via
 routers/transactions.py::commit_recategorize_batch, and discarding it (or
 letting a background AI pass be cancelled - see ai_providers/cancellation.py)
 leaves the DB completely untouched.
+
+Kept as its own singleton slot rather than merged with StagingStore's - a
+staging batch and a recategorize batch may be pending at the same time, each
+only guarding against a second batch of its own kind (CONTEXT.md's
+PendingBatch entry: "Decided: preserve this").
 """
 
 import uuid
 from dataclasses import dataclass, field
+
+from app.engine.pending_batch import PendingBatchStore
 
 
 @dataclass
@@ -60,19 +68,17 @@ class RecategorizeBatch:
     has_card_account: bool = False
 
 
-_batch: RecategorizeBatch | None = None
+_store: PendingBatchStore[RecategorizeBatch] = PendingBatchStore(
+    row_key_field="transaction_id", batch_noun="recategorize batch", row_noun="recategorize row for transaction"
+)
 
 
 def create(batch: RecategorizeBatch) -> str:
-    global _batch
-    if _batch is not None:
-        raise ValueError("A recategorize batch is already pending")
-    _batch = batch
-    return batch.batch_id
+    return _store.create(batch)
 
 
 def current() -> RecategorizeBatch | None:
-    return _batch
+    return _store.current()
 
 
 def get_by_id(batch_id: str) -> RecategorizeBatch | None:
@@ -80,28 +86,17 @@ def get_by_id(batch_id: str) -> RecategorizeBatch | None:
     background AI task uses this to make itself a no-op once the batch it
     was scheduled for has been committed/discarded/superseded, same guard
     shape as StagingStore.get()'s KeyError-on-mismatch."""
-    return _batch if _batch is not None and _batch.batch_id == batch_id else None
+    return _store.get_by_id(batch_id)
 
 
 def update_row(batch_id: str, transaction_id: int, **fields) -> RecategorizeRow:
-    batch = get_by_id(batch_id)
-    if batch is None:
-        raise KeyError(batch_id)
-    row = next((r for r in batch.rows if r.transaction_id == transaction_id), None)
-    if row is None:
-        raise KeyError(f"No recategorize row for transaction {transaction_id}")
-    for key, value in fields.items():
-        setattr(row, key, value)
-    return row
+    return _store.update_row(batch_id, transaction_id, **fields)
 
 
 def delete(batch_id: str) -> None:
-    global _batch
-    if _batch is not None and _batch.batch_id == batch_id:
-        _batch = None
+    _store.delete(batch_id)
 
 
 def reset() -> None:
     """Test-only escape hatch - see StagingStore.reset()'s equivalent comment."""
-    global _batch
-    _batch = None
+    _store.reset()

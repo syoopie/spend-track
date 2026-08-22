@@ -11,10 +11,17 @@ the pending one is committed or discarded (see routers/statements.py), so
 the review UI never has to juggle more than a single pending statement. A
 single upload can bundle multiple PDF files (see upload_statement); those
 are merged into one batch here rather than tracked as separate batches.
+
+StagingStore's lifecycle (create/get/get_by_id/update_row/delete/reset) is
+engine/pending_batch.py's PendingBatchStore, specialized to StagingBatch's
+`index`-keyed rows - see that module for the shared implementation, and
+engine/recategorize_job.py for the other specialization.
 """
 
 import uuid
 from dataclasses import dataclass, field
+
+from app.engine.pending_batch import PendingBatchStore
 
 
 @dataclass
@@ -98,42 +105,9 @@ class StagingBatch:
     has_card_account: bool = False
 
 
-class StagingStore:
+class StagingStore(PendingBatchStore[StagingBatch]):
     def __init__(self) -> None:
-        self._batch: StagingBatch | None = None
-
-    def create(self, batch: StagingBatch) -> str:
-        if self._batch is not None:
-            raise ValueError("A staging batch is already pending")
-        self._batch = batch
-        return batch.batch_id
-
-    def current(self) -> StagingBatch | None:
-        return self._batch
-
-    def get(self, batch_id: str) -> StagingBatch:
-        if self._batch is None or self._batch.batch_id != batch_id:
-            raise KeyError(batch_id)
-        return self._batch
-
-    def update_row(self, batch_id: str, index: int, **fields) -> StagingRow:
-        batch = self.get(batch_id)
-        row = next((r for r in batch.rows if r.index == index), None)
-        if row is None:
-            raise KeyError(f"No staging row at index {index}")
-        for key, value in fields.items():
-            setattr(row, key, value)
-        return row
-
-    def delete(self, batch_id: str) -> None:
-        if self._batch is not None and self._batch.batch_id == batch_id:
-            self._batch = None
-
-    def reset(self) -> None:
-        """Test-only escape hatch: this store is a process-wide singleton
-        (see get_store below), so tests that don't share a DB still share
-        it - each test must clear any pending batch left by a prior one."""
-        self._batch = None
+        super().__init__(row_key_field="index", batch_noun="staging batch", row_noun="staging row at index")
 
 
 _store = StagingStore()
