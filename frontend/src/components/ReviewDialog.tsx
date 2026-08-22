@@ -1,7 +1,7 @@
-import { Loader2, Sparkles } from 'lucide-react'
+import { Loader2, Sparkles, Undo2 } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { useCategories } from '../api/hooks'
-import type { AiJobStatus } from '../api/types'
+import type { AiJobStatus, RuleRerunRowSnapshot } from '../api/types'
 import { categoryIcon } from '../lib/categoryColor'
 import { fmtDate, fmtSigned } from '../lib/format'
 import { CategoryBadge } from './CategoryBadge'
@@ -15,6 +15,8 @@ const AMBER_BADGE_FG = 'oklch(82% 0.13 70)'
 const AI_BG = 'oklch(22% 0.045 285)'
 const AI_BADGE_BG = 'oklch(30% 0.09 285)'
 const AI_BADGE_FG = 'oklch(82% 0.1 285)'
+const SUCCESS_BG = 'oklch(22% 0.05 150)'
+const SUCCESS_FG = 'oklch(80% 0.13 150)'
 
 // The hidden fallback category a row lands in when nothing (rule, contact,
 // or AI) resolves it - what "reject this AI suggestion" reverts a row back
@@ -59,8 +61,6 @@ function aiIsCurrent(row: ReviewRow): boolean {
 
 export interface ApplyRowBody {
   category: string
-  save_as_rule: boolean
-  rule_pattern?: string
   save_as_contact: boolean
   contact_name?: string
   contact_identifier?: string
@@ -112,14 +112,17 @@ function ReviewRowPopover({
   row,
   onApply,
   applyPending,
+  onCreateRule,
+  createRulePending,
 }: {
   row: ReviewRow
   onApply: (body: ApplyRowBody) => Promise<void>
   applyPending: boolean
+  onCreateRule: (matchPattern: string, targetCategory: string) => Promise<void>
+  createRulePending: boolean
 }) {
   const categoriesQ = useCategories()
   const [category, setCategory] = useState(row.category)
-  const [saveAsRule, setSaveAsRule] = useState(row.ai_suggested && aiIsCurrent(row))
   const [rulePattern, setRulePattern] = useState(row.ai_rule_pattern ?? '')
   const [saveAsContact, setSaveAsContact] = useState(false)
 
@@ -166,13 +169,7 @@ function ReviewRowPopover({
             reusable merchant keyword, so it's never rule-eligible - the only
             way to resolve it going forward is a contact mapping. Every other
             row is the reverse: no identifiable payee to attach a contact
-            to, so only "Save as rule" applies. */}
-        {!row.is_paynow && (
-          <label className="flex items-center gap-1.5 text-[12px] text-text pb-2 cursor-pointer">
-            <Checkbox checked={saveAsRule} onChange={setSaveAsRule} />
-            Save as rule
-          </label>
-        )}
+            to, so it gets the "Create a rule" section below instead. */}
         {row.is_paynow && (
           <label className="flex items-center gap-1.5 text-[12px] text-text pb-2 cursor-pointer">
             <Checkbox checked={saveAsContact} onChange={setSaveAsContact} />
@@ -181,9 +178,7 @@ function ReviewRowPopover({
         )}
         {row.ai_suggested && current && (
           <button
-            onClick={() =>
-              onApply({ category: fallbackCategory(row.amount), save_as_rule: false, save_as_contact: false, reject_ai: true })
-            }
+            onClick={() => onApply({ category: fallbackCategory(row.amount), save_as_contact: false, reject_ai: true })}
             disabled={applyPending}
             title="Discard the AI's suggestion and leave this transaction unresolved again"
             className="text-[12px] font-semibold px-3.5 py-2 rounded-lg border border-border bg-transparent text-muted hover:text-text cursor-pointer disabled:opacity-60"
@@ -193,9 +188,7 @@ function ReviewRowPopover({
         )}
         {row.ai_suggested && !current && (
           <button
-            onClick={() =>
-              onApply({ category: row.ai_category!, save_as_rule: false, save_as_contact: false, restore_ai: true })
-            }
+            onClick={() => onApply({ category: row.ai_category!, save_as_contact: false, restore_ai: true })}
             disabled={applyPending}
             title="Bring back the AI's suggestion for this transaction"
             className="text-[12px] font-semibold px-3.5 py-2 rounded-lg border border-border bg-transparent text-muted hover:text-text cursor-pointer disabled:opacity-60"
@@ -204,29 +197,40 @@ function ReviewRowPopover({
           </button>
         )}
         <button
-          onClick={() =>
-            onApply({
-              category,
-              save_as_rule: saveAsRule,
-              rule_pattern: saveAsRule ? rulePattern || undefined : undefined,
-              save_as_contact: saveAsContact,
-            })
-          }
+          onClick={() => onApply({ category, save_as_contact: saveAsContact })}
           disabled={applyPending}
           className="text-[12px] font-semibold px-3.5 py-2 rounded-lg border-none bg-accent text-accent-fg cursor-pointer disabled:opacity-60"
         >
           Apply
         </button>
       </div>
-      {saveAsRule && (
-        <div>
-          <div className="text-[11px] text-muted mb-1">Rule pattern (substring match, blank uses the cleaned name)</div>
-          <input
-            value={rulePattern}
-            onChange={(e) => setRulePattern(e.target.value)}
-            placeholder={row.raw_description}
-            className="w-full box-border px-2.5 py-1.5 rounded-lg border border-border bg-input text-text text-[12px] font-mono"
-          />
+      {/* Deliberately its own row with its own button, not a checkbox bolted
+          onto Apply above - applying a category to this one transaction and
+          creating a rule that resolves every matching transaction going
+          forward (including elsewhere in this same batch, via the rerun
+          this triggers server-side) are two different actions with two
+          different blast radii, so they get two different confirmations. */}
+      {!row.is_paynow && (
+        <div className="flex items-end gap-3 pt-3 border-t border-border/70">
+          <div className="flex-1">
+            <div className="text-[11px] text-muted mb-1">
+              Create a rule — future transactions containing this text will be categorized as{' '}
+              <span className="text-text font-medium">{category}</span> automatically
+            </div>
+            <input
+              value={rulePattern}
+              onChange={(e) => setRulePattern(e.target.value)}
+              placeholder={row.raw_description}
+              className="w-full box-border px-2.5 py-1.5 rounded-lg border border-border bg-input text-text text-[12px] font-mono"
+            />
+          </div>
+          <button
+            onClick={() => onCreateRule(rulePattern.trim(), category)}
+            disabled={createRulePending || !rulePattern.trim()}
+            className="text-[12px] font-semibold px-3.5 py-2 rounded-lg border border-border bg-transparent text-text hover:bg-input cursor-pointer disabled:opacity-60 whitespace-nowrap"
+          >
+            Create Rule
+          </button>
         </div>
       )}
     </div>
@@ -244,6 +248,10 @@ export function ReviewDialog({
   rows,
   onApplyRow,
   applyPending,
+  onCreateRule,
+  createRulePending,
+  onUndoRule,
+  undoRulePending,
   footer,
   emptyMessage = 'Nothing to show.',
 }: {
@@ -257,10 +265,24 @@ export function ReviewDialog({
   rows: ReviewRow[]
   onApplyRow: (row: ReviewRow, body: ApplyRowBody) => Promise<void>
   applyPending: boolean
+  onCreateRule: (
+    row: ReviewRow,
+    matchPattern: string,
+    targetCategory: string,
+  ) => Promise<{ rule_id: number; updated_rows: RuleRerunRowSnapshot[] }>
+  createRulePending: boolean
+  onUndoRule: (payload: { rule_id: number; rows: RuleRerunRowSnapshot[] }) => Promise<void>
+  undoRulePending: boolean
   footer: ReactNode
   emptyMessage?: string
 }) {
   const [openKey, setOpenKey] = useState<number | null>(null)
+  const [ruleBanner, setRuleBanner] = useState<{
+    ruleId: number
+    rows: RuleRerunRowSnapshot[]
+    matchPattern: string
+    category: string
+  } | null>(null)
   const categoriesQ = useCategories()
 
   return (
@@ -300,6 +322,49 @@ export function ReviewDialog({
           style={{ background: 'oklch(24% 0.05 70)', color: 'oklch(85% 0.1 70)' }}
         >
           {aiWarning}
+        </div>
+      )}
+
+      {/* Confirms the "Create Rule" action and offers to back it out - a
+          rule can retroactively recategorize other rows elsewhere in this
+          same batch, so it gets its own persistent (non-fading) banner
+          rather than the plain "popover just closes" feedback a regular
+          Apply gets. Stays up until dismissed, undone, or replaced by a
+          newer rule creation. */}
+      {ruleBanner && (
+        <div
+          className="rounded-[10px] px-4 py-2.5 mb-4 flex items-center justify-between gap-3 text-[12px]"
+          style={{ background: SUCCESS_BG, color: SUCCESS_FG }}
+        >
+          <div>
+            Rule created — "{ruleBanner.matchPattern}" now categorizes as{' '}
+            <span className="font-semibold">{ruleBanner.category}</span>. Applied to {ruleBanner.rows.length}{' '}
+            transaction{ruleBanner.rows.length === 1 ? '' : 's'} in this batch.
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={async () => {
+                try {
+                  await onUndoRule({ rule_id: ruleBanner.ruleId, rows: ruleBanner.rows })
+                  setRuleBanner(null)
+                } catch {
+                  // leave the banner up so the user can retry the undo
+                }
+              }}
+              disabled={undoRulePending}
+              className="text-[11px] font-semibold px-2.5 py-1.5 rounded-md bg-transparent cursor-pointer inline-flex items-center gap-1 disabled:opacity-60"
+              style={{ color: SUCCESS_FG, border: '1px solid currentColor' }}
+            >
+              <Undo2 size={11} /> Undo
+            </button>
+            <button
+              onClick={() => setRuleBanner(null)}
+              className="text-base leading-none cursor-pointer border-none bg-transparent"
+              style={{ color: SUCCESS_FG }}
+            >
+              ×
+            </button>
+          </div>
         </div>
       )}
 
@@ -373,6 +438,21 @@ export function ReviewDialog({
                     try {
                       await onApplyRow(row, body)
                       setOpenKey(null)
+                    } catch {
+                      // leave the popover open on failure so the user can retry
+                    }
+                  }}
+                  createRulePending={createRulePending}
+                  onCreateRule={async (matchPattern, targetCategory) => {
+                    try {
+                      const result = await onCreateRule(row, matchPattern, targetCategory)
+                      setOpenKey(null)
+                      setRuleBanner({
+                        ruleId: result.rule_id,
+                        rows: result.updated_rows,
+                        matchPattern,
+                        category: targetCategory,
+                      })
                     } catch {
                       // leave the popover open on failure so the user can retry
                     }

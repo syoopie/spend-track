@@ -67,6 +67,47 @@ class StagingRowUpdateRequest(BaseModel):
     restore_ai: bool = False
 
 
+class RuleQuickCreateRequest(BaseModel):
+    """Body for the "Create Rule" action in the review dialogs - a
+    deliberately narrower sibling of RuleCreateRequest (no priority/exclusion
+    fields - a quick rule created mid-review is always a plain category
+    rule, appended after the user's existing rules; exclusion rules are
+    still only made via the full Rules page)."""
+
+    match_pattern: str
+    target_category: str
+    target_subcategory: str | None = None
+
+
+class RuleRerunRowSnapshot(BaseModel):
+    """Both directions of a rule-rerun's row diff: the server returns one of
+    these per row a newly created rule changed (holding that row's *previous*
+    values, for an undo prompt), and the client echoes the same list back
+    verbatim to the undo endpoint to restore it. key is a StagingRow.index or
+    a RecategorizeRow.transaction_id, matching whichever batch this came
+    from."""
+
+    key: int
+    category: str
+    subcategory: str | None
+    matched_label: str | None
+    is_excluded: bool
+    exclusion_reason: str | None
+    contact_id: int | None
+    needs_review: bool
+
+
+class StagingRuleCreateResult(BaseModel):
+    rule_id: int
+    updated_rows: list[RuleRerunRowSnapshot]
+    batch: StagingBatchOut
+
+
+class StagingRuleUndoRequest(BaseModel):
+    rule_id: int
+    rows: list[RuleRerunRowSnapshot]
+
+
 class CommitResult(BaseModel):
     transactions_committed: int
     duplicates_skipped: int
@@ -170,6 +211,19 @@ class RecategorizeRowUpdateRequest(BaseModel):
     contact_identifier: str | None = None
     reject_ai: bool = False
     restore_ai: bool = False
+
+
+class RecategorizeRuleCreateResult(BaseModel):
+    """Mirrors StagingRuleCreateResult exactly - see its docstring-level comment."""
+
+    rule_id: int
+    updated_rows: list[RuleRerunRowSnapshot]
+    batch: RecategorizeBatchOut
+
+
+class RecategorizeRuleUndoRequest(BaseModel):
+    rule_id: int
+    rows: list[RuleRerunRowSnapshot]
 
 
 class RecategorizeCommitResult(BaseModel):

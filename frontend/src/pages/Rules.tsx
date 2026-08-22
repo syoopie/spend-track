@@ -1,5 +1,6 @@
+import { Pencil } from 'lucide-react'
 import { useState } from 'react'
-import { useCategories, useCreateRule, useDeleteRule, useReorderRules, useRules } from '../api/hooks'
+import { useCategories, useCreateRule, useDeleteRule, useReorderRules, useRules, useUpdateRule } from '../api/hooks'
 import { CategoryBadge } from '../components/CategoryBadge'
 import { categoryOptionElements } from '../components/CategoryOptions'
 import { Checkbox } from '../components/Checkbox'
@@ -7,30 +8,46 @@ import { Modal } from '../components/Modal'
 import { Select } from '../components/Select'
 import type { Rule } from '../api/types'
 
-function RuleBuilderModal({ onClose }: { onClose: () => void }) {
+function RuleFormModal({ rule, onClose }: { rule?: Rule; onClose: () => void }) {
   const categoriesQ = useCategories()
   const createRule = useCreateRule()
-  const [pattern, setPattern] = useState('')
-  const [category, setCategory] = useState('')
-  const [priority, setPriority] = useState<number | ''>('')
-  const [isExclusion, setIsExclusion] = useState(false)
-  const [exclusionReason, setExclusionReason] = useState('')
+  const updateRule = useUpdateRule()
+  const [pattern, setPattern] = useState(rule?.match_pattern ?? '')
+  const [category, setCategory] = useState(rule?.target_category ?? '')
+  const [priority, setPriority] = useState<number | ''>(rule?.priority ?? '')
+  const [isExclusion, setIsExclusion] = useState(rule?.is_exclusion_rule ?? false)
+  const [exclusionReason, setExclusionReason] = useState(rule?.exclusion_reason ?? '')
 
   async function handleSave() {
     if (!pattern.trim()) return
-    await createRule.mutateAsync({
-      match_pattern: pattern.trim(),
-      target_category: isExclusion ? null : category || categoriesQ.data?.[0]?.name || 'Others',
-      is_exclusion_rule: isExclusion,
-      exclusion_reason: isExclusion ? exclusionReason.trim() || null : null,
-      priority: priority === '' ? null : priority,
-    })
+    if (rule) {
+      await updateRule.mutateAsync({
+        id: rule.id,
+        body: {
+          match_pattern: pattern.trim(),
+          target_category: isExclusion ? null : category || categoriesQ.data?.[0]?.name || 'Others',
+          is_exclusion_rule: isExclusion,
+          exclusion_reason: isExclusion ? exclusionReason.trim() || null : null,
+          priority: priority === '' ? null : priority,
+        },
+      })
+    } else {
+      await createRule.mutateAsync({
+        match_pattern: pattern.trim(),
+        target_category: isExclusion ? null : category || categoriesQ.data?.[0]?.name || 'Others',
+        is_exclusion_rule: isExclusion,
+        exclusion_reason: isExclusion ? exclusionReason.trim() || null : null,
+        priority: priority === '' ? null : priority,
+      })
+    }
     onClose()
   }
 
+  const saving = createRule.isPending || updateRule.isPending
+
   return (
     <Modal onClose={onClose} width={460}>
-      <div className="text-base font-bold mb-1">New Rule</div>
+      <div className="text-base font-bold mb-1">{rule ? 'Edit Rule' : 'New Rule'}</div>
       <div className="text-[12px] text-muted mb-4">Applies to every transaction whose description contains the text below.</div>
 
       <div className="flex flex-col gap-3.5">
@@ -98,10 +115,10 @@ function RuleBuilderModal({ onClose }: { onClose: () => void }) {
         </button>
         <button
           onClick={handleSave}
-          disabled={createRule.isPending || !pattern.trim()}
+          disabled={saving || !pattern.trim()}
           className="text-[13px] font-semibold px-4 py-2.5 rounded-lg border-none bg-accent text-accent-fg cursor-pointer disabled:opacity-60"
         >
-          Save Rule
+          {rule ? 'Save Changes' : 'Save Rule'}
         </button>
       </div>
     </Modal>
@@ -123,7 +140,8 @@ export function Rules() {
   const categoriesQ = useCategories()
   const reorderRules = useReorderRules()
   const deleteRule = useDeleteRule()
-  const [modalOpen, setModalOpen] = useState(false)
+  // 'new' opens the modal in Add mode; a Rule opens it pre-filled in Edit mode.
+  const [formTarget, setFormTarget] = useState<Rule | 'new' | null>(null)
   const [draggedId, setDraggedId] = useState<number | null>(null)
 
   const rules = rulesQ.data ?? []
@@ -143,7 +161,7 @@ export function Rules() {
           <div className="text-[13px] text-muted mt-0.5">Evaluated top to bottom — the first match wins</div>
         </div>
         <button
-          onClick={() => setModalOpen(true)}
+          onClick={() => setFormTarget('new')}
           className="text-[13px] font-semibold px-4 py-2.5 rounded-lg border-none bg-accent text-accent-fg cursor-pointer self-start"
         >
           + New Rule
@@ -189,6 +207,13 @@ export function Rules() {
                 )}
               </div>
               <button
+                onClick={() => setFormTarget(r)}
+                title="Edit rule"
+                className="text-muted-2 hover:text-text bg-transparent border-none cursor-pointer p-1 rounded-md opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
+              >
+                <Pencil size={13} />
+              </button>
+              <button
                 onClick={() => deleteRule.mutate(r.id)}
                 className="text-xs text-muted-2 hover:text-danger-text bg-transparent border-none cursor-pointer opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
               >
@@ -199,7 +224,9 @@ export function Rules() {
         })}
       </div>
 
-      {modalOpen && <RuleBuilderModal onClose={() => setModalOpen(false)} />}
+      {formTarget && (
+        <RuleFormModal rule={formTarget === 'new' ? undefined : formTarget} onClose={() => setFormTarget(null)} />
+      )}
     </div>
   )
 }

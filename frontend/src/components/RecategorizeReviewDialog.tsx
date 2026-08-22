@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import {
   useCommitRecategorizeBatch,
+  useCreateRuleFromRecategorizeBatch,
   useCurrentRecategorizeBatch,
   useDiscardRecategorizeBatch,
   useRecategorizeTransactions,
+  useUndoRuleFromRecategorizeBatch,
   useUpdateRecategorizeRow,
 } from '../api/hooks'
 import { fmtMonthRangeLabel } from '../lib/format'
@@ -34,6 +36,8 @@ export function RecategorizeReviewDialog({
   // Hooks must run unconditionally regardless of which view below renders -
   // an empty batchId is inert until a batch actually exists.
   const updateRow = useUpdateRecategorizeRow(batchQ.data?.batch_id ?? '')
+  const createRule = useCreateRuleFromRecategorizeBatch(batchQ.data?.batch_id ?? '')
+  const undoRule = useUndoRuleFromRecategorizeBatch(batchQ.data?.batch_id ?? '')
   const [confirmError, setConfirmError] = useState<string | null>(null)
 
   function handleConfirm() {
@@ -100,8 +104,6 @@ export function RecategorizeReviewDialog({
       transactionId: row.key,
       body: {
         category: body.category,
-        save_as_rule: body.save_as_rule,
-        rule_pattern: body.rule_pattern,
         save_as_contact: body.save_as_contact,
         contact_name: body.contact_name,
         contact_identifier: body.contact_identifier,
@@ -109,6 +111,10 @@ export function RecategorizeReviewDialog({
         restore_ai: body.restore_ai,
       },
     })
+  }
+
+  async function handleCreateRule(_row: ReviewRow, matchPattern: string, targetCategory: string) {
+    return createRule.mutateAsync({ match_pattern: matchPattern, target_category: targetCategory })
   }
 
   const rows: ReviewRow[] = batch.rows.map((r) => ({
@@ -149,6 +155,10 @@ export function RecategorizeReviewDialog({
       rows={rows}
       onApplyRow={handleApplyRow}
       applyPending={updateRow.isPending}
+      onCreateRule={handleCreateRule}
+      createRulePending={createRule.isPending}
+      onUndoRule={(payload) => undoRule.mutateAsync(payload).then(() => {})}
+      undoRulePending={undoRule.isPending}
       emptyMessage="No transactions in this range."
       footer={
         <>

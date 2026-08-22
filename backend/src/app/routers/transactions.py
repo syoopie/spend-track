@@ -8,6 +8,7 @@ from app.db import get_conn
 from app.engine import recategorize_job
 from app.engine.ai_providers import AiCandidate, AiSuggestion, active_model_name, run_categorization_job
 from app.engine.ai_providers import cancellation as ai_cancellation
+from app.engine.rule_rerun import rerun_rules_on_batch
 from app.engine.rules import categorize
 from app.errors import api_error
 from app.models import (
@@ -16,7 +17,11 @@ from app.models import (
     RecategorizeRequest,
     RecategorizeRowOut,
     RecategorizeRowUpdateRequest,
+    RecategorizeRuleCreateResult,
+    RecategorizeRuleUndoRequest,
     RefundPairingOut,
+    RuleQuickCreateRequest,
+    RuleRerunRowSnapshot,
     TransactionOut,
     TransactionUpdateRequest,
 )
@@ -243,6 +248,7 @@ def recategorize_transactions(body: RecategorizeRequest, background_tasks: Backg
                     exclusion_reason=result.exclusion_reason,
                     needs_review=result.needs_review,
                     is_paynow=result.is_paynow,
+                    is_card_account=bool(row["account_is_card"]),
                 )
             )
             if result.category in ("Others", "Other Income") and result.matched_label is None:
@@ -272,6 +278,7 @@ def recategorize_transactions(body: RecategorizeRequest, background_tasks: Backg
         rows=rows_out,
         ai_status=ai_status,
         ai_model=ai_model,
+        has_card_account=has_card_account,
     )
     try:
         recategorize_job.create(batch)
@@ -341,6 +348,68 @@ def update_recategorize_row(batch_id: str, transaction_id: int, body: Recategori
             recategorize_job.update_row(batch_id, transaction_id, contact_id=contact_id)
 
     return _batch_to_out(recategorize_job.get_by_id(batch_id))
+
+
+@router.post("/recategorize/{batch_id}/rules", response_model=RecategorizeRuleCreateResult)
+def create_rule_from_recategorize_batch(batch_id: str, body: RuleQuickCreateRequest):
+    """Mirrors routers/statements.py::create_rule_from_staging_batch exactly
+    - see its docstring."""
+    batch = recategorize_job.get_by_id(batch_id)
+    if batch is None:
+        raise api_error(404, "RECATEGORIZE_BATCH_NOT_FOUND", "No recategorize batch with that id.")
+    if not body.match_pattern.strip():
+        raise api_error(422, "INVALID_RULE_PATTERN", "Rule pattern cannot be blank.")
+
+    with get_conn() as conn:
+        rule_id = repo.insert_rule(
+            conn,
+            priority=repo.next_user_rule_priority(conn),
+            match_pattern=body.match_pattern.strip(),
+            target_category=body.target_category,
+            target_subcategory=body.target_subcategory,
+        )
+        rules = repo.fetch_active_rules(conn)
+        contact_identifiers = repo.fetch_contact_identifiers(conn)
+        category_directions = repo.fetch_category_directions(conn)
+
+    changes = rerun_rules_on_batch(
+        batch.rows, "transaction_id", rules, contact_identifiers, category_directions, batch.has_card_account
+    )
+    return RecategorizeRuleCreateResult(
+        rule_id=rule_id,
+        updated_rows=[RuleRerunRowSnapshot(**c) for c in changes],
+        batch=_batch_to_out(batch),
+    )
+
+
+@router.post("/recategorize/{batch_id}/rules/undo", response_model=RecategorizeBatchOut)
+def undo_rule_from_recategorize_batch(batch_id: str, body: RecategorizeRuleUndoRequest):
+    """Mirrors routers/statements.py::undo_rule_from_staging_batch exactly -
+    see its docstring."""
+    batch = recategorize_job.get_by_id(batch_id)
+    if batch is None:
+        raise api_error(404, "RECATEGORIZE_BATCH_NOT_FOUND", "No recategorize batch with that id.")
+
+    with get_conn() as conn:
+        conn.execute("DELETE FROM rules WHERE id = ? AND is_default = 0", (body.rule_id,))
+
+    for snap in body.rows:
+        try:
+            recategorize_job.update_row(
+                batch_id,
+                snap.key,
+                category=snap.category,
+                subcategory=snap.subcategory,
+                matched_label=snap.matched_label,
+                is_excluded=snap.is_excluded,
+                exclusion_reason=snap.exclusion_reason,
+                contact_id=snap.contact_id,
+                needs_review=snap.needs_review,
+                manually_edited=False,
+            )
+        except KeyError:
+            continue  # row no longer exists - nothing left to restore for it
+    return _batch_to_out(batch)
 
 
 @router.post("/recategorize/{batch_id}/commit", response_model=RecategorizeCommitResult)

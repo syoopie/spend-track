@@ -1,4 +1,11 @@
-import { useCommitBatch, useCurrentStagingBatch, useDiscardBatch, useUpdateStagingRow } from '../api/hooks'
+import {
+  useCommitBatch,
+  useCreateRuleFromStagingBatch,
+  useCurrentStagingBatch,
+  useDiscardBatch,
+  useUndoRuleFromStagingBatch,
+  useUpdateStagingRow,
+} from '../api/hooks'
 import { ReviewDialog, type ApplyRowBody, type ReviewRow, type ReviewStatCard } from './ReviewDialog'
 
 export function StagingReviewDialog({ onClose }: { onClose: () => void }) {
@@ -6,6 +13,8 @@ export function StagingReviewDialog({ onClose }: { onClose: () => void }) {
   const commit = useCommitBatch()
   const discard = useDiscardBatch()
   const updateRow = useUpdateStagingRow(batchQ.data?.batch_id ?? '')
+  const createRule = useCreateRuleFromStagingBatch(batchQ.data?.batch_id ?? '')
+  const undoRule = useUndoRuleFromStagingBatch(batchQ.data?.batch_id ?? '')
 
   if (batchQ.isLoading) {
     return (
@@ -20,6 +29,10 @@ export function StagingReviewDialog({ onClose }: { onClose: () => void }) {
         rows={[]}
         onApplyRow={async () => {}}
         applyPending={false}
+        onCreateRule={async () => ({ rule_id: 0, updated_rows: [] })}
+        createRulePending={false}
+        onUndoRule={async () => {}}
+        undoRulePending={false}
         footer={null}
       />
     )
@@ -44,8 +57,6 @@ export function StagingReviewDialog({ onClose }: { onClose: () => void }) {
       index: row.key,
       body: {
         category: body.category,
-        save_as_rule: body.save_as_rule,
-        rule_pattern: body.rule_pattern,
         save_as_contact: body.save_as_contact,
         contact_name: body.contact_name,
         contact_identifier: body.contact_identifier,
@@ -53,6 +64,10 @@ export function StagingReviewDialog({ onClose }: { onClose: () => void }) {
         restore_ai: body.restore_ai,
       },
     })
+  }
+
+  async function handleCreateRule(_row: ReviewRow, matchPattern: string, targetCategory: string) {
+    return createRule.mutateAsync({ match_pattern: matchPattern, target_category: targetCategory })
   }
 
   const rows: ReviewRow[] = visibleRows.map((r) => ({
@@ -97,6 +112,10 @@ export function StagingReviewDialog({ onClose }: { onClose: () => void }) {
       rows={rows}
       onApplyRow={handleApplyRow}
       applyPending={updateRow.isPending}
+      onCreateRule={handleCreateRule}
+      createRulePending={createRule.isPending}
+      onUndoRule={(payload) => undoRule.mutateAsync(payload).then(() => {})}
+      undoRulePending={undoRule.isPending}
       emptyMessage="Nothing new to commit."
       footer={
         <>

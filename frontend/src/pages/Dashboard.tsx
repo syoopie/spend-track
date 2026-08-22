@@ -38,7 +38,7 @@ function MetricCard({
 }
 
 export function Dashboard() {
-  const { openDialog, hasPendingBatch, openReview } = useUploadDialog()
+  const { openDialog, hasPendingBatch } = useUploadDialog()
   // Loaded once per mount (not on every render) so a stored selection wins,
   // but doesn't keep re-overriding state after the user changes it.
   const [storedFilters] = useState(loadDashboardFilters)
@@ -120,27 +120,9 @@ export function Dashboard() {
   )
   const distinctAccounts = new Set((txQ.data ?? []).map((t) => t.account_id)).size
 
-  const banner = hasPendingBatch && (
-    <div
-      className="flex items-center justify-between gap-4 px-4.5 py-3 mb-5 rounded-xl border"
-      style={{ background: 'oklch(24% 0.05 70)', borderColor: 'oklch(40% 0.08 70)' }}
-    >
-      <div className="text-[13px]" style={{ color: 'oklch(85% 0.12 70)' }}>
-        A statement is awaiting review before it can be committed.
-      </div>
-      <button
-        onClick={openReview}
-        className="text-[12px] font-semibold px-3.5 py-2 rounded-lg border-none bg-accent text-accent-fg cursor-pointer shrink-0"
-      >
-        Review Now
-      </button>
-    </div>
-  )
-
   if (summaryQ.isLoading || !summaryQ.data || accountsQ.isLoading) {
     return (
       <div className="p-9">
-        {banner}
         <div className="text-muted">Loading dashboard…</div>
       </div>
     )
@@ -149,7 +131,6 @@ export function Dashboard() {
   if ((accountsQ.data ?? []).length === 0) {
     return (
       <div className="min-h-screen flex flex-col p-9">
-        {banner}
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center max-w-md">
             <div className="w-13 h-13 rounded-xl bg-accent/12 mx-auto mb-5 flex items-center justify-center">
@@ -181,7 +162,6 @@ export function Dashboard() {
 
   return (
     <div className="px-9 pb-15">
-      <div className="pt-7">{banner}</div>
       <div className="sticky top-0 z-20 -mx-9 px-9 bg-bg pt-7 pb-5.5">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
