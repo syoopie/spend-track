@@ -113,11 +113,22 @@ def build_prompt(candidates: list[AiCandidate], categories: list[tuple[str, str]
         "terminal ID, or masked card/account number (those are different on every transaction, so a rule built "
         "from one would never match again). Use null if the description is too generic/one-off for a reliable "
         "rule.\n\n"
+        "Some transactions are a generic funds-transfer or bill-payment line with no identifiable payee at all - "
+        'e.g. "PAYMT THRU E-BANK/HOMEB/CYBERB", a bare "GIRO", "FAST PAYMENT", "IBG", or "FUNDS TRANSFER" with no '
+        "name attached. These are commonly credit card bill payments, loan repayments, or other bill payments - "
+        "not a specific purchase - and the description alone gives no way to tell which. Guessing a spending "
+        "category for one of these risks being flatly wrong, and if it actually was a credit card bill payment "
+        "and the user also tracks that card's own statement here, confidently labeling it as everyday spending "
+        "would double-count money already counted on the card statement. For a transaction like this, where "
+        "nothing about the payee or purpose can be determined from the description, respond with "
+        '"category": null instead of guessing - leaving it uncategorized for the user to resolve by hand is '
+        "better than a wrong guess.\n\n"
         f"Allowed categories (name, direction):\n{category_lines}\n\n"
         f"Transactions:\n[{candidate_lines}]\n\n"
         'Respond with ONLY a JSON object of the exact shape {"results": [...]}, no other text - "results" must be '
         "an array with one object per transaction, each shaped exactly like: "
-        '{"index": <same index value given above>, "category": "<one of the allowed category names>", '
+        '{"index": <same index value given above>, "category": "<one of the allowed category names, or null if '
+        'you genuinely cannot tell what this transaction was for>", '
         '"display_label": "<clean label>", "rule_pattern": "<UPPERCASE substring or null>"}'
     )
 
