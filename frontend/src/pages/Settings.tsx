@@ -14,6 +14,7 @@ import {
 import { Checkbox } from '../components/Checkbox'
 import { Modal } from '../components/Modal'
 import { Tabs } from '../components/Tabs'
+import { Toast, type ToastMessage } from '../components/Toast'
 import { fmtBytes } from '../lib/format'
 import { ACCENT_PRESETS, DEFAULT_ACCENT, loadStoredAccentColor, resetAccentColor, saveAccentColor } from '../lib/accentColor'
 import type { AiProviderKind, Settings as SettingsType } from '../api/types'
@@ -34,7 +35,7 @@ function AiSection({ settings }: { settings: SettingsType | undefined }) {
   const toggleAi = useUpdateAiSettings()
 
   const [enabled, setEnabled] = useState(false)
-  const [toggleNotice, setToggleNotice] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
+  const [toggleNotice, setToggleNotice] = useState<ToastMessage | null>(null)
   const toggleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [provider, setProvider] = useState<AiProviderKind>('ollama')
@@ -95,7 +96,7 @@ function AiSection({ settings }: { settings: SettingsType | undefined }) {
       toggleAi.mutate(
         { ai_enabled: next },
         {
-          onSuccess: () => showToggleNotice('success', next ? 'AI categorization enabled.' : 'AI categorization disabled.'),
+          onSuccess: () => showToggleNotice('success', next ? 'AI enabled.' : 'AI disabled.'),
           onError: (err) =>
             showToggleNotice(
               'error',
@@ -137,24 +138,19 @@ function AiSection({ settings }: { settings: SettingsType | undefined }) {
 
   return (
     <div className="bg-card border border-border rounded-xl p-5 mb-4">
-      <div className="text-[13px] font-semibold mb-1">AI Categorization</div>
+      <div className="text-[13px] font-semibold mb-1">AI</div>
       <div className="text-xs text-muted mb-3.5">
-        Whatever the rule engine can't resolve is sent to a model for a suggested category, label, and rule -
+        Lets the app call out to a language model to help with things the built-in rule engine can't handle on its
+        own. <strong className="text-text-2">Categorization is currently the only AI-powered feature</strong>:
+        whatever the rule engine leaves in "Others" is sent to a model for a suggested category, label, and rule -
         automatically on every upload and Recategorize run, always shown for review before it's relied on.
       </div>
 
       <label className="flex items-center gap-2 text-[13px] text-text cursor-pointer w-fit">
         <Checkbox checked={enabled} onChange={handleToggleEnabled} />
-        Enable AI categorization
+        Enable AI
       </label>
-      {toggleNotice && (
-        <div
-          className={`text-[12px] mt-1.5 ${toggleNotice.kind === 'success' ? 'text-success' : ''}`}
-          style={toggleNotice.kind === 'error' ? { color: 'oklch(70% 0.18 25)' } : undefined}
-        >
-          {toggleNotice.text}
-        </div>
-      )}
+      <Toast toast={toggleNotice} />
 
       {/* Connection details only matter once AI is actually on. */}
       {enabled && (
