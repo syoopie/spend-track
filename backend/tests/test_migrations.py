@@ -64,3 +64,28 @@ def test_correctly_directed_category_is_left_alone(tmp_path):
     row = conn.execute("SELECT category FROM transactions WHERE fingerprint = 'fp1'").fetchone()
     conn.close()
     assert row["category"] == "Transport"
+
+
+def test_rules_direction_backfilled_from_category_for_pre_existing_dbs(tmp_path):
+    """Simulates a DB created before rules.direction existed: a category
+    rule created back then must come back with the same direction its
+    category already had (not silently dropped to the outflow column
+    default) once the column is added on next launch."""
+    db_path = tmp_path / "test.db"
+    init_db(db_path)
+
+    conn = _connect(db_path)
+    conn.execute("ALTER TABLE rules DROP COLUMN direction")
+    conn.execute(
+        "INSERT INTO rules (priority, match_pattern, target_category, is_exclusion_rule) "
+        "VALUES (1, 'PAYROLL', 'Salary', 0)"
+    )
+    conn.commit()
+    conn.close()
+
+    init_db(db_path)  # simulates the app restarting on a pre-direction-column DB
+
+    conn = _connect(db_path)
+    row = conn.execute("SELECT direction FROM rules WHERE match_pattern = 'PAYROLL'").fetchone()
+    conn.close()
+    assert row["direction"] == "inflow"

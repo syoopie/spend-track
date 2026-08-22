@@ -96,15 +96,22 @@ def _migrate_direction_mismatched_transactions(conn: sqlite3.Connection) -> None
     )
 
 
-def _add_column_if_missing(conn: sqlite3.Connection, table: str, column: str, ddl: str) -> None:
+def _add_column_if_missing(conn: sqlite3.Connection, table: str, column: str, ddl: str) -> bool:
     existing_columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
     if column not in existing_columns:
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {ddl}")
+        return True
+    return False
 
 
-def migrate_schema(conn: sqlite3.Connection) -> None:
+def migrate_schema(conn: sqlite3.Connection) -> bool:
     """CREATE TABLE IF NOT EXISTS in schema.sql only covers fresh installs -
-    a DB created before a column existed needs an explicit ALTER TABLE."""
+    a DB created before a column existed needs an explicit ALTER TABLE.
+    Returns whether rules.direction was just added, so run_all() can
+    backfill it from each rule's target category afterward - it can't be
+    done here because that backfill needs categories.direction to already
+    hold real per-category values, and reconcile_categories() (which
+    populates those) hasn't run yet at this point."""
     _add_column_if_missing(conn, "rules", "is_default", "is_default BOOLEAN DEFAULT 0")
     _add_column_if_missing(conn, "rules", "display_label", "display_label TEXT")
     _add_column_if_missing(conn, "transactions", "matched_label", "matched_label TEXT")
@@ -112,6 +119,29 @@ def migrate_schema(conn: sqlite3.Connection) -> None:
     _add_column_if_missing(conn, "categories", "is_hidden", "is_hidden BOOLEAN DEFAULT 0")
     _add_column_if_missing(conn, "accounts", "is_card", "is_card BOOLEAN DEFAULT 0")
     _add_column_if_missing(conn, "categories", "direction", "direction TEXT NOT NULL DEFAULT 'outflow'")
+    return _add_column_if_missing(conn, "rules", "direction", "direction TEXT NOT NULL DEFAULT 'outflow'")
+
+
+def _backfill_rule_directions_from_category(conn: sqlite3.Connection) -> None:
+    """One-time backfill for DBs that predate rules.direction. A
+    category-assigning rule's direction is just the direction of the
+    category it already assigns - it could never actually have applied to
+    the opposite direction anyway (see engine/rules.py's
+    _category_direction check), so this restores exactly the same
+    behavior those rules already had rather than dropping them to the
+    'outflow' column default. Exclusion rules have no category to infer a
+    direction from - they were never direction-scoped before this field
+    existed, so they keep that default and the user can flip specific ones
+    to inflow if that's wrong for them."""
+    conn.execute(
+        """
+        UPDATE rules SET direction = (
+            SELECT direction FROM categories WHERE categories.name = rules.target_category
+        )
+        WHERE is_exclusion_rule = 0
+          AND EXISTS (SELECT 1 FROM categories WHERE categories.name = rules.target_category)
+        """
+    )
 
 
 def reconcile_categories(conn: sqlite3.Connection) -> None:
@@ -133,6 +163,9 @@ def reconcile_categories(conn: sqlite3.Connection) -> None:
     )
 
 
+_CATEGORY_DIRECTIONS = {name: direction for name, *_, direction in DEFAULT_CATEGORIES}
+
+
 def reconcile_default_rules(conn: sqlite3.Connection) -> None:
     """Default rules are a pure function of default_rules.py, not user data -
     fully replacing them on every startup (rather than seeding once and
@@ -140,10 +173,10 @@ def reconcile_default_rules(conn: sqlite3.Connection) -> None:
     already-initialized DBs without a one-off migration script."""
     conn.execute("DELETE FROM rules WHERE is_default = 1")
     conn.executemany(
-        "INSERT INTO rules (priority, match_pattern, target_category, is_exclusion_rule, is_default, display_label) "
-        "VALUES (?, ?, ?, 0, 1, ?)",
+        "INSERT INTO rules (priority, match_pattern, target_category, direction, is_exclusion_rule, is_default, "
+        "display_label) VALUES (?, ?, ?, ?, 0, 1, ?)",
         [
-            (10000 + i, pattern, category, label)
+            (10000 + i, pattern, category, _CATEGORY_DIRECTIONS.get(category, "outflow"), label)
             for i, (pattern, category, label) in enumerate(iter_default_rules())
         ],
     )
@@ -153,9 +186,11 @@ def run_all(conn: sqlite3.Connection) -> None:
     """Called once per db.init_db(). Order matters: schema DDL before data
     reconciliation, and renames/direction-redirects before reconcile_categories()
     so a just-migrated row isn't immediately re-created under its old name."""
-    migrate_schema(conn)
+    rules_direction_just_added = migrate_schema(conn)
     _apply_category_renames(conn)
     _migrate_ambiguous_category_directions(conn)
     _migrate_direction_mismatched_transactions(conn)
     reconcile_categories(conn)
+    if rules_direction_just_added:
+        _backfill_rule_directions_from_category(conn)
     reconcile_default_rules(conn)
