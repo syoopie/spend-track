@@ -89,7 +89,14 @@ def get_settings():
 
 @router.get("/ai/status", response_model=AiStatusOut)
 def get_ai_status():
-    provider = build_provider(get_ai_settings())
+    try:
+        provider = build_provider(get_ai_settings())
+    except ValueError as exc:
+        # Defensive: AiSettingsUpdateRequest.ai_provider is now a Literal, so
+        # this can no longer be reached through the API - but a pre-existing
+        # or hand-edited config.json could still hold a stale/invalid value,
+        # and that should surface as "unreachable", not a 500.
+        return AiStatusOut(reachable=False, models=[], error=str(exc))
     health = provider.check_health()
     return AiStatusOut(reachable=health.reachable, models=health.models, error=health.error)
 
@@ -113,7 +120,15 @@ def update_ai_settings(body: AiSettingsUpdateRequest):
     resulting_enabled = updates.get("ai_enabled", current["ai_enabled"])
     if resulting_enabled:
         merged = {**current, **updates}
-        model_field, model_label = _PROVIDER_REQUIREMENTS[resulting_provider]
+        # ai_provider on the request is now a Literal, so this can only be
+        # reached via a stale/hand-edited config.json still holding an old
+        # invalid value - a clean 400 beats a KeyError -> 500.
+        requirement = _PROVIDER_REQUIREMENTS.get(resulting_provider)
+        if requirement is None:
+            raise api_error(
+                400, "AI_PROVIDER_NOT_CONFIGURED", f"Unknown AI provider {resulting_provider!r} - re-select a provider."
+            )
+        model_field, model_label = requirement
         if not merged.get(model_field):
             raise api_error(400, "AI_PROVIDER_NOT_CONFIGURED", f"{model_label} is required for {resulting_provider}.")
         key_field = _PROVIDER_KEY_REQUIREMENTS.get(resulting_provider)

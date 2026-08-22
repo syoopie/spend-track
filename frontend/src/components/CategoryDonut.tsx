@@ -59,7 +59,11 @@ export function CategoryDonut({
                     onMouseEnter={() => setHovered(seg.category)}
                     onMouseLeave={() => setHovered(null)}
                     onClick={() => onCategoryClick?.(seg.category)}
-                    className={onCategoryClick ? 'cursor-pointer transition-all' : 'transition-all'}
+                    className={
+                      onCategoryClick
+                        ? 'cursor-pointer transition-[stroke-width,opacity]'
+                        : 'transition-[stroke-width,opacity]'
+                    }
                   />
                 ))}
               </g>

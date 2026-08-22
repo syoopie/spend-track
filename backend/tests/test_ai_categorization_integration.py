@@ -73,7 +73,7 @@ def test_upload_with_ai_disabled_leaves_rows_untouched(client):
 def test_upload_with_ai_enabled_and_reachable_suggests_categories(client, monkeypatch):
     _enable_ai(client)
     fake = _FakeProvider(reachable=True)
-    monkeypatch.setattr("app.routers.statements.build_provider", lambda settings: fake)
+    monkeypatch.setattr("app.engine.ai_providers.build_provider", lambda settings: fake)
 
     upload_body = _upload(client).json()
     assert upload_body["ai_status"] == "running"
@@ -92,7 +92,7 @@ def test_upload_with_ai_enabled_and_reachable_suggests_categories(client, monkey
 def test_upload_with_ai_enabled_and_unreachable_sets_warning(client, monkeypatch):
     _enable_ai(client)
     fake = _FakeProvider(reachable=False, health_error="connection refused")
-    monkeypatch.setattr("app.routers.statements.build_provider", lambda settings: fake)
+    monkeypatch.setattr("app.engine.ai_providers.build_provider", lambda settings: fake)
 
     _upload(client)
     final = _staging_current(client)
@@ -104,7 +104,7 @@ def test_upload_with_ai_enabled_and_unreachable_sets_warning(client, monkeypatch
 def test_upload_with_ai_categorize_error_sets_warning(client, monkeypatch):
     _enable_ai(client)
     fake = _FakeProvider(reachable=True, raise_on_categorize=AiProviderUnavailableError("timed out"))
-    monkeypatch.setattr("app.routers.statements.build_provider", lambda settings: fake)
+    monkeypatch.setattr("app.engine.ai_providers.build_provider", lambda settings: fake)
 
     _upload(client)
     final = _staging_current(client)
@@ -128,7 +128,7 @@ def test_background_ai_task_no_op_after_batch_discarded(client, monkeypatch):
 def test_patch_staging_row_accepts_rule_pattern(client, monkeypatch):
     _enable_ai(client)
     fake = _FakeProvider(reachable=True)
-    monkeypatch.setattr("app.routers.statements.build_provider", lambda settings: fake)
+    monkeypatch.setattr("app.engine.ai_providers.build_provider", lambda settings: fake)
     _upload(client)
     final = _staging_current(client)
     suggested = next(r for r in final["rows"] if r["ai_suggested"])
@@ -150,7 +150,7 @@ def test_patch_staging_row_accepts_rule_pattern(client, monkeypatch):
 def test_staging_reject_then_restore_ai_suggestion(client, monkeypatch):
     _enable_ai(client)
     fake = _FakeProvider(reachable=True)
-    monkeypatch.setattr("app.routers.statements.build_provider", lambda settings: fake)
+    monkeypatch.setattr("app.engine.ai_providers.build_provider", lambda settings: fake)
     _upload(client)
     final = _staging_current(client)
     suggested = next(r for r in final["rows"] if r["ai_suggested"])
@@ -210,7 +210,7 @@ def test_recategorize_with_ai_enabled_categorizes_leftovers(client, monkeypatch)
     _upload_and_commit(client)
     _enable_ai(client)
     fake = _FakeProvider(reachable=True, target_category="Shopping")
-    monkeypatch.setattr("app.routers.transactions.build_provider", lambda settings: fake)
+    monkeypatch.setattr("app.engine.ai_providers.build_provider", lambda settings: fake)
 
     resp = client.post("/api/transactions/recategorize", json={"date_from": "2024-01", "date_to": "2024-12"})
     body = resp.json()
@@ -242,7 +242,7 @@ def test_recategorize_row_edit_syncs_into_current_batch(client, monkeypatch):
     _upload_and_commit(client)
     _enable_ai(client)
     fake = _FakeProvider(reachable=True, target_category="Shopping")
-    monkeypatch.setattr("app.routers.transactions.build_provider", lambda settings: fake)
+    monkeypatch.setattr("app.engine.ai_providers.build_provider", lambda settings: fake)
 
     batch = client.post("/api/transactions/recategorize", json={"date_from": "2024-01", "date_to": "2024-12"}).json()
     current = client.get("/api/transactions/recategorize/current").json()
@@ -269,7 +269,7 @@ def test_recategorize_reject_ai_suggestion_clears_label_and_flags(client, monkey
     _upload_and_commit(client)
     _enable_ai(client)
     fake = _FakeProvider(reachable=True, target_category="Shopping")
-    monkeypatch.setattr("app.routers.transactions.build_provider", lambda settings: fake)
+    monkeypatch.setattr("app.engine.ai_providers.build_provider", lambda settings: fake)
 
     batch = client.post("/api/transactions/recategorize", json={"date_from": "2024-01", "date_to": "2024-12"}).json()
     current = client.get("/api/transactions/recategorize/current").json()
@@ -295,7 +295,7 @@ def test_recategorize_restore_ai_suggestion_after_reject(client, monkeypatch):
     _upload_and_commit(client)
     _enable_ai(client)
     fake = _FakeProvider(reachable=True, target_category="Shopping")
-    monkeypatch.setattr("app.routers.transactions.build_provider", lambda settings: fake)
+    monkeypatch.setattr("app.engine.ai_providers.build_provider", lambda settings: fake)
 
     batch = client.post("/api/transactions/recategorize", json={"date_from": "2024-01", "date_to": "2024-12"}).json()
     current = client.get("/api/transactions/recategorize/current").json()
@@ -358,3 +358,80 @@ def test_recategorize_commit_also_cancels_ai(client, monkeypatch):
     batch = client.post("/api/transactions/recategorize", json={"date_from": "2024-01", "date_to": "2024-12"}).json()
     assert client.post(f"/api/transactions/recategorize/{batch['batch_id']}/commit").status_code == 200
     assert calls == [batch["batch_id"]]
+
+
+# --- background AI job must not clobber a row the user already resolved -------
+
+
+def test_staging_apply_ai_suggestions_skips_manually_edited_rows():
+    """If the user resolves a row (via update_staging_row, which sets
+    manually_edited=True) before the AI's suggestion for that same row
+    comes back, the background job must not silently overwrite their
+    choice - see routers/statements.py::_apply_ai_suggestions."""
+    from app.engine.ai_providers.base import AiSuggestion
+    from app.engine.staging_store import StagingBatch, StagingRow
+    from app.routers.statements import _apply_ai_suggestions
+
+    edited_row = StagingRow(
+        index=0, account_number="acc", transaction_date="2024-01-01", raw_description="X", matched_label=None,
+        amount=-5.0, fingerprint="fp0", category="Others", subcategory=None, is_excluded=False,
+        exclusion_reason=None, contact_id=None, needs_review=False, is_duplicate=False, manually_edited=True,
+    )
+    untouched_row = StagingRow(
+        index=1, account_number="acc", transaction_date="2024-01-01", raw_description="Y", matched_label=None,
+        amount=-5.0, fingerprint="fp1", category="Others", subcategory=None, is_excluded=False,
+        exclusion_reason=None, contact_id=None, needs_review=False, is_duplicate=False,
+    )
+    batch = StagingBatch(source_filenames=["f.pdf"], bank_name="UOB", accounts=[], rows=[edited_row, untouched_row])
+    suggestions = [
+        AiSuggestion(index=0, category="Shopping", display_label="Should not apply", rule_pattern=None),
+        AiSuggestion(index=1, category="Shopping", display_label="Should apply", rule_pattern=None),
+    ]
+
+    _apply_ai_suggestions(batch, suggestions)
+
+    assert edited_row.category == "Others"  # untouched - the manual edit wins
+    assert edited_row.ai_suggested is False
+    assert untouched_row.category == "Shopping"
+    assert untouched_row.matched_label == "Should apply"
+    assert untouched_row.ai_suggested is True
+
+
+def test_recategorize_apply_ai_suggestions_skips_manually_edited_rows():
+    from app.engine.ai_providers.base import AiSuggestion
+    from app.engine.recategorize_job import RecategorizeBatch, RecategorizeRow
+    from app.routers.transactions import _apply_ai_suggestions
+
+    edited_row = RecategorizeRow(
+        transaction_id=1, account_number_masked="***1234", transaction_date="2024-01-01", raw_description="X",
+        matched_label=None, amount=-5.0, category="Others", subcategory=None, contact_id=None, is_excluded=False,
+        exclusion_reason=None, needs_review=False, manually_edited=True,
+    )
+    untouched_row = RecategorizeRow(
+        transaction_id=2, account_number_masked="***1234", transaction_date="2024-01-01", raw_description="Y",
+        matched_label=None, amount=-5.0, category="Others", subcategory=None, contact_id=None, is_excluded=False,
+        exclusion_reason=None, needs_review=False,
+    )
+    batch = RecategorizeBatch(
+        date_from="2024-01", date_to="2024-01", account_id=None, scanned=2, changed=0,
+        rows=[edited_row, untouched_row],
+    )
+    suggestions = [
+        AiSuggestion(index=1, category="Shopping", display_label="Should not apply", rule_pattern=None),
+        AiSuggestion(index=2, category="Shopping", display_label="Should apply", rule_pattern=None),
+    ]
+
+    _apply_ai_suggestions(batch, suggestions)
+
+    assert edited_row.category == "Others"
+    assert edited_row.ai_suggested is False
+    assert untouched_row.category == "Shopping"
+    assert untouched_row.ai_suggested is True
+
+
+# --- ai_provider is now a validated enum, not a free string --------------------
+
+
+def test_update_ai_settings_rejects_unknown_provider(client):
+    resp = client.patch("/api/settings/ai", json={"ai_provider": "not-a-real-provider"})
+    assert resp.status_code == 422

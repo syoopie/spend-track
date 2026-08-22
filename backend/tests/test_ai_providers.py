@@ -53,6 +53,15 @@ def test_parse_suggestions_strips_markdown_fence():
     assert len(result) == 1
 
 
+def test_parse_suggestions_strips_single_line_markdown_fence():
+    """No newline after the opening ```json tag - the fence must still be
+    stripped rather than left glued onto the JSON (see
+    ai_providers/base.py::_strip_markdown_fence)."""
+    raw = '```json[{"index": 0, "category": "Food & Drink", "display_label": "Sheng Siong", "rule_pattern": null}]```'
+    result = parse_suggestions(raw, CANDIDATES, CATEGORIES)
+    assert len(result) == 1
+
+
 def test_parse_suggestions_raises_on_malformed_json():
     with pytest.raises(AiProviderResponseError):
         parse_suggestions("not json at all", CANDIDATES, CATEGORIES)
@@ -72,6 +81,23 @@ def test_parse_suggestions_drops_direction_mismatch():
 def test_parse_suggestions_drops_unknown_index():
     raw = '[{"index": 999, "category": "Food & Drink", "display_label": "X", "rule_pattern": null}]'
     assert parse_suggestions(raw, CANDIDATES, CATEGORIES) == []
+
+
+def test_parse_suggestions_falls_back_to_noise_stripped_label_when_model_omits_one():
+    """A model that skips display_label shouldn't leave raw reference codes
+    and masked card numbers as the label - see naming.py's noise-stripping,
+    reused here instead of a blind .title() of the raw description."""
+    candidates = [
+        AiCandidate(
+            index=0, raw_description="NETS Debit-Consumer HENG LI12306400 xxxxxx5678", amount=-8.5, direction="outflow"
+        )
+    ]
+    raw = '[{"index": 0, "category": "Food & Drink", "display_label": "", "rule_pattern": null}]'
+    result = parse_suggestions(raw, candidates, CATEGORIES)
+    assert len(result) == 1
+    assert result[0].display_label == "Heng"
+    assert "12306400" not in result[0].display_label
+    assert "xxxxxx5678" not in result[0].display_label.lower()
 
 
 # --- OllamaProvider -----------------------------------------------------------

@@ -62,6 +62,13 @@ class StagingRow:
     ai_category: str | None = None
     ai_label: str | None = None
     ai_rule_pattern: str | None = None
+    # Set by update_row() the moment the user explicitly resolves this row
+    # (accept/reject/restore/plain edit) - checked by the background AI job
+    # before overwriting a row's category/label, so a suggestion that was
+    # still in flight can't clobber a decision the user already made about
+    # this specific row while waiting for it (see routers/statements.py's
+    # _apply_ai_suggestions).
+    manually_edited: bool = False
 
 
 @dataclass

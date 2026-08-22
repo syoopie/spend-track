@@ -157,7 +157,7 @@ export function Dashboard() {
             </div>
             <div className="text-xl font-semibold text-text mb-2.5">No statements yet</div>
             <div className="text-[13px] text-muted mb-5.5">
-              Upload a DBS, OCBC, or UOB e-statement PDF to see your spending here - or drag one in anywhere.
+              Upload a DBS, OCBC, or UOB e-statement PDF to see your spending here — or drag one in anywhere.
             </div>
             <button
               onClick={openDialog}
@@ -398,7 +398,7 @@ export function Dashboard() {
                   <button
                     onClick={() => setEditingTxId(editingTxId === tx.id ? null : tx.id)}
                     title="Edit transaction"
-                    className="border-none bg-transparent cursor-pointer text-muted-2 hover:text-text opacity-0 group-hover:opacity-100"
+                    className="border-none bg-transparent cursor-pointer text-muted-2 hover:text-text opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
                   >
                     <Pencil size={14} />
                   </button>

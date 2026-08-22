@@ -7,6 +7,7 @@ from app.engine.ai_providers.base import (
     AiSuggestion,
     ProviderHealth,
 )
+from app.engine.ai_providers.job_runner import run_categorization_job
 from app.engine.ai_providers.ollama import OllamaProvider
 from app.engine.ai_providers.openai_compatible import OpenAiCompatibleProvider
 
@@ -49,4 +50,5 @@ __all__ = [
     "ProviderHealth",
     "build_provider",
     "active_model_name",
+    "run_categorization_job",
 ]

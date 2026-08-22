@@ -1,10 +1,13 @@
+import { Pencil } from 'lucide-react'
 import { useRef, useState } from 'react'
 import {
   useCategories,
   useContacts,
   useCreateContact,
   useImportContactsCsv,
+  useUpdateContact,
 } from '../api/hooks'
+import type { Contact } from '../api/types'
 import { CategoryBadge } from '../components/CategoryBadge'
 import { categoryOptionElements } from '../components/CategoryOptions'
 import { Modal } from '../components/Modal'
@@ -12,12 +15,18 @@ import { Select } from '../components/Select'
 import { fmtPlain } from '../lib/format'
 import { CONTACT_IDENTIFIER_HINT } from '../lib/localization'
 
-function AddContactModal({ onClose }: { onClose: () => void }) {
+// contact === undefined -> "Add Contact"; contact set -> "Edit Contact",
+// pre-filled and saving via PATCH instead of POST.
+function ContactFormModal({ contact, onClose }: { contact?: Contact; onClose: () => void }) {
   const categoriesQ = useCategories()
   const createContact = useCreateContact()
-  const [name, setName] = useState('')
-  const [category, setCategory] = useState('')
-  const [identifiers, setIdentifiers] = useState<string[]>([''])
+  const updateContact = useUpdateContact()
+  const [name, setName] = useState(contact?.name ?? '')
+  const [category, setCategory] = useState(contact?.default_category ?? '')
+  const [identifiers, setIdentifiers] = useState<string[]>(contact?.identifiers.length ? contact.identifiers : [''])
+
+  const isEditing = contact != null
+  const saving = createContact.isPending || updateContact.isPending
 
   function updateIdentifier(i: number, value: string) {
     setIdentifiers((prev) => prev.map((id, idx) => (idx === i ? value : id)))
@@ -25,17 +34,22 @@ function AddContactModal({ onClose }: { onClose: () => void }) {
 
   async function handleSave() {
     if (!name.trim()) return
-    await createContact.mutateAsync({
+    const body = {
       name: name.trim(),
       default_category: category || categoriesQ.data?.[0]?.name || '',
       identifiers: identifiers.map((i) => i.trim()).filter(Boolean),
-    })
+    }
+    if (isEditing) {
+      await updateContact.mutateAsync({ id: contact.id, body })
+    } else {
+      await createContact.mutateAsync(body)
+    }
     onClose()
   }
 
   return (
     <Modal onClose={onClose}>
-      <div className="text-base font-bold mb-4">Add Contact</div>
+      <div className="text-base font-bold mb-4">{isEditing ? 'Edit Contact' : 'Add Contact'}</div>
 
       <div className="text-xs text-muted mb-1">Name</div>
       <input
@@ -78,10 +92,10 @@ function AddContactModal({ onClose }: { onClose: () => void }) {
         </button>
         <button
           onClick={handleSave}
-          disabled={createContact.isPending || !name.trim()}
+          disabled={saving || !name.trim()}
           className="text-[13px] font-semibold px-4 py-2.5 rounded-lg border-none bg-accent text-accent-fg cursor-pointer disabled:opacity-60"
         >
-          Save Contact
+          {isEditing ? 'Save Changes' : 'Save Contact'}
         </button>
       </div>
     </Modal>
@@ -93,7 +107,8 @@ export function Contacts() {
   const categoriesQ = useCategories()
   const importCsv = useImportContactsCsv()
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [modalOpen, setModalOpen] = useState(false)
+  // 'new' opens the modal in Add mode; a Contact opens it pre-filled in Edit mode.
+  const [formTarget, setFormTarget] = useState<Contact | 'new' | null>(null)
   const [importResult, setImportResult] = useState<string | null>(null)
 
   async function handleImport(file: File) {
@@ -129,7 +144,7 @@ export function Contacts() {
             Import CSV
           </button>
           <button
-            onClick={() => setModalOpen(true)}
+            onClick={() => setFormTarget('new')}
             className="text-[13px] font-semibold px-4 py-2.5 rounded-lg border-none bg-accent text-accent-fg cursor-pointer"
           >
             + Add Contact
@@ -144,11 +159,12 @@ export function Contacts() {
       )}
 
       <div className="bg-card border border-border rounded-xl overflow-hidden">
-        <div className="grid grid-cols-[1fr_1.6fr_160px_140px] px-5 py-2.5 text-[11px] text-muted-2 uppercase tracking-wide border-b border-divider">
+        <div className="grid grid-cols-[1fr_1.6fr_160px_140px_36px] px-5 py-2.5 text-[11px] text-muted-2 uppercase tracking-wide border-b border-divider">
           <div>Contact</div>
           <div>Linked Identifiers</div>
           <div>Default Category</div>
           <div className="text-right">Historical Spend</div>
+          <div />
         </div>
         {contactsQ.isLoading && <div className="p-5 text-muted text-sm">Loading…</div>}
         {!contactsQ.isLoading && (contactsQ.data ?? []).length === 0 && (
@@ -157,7 +173,7 @@ export function Contacts() {
         {(contactsQ.data ?? []).map((c) => (
           <div
             key={c.id}
-            className="grid grid-cols-[1fr_1.6fr_160px_140px] items-center px-5 py-3.5 text-[13px] border-b border-divider"
+            className="grid grid-cols-[1fr_1.6fr_160px_140px_36px] items-center px-5 py-3.5 text-[13px] border-b border-divider"
           >
             <div className="font-semibold">{c.name}</div>
             <div className="flex gap-1.5 flex-wrap">
@@ -174,11 +190,22 @@ export function Contacts() {
               <CategoryBadge category={c.default_category} categories={categoriesQ.data} />
             </div>
             <div className="text-right font-mono">{fmtPlain(c.historical_spend)}</div>
+            <div className="text-right">
+              <button
+                onClick={() => setFormTarget(c)}
+                title="Edit contact"
+                className="text-muted hover:text-text bg-transparent border-none cursor-pointer p-1 rounded-md"
+              >
+                <Pencil size={14} />
+              </button>
+            </div>
           </div>
         ))}
       </div>
 
-      {modalOpen && <AddContactModal onClose={() => setModalOpen(false)} />}
+      {formTarget && (
+        <ContactFormModal contact={formTarget === 'new' ? undefined : formTarget} onClose={() => setFormTarget(null)} />
+      )}
     </div>
   )
 }

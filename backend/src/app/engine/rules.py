@@ -39,6 +39,12 @@ class Categorization:
     exclusion_reason: str | None
     needs_review: bool
     matched_label: str | None
+    # Whether raw_description itself carries a PayNow scheme marker
+    # (engine/paynow.py::is_paynow_transfer), independent of how the
+    # transaction was actually resolved (rule/contact/fallback) - computed
+    # once here so callers that need it (e.g. gating "save as contact" vs.
+    # "save as rule" in the review dialogs) don't have to recompute it.
+    is_paynow: bool
 
 
 def _direction_of(amount: float) -> str:
@@ -92,6 +98,7 @@ def categorize(
     "PayNow from/to" label wording."""
     desc_upper = raw_description.upper()
     direction = _direction_of(amount)
+    is_paynow = paynow.is_paynow_transfer(desc_upper)
 
     for rule in rules:  # must already be sorted by priority ASC
         if rule["match_pattern"].upper() in desc_upper:
@@ -104,6 +111,7 @@ def categorize(
                     exclusion_reason=rule["exclusion_reason"],
                     needs_review=False,
                     matched_label=None,
+                    is_paynow=is_paynow,
                 )
             category = rule["target_category"]
             if _category_direction(category_directions, category) != direction:
@@ -120,6 +128,7 @@ def categorize(
                 exclusion_reason=None,
                 needs_review=False,
                 matched_label=label,
+                is_paynow=is_paynow,
             )
 
     if (
@@ -136,6 +145,7 @@ def categorize(
             exclusion_reason=CARD_PAYMENT_EXCLUSION_REASON,
             needs_review=False,
             matched_label="Credit Card Payment",
+            is_paynow=is_paynow,
         )
 
     contact = find_matching_contact(raw_description, contact_identifiers)
@@ -153,13 +163,13 @@ def categorize(
                 exclusion_reason=None,
                 needs_review=False,
                 matched_label=label,
+                is_paynow=is_paynow,
             )
         # else: this contact's category doesn't fit the transaction's actual
         # direction and isn't a Paynow<->Paynow Received case either - fall
         # through to the generic PayNow-marker/fallback tier below instead
         # of forcing a mismatched category.
 
-    is_paynow = paynow.is_paynow_transfer(desc_upper)
     category = paynow.category_for_direction(amount) if is_paynow else _fallback_category(direction)
     return Categorization(
         category=category,
@@ -169,4 +179,5 @@ def categorize(
         exclusion_reason=None,
         needs_review=is_paynow,
         matched_label=paynow.label(raw_description, amount) if is_paynow else None,
+        is_paynow=is_paynow,
     )
