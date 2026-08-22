@@ -67,7 +67,7 @@ def test_create_rule_from_staging_batch_applies_retroactively(client):
         if r["key"] in target_keys:
             assert r["category"] == "Others"  # the previous value, for undo
 
-    rows_by_index = {r["index"]: r for r in result["batch"]["rows"]}
+    rows_by_index = {r["key"]: r for r in result["batch"]["rows"]}
     for key in target_keys:
         assert rows_by_index[key]["category"] == "Groceries"
         assert rows_by_index[key]["matched_label"] == "Megamart"
@@ -123,7 +123,7 @@ def test_undo_rule_from_staging_batch_reverts_rows_and_deletes_rule(client):
         json={"rule_id": result["rule_id"], "rows": result["updated_rows"]},
     )
     assert undo_resp.status_code == 200
-    rows_by_index = {r["index"]: r for r in undo_resp.json()["rows"]}
+    rows_by_index = {r["key"]: r for r in undo_resp.json()["rows"]}
     for key in target_keys:
         row_out = rows_by_index[key]
         assert row_out["category"] == "Others"
@@ -167,7 +167,7 @@ def test_create_rule_from_recategorize_batch_applies_retroactively(client):
     updated_keys = {r["key"] for r in result["updated_rows"]}
     assert target_keys <= updated_keys
 
-    rows_by_id = {r["transaction_id"]: r for r in result["batch"]["rows"]}
+    rows_by_id = {r["key"]: r for r in result["batch"]["rows"]}
     for key in target_keys:
         assert rows_by_id[key]["category"] == "Groceries"
 
@@ -176,7 +176,7 @@ def test_create_rule_from_recategorize_batch_applies_retroactively(client):
         json={"rule_id": result["rule_id"], "rows": result["updated_rows"]},
     )
     assert undo_resp.status_code == 200
-    rows_by_id = {r["transaction_id"]: r for r in undo_resp.json()["rows"]}
+    rows_by_id = {r["key"]: r for r in undo_resp.json()["rows"]}
     for key in target_keys:
         assert rows_by_id[key]["category"] == "Others"
 

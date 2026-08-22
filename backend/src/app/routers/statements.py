@@ -1,6 +1,6 @@
 from fastapi import APIRouter, BackgroundTasks, File, Form, UploadFile
 
-from app import repo
+from app import contact_directory, repo, rule_catalog
 from app.config import get_ai_settings
 from app.db import get_conn
 from app.engine.ai_providers import AiCandidate, AiSuggestion, active_model_name, run_categorization_job
@@ -9,17 +9,17 @@ from app.engine.fingerprint import clean_description, compute_daily_sequence_ind
 from app.engine.identity import derive_account_id
 from app.engine.refunds import find_refund_pairs
 from app.engine.rule_rerun import rerun_rules_on_batch
-from app.engine.rules import categorize
+from app.engine.rules import CategorizationRequest, CategorizationRuleset, categorize
 from app.engine.staging_store import StagingAccount, StagingBatch, StagingRow, get_store
 from app.errors import api_error
 from app.models import (
+    BatchRowOut,
+    BatchRowUpdateRequest,
     CommitResult,
     RuleQuickCreateRequest,
     RuleRerunRowSnapshot,
     StagingAccountOut,
     StagingBatchOut,
-    StagingRowOut,
-    StagingRowUpdateRequest,
     StagingRuleCreateResult,
     StagingRuleUndoRequest,
 )
@@ -33,8 +33,8 @@ router = APIRouter(prefix="/api/statements", tags=["statements"])
 def _batch_to_response(batch: StagingBatch) -> StagingBatchOut:
     masked_by_number = {a.account_number: a.account_number_masked for a in batch.accounts}
     rows_out = [
-        StagingRowOut(
-            index=r.index,
+        BatchRowOut(
+            key=r.index,
             account_number_masked=masked_by_number[r.account_number],
             transaction_date=r.transaction_date,
             raw_description=r.raw_description,
@@ -166,8 +166,8 @@ async def upload_statement(
         parsed_files.append((filename, parsed))
 
     with get_conn() as conn:
-        rules = repo.fetch_active_rules(conn)
-        contact_identifiers = repo.fetch_contact_identifiers(conn)
+        rules = rule_catalog.fetch_active_rules(conn)
+        contact_identifiers = contact_directory.fetch_contact_identifiers(conn)
         category_directions = repo.fetch_category_directions(conn)
         ai_categories = repo.fetch_ai_target_categories(conn)
         # Any card account already committed, or parsed anywhere in this same
@@ -176,6 +176,13 @@ async def upload_statement(
         has_card_account = (
             conn.execute("SELECT 1 FROM accounts WHERE is_card = 1 LIMIT 1").fetchone() is not None
             or any(pa.is_card for _f, parsed in parsed_files for pa in parsed.accounts)
+        )
+
+        ruleset = CategorizationRuleset(
+            rules=rules,
+            contact_identifiers=contact_identifiers,
+            category_directions=category_directions,
+            has_card_account=has_card_account,
         )
 
         staging_accounts: list[StagingAccount] = []
@@ -213,13 +220,12 @@ async def upload_statement(
                     )
                     seen_fingerprints.add(fingerprint)
                     cat = categorize(
-                        tx.raw_description,
-                        rules,
-                        contact_identifiers,
-                        amount=tx.amount,
-                        category_directions=category_directions,
-                        has_card_account=has_card_account,
-                        posting_account_is_card=parsed_account.is_card,
+                        CategorizationRequest(
+                            raw_description=tx.raw_description,
+                            amount=tx.amount,
+                            posting_account_is_card=parsed_account.is_card,
+                        ),
+                        ruleset,
                     )
                     staging_rows.append(
                         StagingRow(
@@ -292,7 +298,7 @@ def get_staging_batch(batch_id: str):
 
 
 @router.patch("/staging/{batch_id}/rows/{index}", response_model=StagingBatchOut)
-def update_staging_row(batch_id: str, index: int, body: StagingRowUpdateRequest):
+def update_staging_row(batch_id: str, index: int, body: BatchRowUpdateRequest):
     store = get_store()
     try:
         batch = store.get(batch_id)
@@ -363,15 +369,16 @@ def create_rule_from_staging_batch(batch_id: str, body: RuleQuickCreateRequest):
         raise api_error(422, "INVALID_RULE_PATTERN", "Rule pattern cannot be blank.")
 
     with get_conn() as conn:
-        rule_id = repo.insert_rule(
+        rule_id = rule_catalog.insert_rule(
             conn,
-            priority=repo.next_user_rule_priority(conn),
+            priority=rule_catalog.next_user_rule_priority(conn),
             match_pattern=body.match_pattern.strip(),
             target_category=body.target_category,
             target_subcategory=body.target_subcategory,
+            direction=rule_catalog.category_direction(conn, body.target_category),
         )
-        rules = repo.fetch_active_rules(conn)
-        contact_identifiers = repo.fetch_contact_identifiers(conn)
+        rules = rule_catalog.fetch_active_rules(conn)
+        contact_identifiers = contact_directory.fetch_contact_identifiers(conn)
         category_directions = repo.fetch_category_directions(conn)
 
     changes = rerun_rules_on_batch(

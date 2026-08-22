@@ -87,7 +87,7 @@ def test_patch_row_assigns_category_and_creates_rule_and_contact(client):
     review_row = next(r for r in body["rows"] if r["needs_review"])
 
     resp = client.patch(
-        f"/api/statements/staging/{batch_id}/rows/{review_row['index']}",
+        f"/api/statements/staging/{batch_id}/rows/{review_row['key']}",
         json={
             "category": "Paynow",
             "save_as_rule": True,
@@ -97,7 +97,7 @@ def test_patch_row_assigns_category_and_creates_rule_and_contact(client):
         },
     )
     assert resp.status_code == 200
-    updated_row = next(r for r in resp.json()["rows"] if r["index"] == review_row["index"])
+    updated_row = next(r for r in resp.json()["rows"] if r["key"] == review_row["key"])
     assert updated_row["category"] == "Paynow"
     assert updated_row["needs_review"] is False
     assert updated_row["contact_id"] is not None

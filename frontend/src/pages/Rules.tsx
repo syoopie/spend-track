@@ -6,7 +6,7 @@ import { categoryOptionElements } from '../components/CategoryOptions'
 import { Checkbox } from '../components/Checkbox'
 import { Modal } from '../components/Modal'
 import { Select } from '../components/Select'
-import type { Rule } from '../api/types'
+import type { CategoryDirection, Rule } from '../api/types'
 
 function RuleFormModal({ rule, onClose }: { rule?: Rule; onClose: () => void }) {
   const categoriesQ = useCategories()
@@ -17,28 +17,27 @@ function RuleFormModal({ rule, onClose }: { rule?: Rule; onClose: () => void }) 
   const [priority, setPriority] = useState<number | ''>(rule?.priority ?? '')
   const [isExclusion, setIsExclusion] = useState(rule?.is_exclusion_rule ?? false)
   const [exclusionReason, setExclusionReason] = useState(rule?.exclusion_reason ?? '')
+  // Only meaningful (and sent to the backend) for an exclusion rule - a
+  // category rule's direction is always just the direction of whichever
+  // category it assigns, so the backend derives that on its own rather
+  // than trusting a second, independently-editable copy of the same fact
+  // that could drift out of sync with the category picked below.
+  const [exclusionDirection, setExclusionDirection] = useState<CategoryDirection>(rule?.direction ?? 'outflow')
 
   async function handleSave() {
     if (!pattern.trim()) return
+    const body = {
+      match_pattern: pattern.trim(),
+      target_category: isExclusion ? null : category || categoriesQ.data?.[0]?.name || 'Others',
+      is_exclusion_rule: isExclusion,
+      exclusion_reason: isExclusion ? exclusionReason.trim() || null : null,
+      direction: isExclusion ? exclusionDirection : undefined,
+      priority: priority === '' ? null : priority,
+    }
     if (rule) {
-      await updateRule.mutateAsync({
-        id: rule.id,
-        body: {
-          match_pattern: pattern.trim(),
-          target_category: isExclusion ? null : category || categoriesQ.data?.[0]?.name || 'Others',
-          is_exclusion_rule: isExclusion,
-          exclusion_reason: isExclusion ? exclusionReason.trim() || null : null,
-          priority: priority === '' ? null : priority,
-        },
-      })
+      await updateRule.mutateAsync({ id: rule.id, body })
     } else {
-      await createRule.mutateAsync({
-        match_pattern: pattern.trim(),
-        target_category: isExclusion ? null : category || categoriesQ.data?.[0]?.name || 'Others',
-        is_exclusion_rule: isExclusion,
-        exclusion_reason: isExclusion ? exclusionReason.trim() || null : null,
-        priority: priority === '' ? null : priority,
-      })
+      await createRule.mutateAsync(body)
     }
     onClose()
   }
@@ -80,14 +79,32 @@ function RuleFormModal({ rule, onClose }: { rule?: Rule; onClose: () => void }) 
         )}
 
         {isExclusion && (
-          <div>
-            <div className="text-xs text-muted mb-1">Exclusion reason</div>
-            <input
-              value={exclusionReason}
-              onChange={(e) => setExclusionReason(e.target.value)}
-              placeholder="e.g. Self-transfer between own accounts"
-              className="w-full box-border px-3 py-2.5 rounded-lg border border-border bg-input text-text text-[13px]"
-            />
+          <div className="flex flex-col gap-3.5">
+            <div>
+              <div className="text-xs text-muted mb-1">Exclusion reason</div>
+              <input
+                value={exclusionReason}
+                onChange={(e) => setExclusionReason(e.target.value)}
+                placeholder="e.g. Self-transfer between own accounts"
+                className="w-full box-border px-3 py-2.5 rounded-lg border border-border bg-input text-text text-[13px]"
+              />
+            </div>
+            <div>
+              <div className="text-xs text-muted mb-1">Applies to</div>
+              <Select
+                value={exclusionDirection}
+                onChange={(e) => setExclusionDirection(e.target.value as CategoryDirection)}
+                className="w-full"
+              >
+                <option value="outflow">Outflow transactions only</option>
+                <option value="inflow">Inflow transactions only</option>
+              </Select>
+              <div className="text-[11px] text-muted-2 mt-1">
+                An exclusion rule has no category to imply a direction from, so this must be picked explicitly -
+                otherwise a pattern like a self-transfer's description could exclude both legs of an unrelated
+                transaction pair.
+              </div>
+            </div>
           </div>
         )}
 
@@ -199,6 +216,9 @@ export function Rules() {
                       style={{ background: 'oklch(28% 0.06 25)', color: 'oklch(75% 0.15 25)' }}
                     >
                       EXCLUDE
+                    </span>
+                    <span className="text-muted-2 text-[11px] uppercase tracking-wide ml-1.5">
+                      {r.direction} only
                     </span>
                     <span className="text-muted-2 text-xs"> — {r.exclusion_reason}</span>
                   </>

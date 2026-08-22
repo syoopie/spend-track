@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 
-from app import repo
+from app import rule_catalog
 from app.db import get_conn
 from app.errors import api_error, not_found_error
 from app.models import RuleCreateRequest, RuleOut, RuleReorderRequest, RuleUpdateRequest
@@ -29,6 +29,7 @@ def _row_to_out(row) -> RuleOut:
         target_subcategory=row["target_subcategory"],
         is_exclusion_rule=bool(row["is_exclusion_rule"]),
         exclusion_reason=row["exclusion_reason"],
+        direction=row["direction"],
         is_default=bool(row["is_default"]),
         display_label=row["display_label"],
     )
@@ -45,17 +46,25 @@ def list_rules(include_default: bool = False):
 @router.post("", response_model=RuleOut)
 def create_rule(body: RuleCreateRequest):
     with get_conn() as conn:
-        priority = body.priority if body.priority is not None else repo.next_user_rule_priority(conn)
+        priority = body.priority if body.priority is not None else rule_catalog.next_user_rule_priority(conn)
         # target_category is NOT NULL per TECHNICAL_SPEC.md's schema even
         # though exclusion rules don't use it - default to "Others" for those.
-        rule_id = repo.insert_rule(
+        target_category = body.target_category or "Others"
+        # A category-assigning rule's direction always matches its own
+        # category (there's no meaningful scenario where they'd differ - see
+        # rule_catalog.category_direction's docstring), so it's derived rather than
+        # independently trusted from the request unless the caller is an
+        # exclusion rule, which has no category to derive it from.
+        direction = body.direction or rule_catalog.category_direction(conn, target_category)
+        rule_id = rule_catalog.insert_rule(
             conn,
             priority=priority,
             match_pattern=body.match_pattern,
-            target_category=body.target_category or "Others",
+            target_category=target_category,
             target_subcategory=body.target_subcategory,
             is_exclusion_rule=body.is_exclusion_rule,
             exclusion_reason=body.exclusion_reason,
+            direction=direction,
         )
         row = conn.execute("SELECT * FROM rules WHERE id = ?", (rule_id,)).fetchone()
         return _row_to_out(row)
@@ -85,9 +94,22 @@ def update_rule(rule_id: int, body: RuleUpdateRequest):
                 body.exclusion_reason if body.exclusion_reason is not None else existing["exclusion_reason"]
             ),
         }
+        # An explicit direction always wins. Otherwise, a category-assigning
+        # rule re-derives it from whatever category it now ends up
+        # targeting (so switching a rule's category can't leave a stale,
+        # mismatched direction behind) - an exclusion rule has no category
+        # to derive from, so it just keeps whatever it already had.
+        if body.direction is not None:
+            merged["direction"] = body.direction
+        elif not merged["is_exclusion_rule"]:
+            merged["direction"] = rule_catalog.category_direction(
+                conn, merged["target_category"], default=existing["direction"]
+            )
+        else:
+            merged["direction"] = existing["direction"]
         conn.execute(
             "UPDATE rules SET priority=?, match_pattern=?, target_category=?, target_subcategory=?, "
-            "is_exclusion_rule=?, exclusion_reason=? WHERE id=?",
+            "is_exclusion_rule=?, exclusion_reason=?, direction=? WHERE id=?",
             (*merged.values(), rule_id),
         )
         row = conn.execute("SELECT * FROM rules WHERE id = ?", (rule_id,)).fetchone()

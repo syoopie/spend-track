@@ -5,7 +5,7 @@ from collections import defaultdict
 
 from fastapi import APIRouter, File, UploadFile
 
-from app import repo
+from app import contact_directory
 from app.db import get_conn
 from app.errors import not_found_error
 from app.models import ContactCreateRequest, ContactImportResult, ContactOut, ContactUpdateRequest
@@ -72,7 +72,7 @@ def list_contacts():
 @router.post("", response_model=ContactOut)
 def create_contact(body: ContactCreateRequest):
     with get_conn() as conn:
-        contact_id = repo.insert_contact(
+        contact_id = contact_directory.insert_contact(
             conn,
             name=body.name,
             default_category=body.default_category,
@@ -98,7 +98,7 @@ def update_contact(contact_id: int, body: ContactUpdateRequest):
             (name, category, subcategory, contact_id),
         )
         if body.identifiers is not None:
-            repo.replace_contact_identifiers(conn, contact_id, body.identifiers)
+            contact_directory.replace_contact_identifiers(conn, contact_id, body.identifiers)
         return _fetch_contact(conn, contact_id)
 
 
@@ -128,7 +128,7 @@ async def import_contacts_csv(file: UploadFile = File(...)):
             if not name or not identifier:
                 continue
 
-            if repo.find_contact_id_by_identifier(conn, identifier) is not None:
+            if contact_directory.find_contact_id_by_identifier(conn, identifier) is not None:
                 continue  # identifier already mapped to some contact - leave as-is
 
             existing_contact = conn.execute(
@@ -142,7 +142,7 @@ async def import_contacts_csv(file: UploadFile = File(...)):
                     (contact_id, identifier),
                 )
             else:
-                repo.insert_contact(
+                contact_directory.insert_contact(
                     conn, name=name, default_category=category or "Others", identifiers=[identifier]
                 )
                 created += 1

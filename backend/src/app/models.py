@@ -13,8 +13,18 @@ class StagingAccountOut(BaseModel):
     is_card: bool
 
 
-class StagingRowOut(BaseModel):
-    index: int
+class BatchRowOut(BaseModel):
+    """Shared row shape for both a staging batch (engine/staging_store.py)
+    and a recategorize batch (engine/recategorize_job.py) - `key` is a
+    StagingRow.index or a RecategorizeRow.transaction_id depending on which
+    kind of batch this came from (same convention as RuleRerunRowSnapshot's
+    own `key`). A recategorize row always has is_duplicate=False - dedup
+    only applies to newly-parsed staging rows. Unifying this (previously
+    StagingRowOut/RecategorizeRowOut) is what lets the frontend's
+    ReviewDialog/BatchActions treat both kinds of batch identically - see
+    CONTEXT.md's BatchActions entry."""
+
+    key: int
     account_number_masked: str
     transaction_date: str
     raw_description: str
@@ -39,7 +49,7 @@ class StagingBatchOut(BaseModel):
     source_filenames: list[str]
     bank_name: str
     accounts: list[StagingAccountOut]
-    rows: list[StagingRowOut]
+    rows: list[BatchRowOut]
     new_extracted: int
     duplicates_skipped: int
     new_accounts_provisioned: int
@@ -50,7 +60,11 @@ class StagingBatchOut(BaseModel):
     ai_suggested_count: int
 
 
-class StagingRowUpdateRequest(BaseModel):
+class BatchRowUpdateRequest(BaseModel):
+    """Shared request body for editing one row of either a staging batch or
+    a recategorize batch (previously StagingRowUpdateRequest/
+    RecategorizeRowUpdateRequest, identical fields under different names)."""
+
     category: str
     subcategory: str | None = None
     save_as_rule: bool = False
@@ -161,26 +175,6 @@ class RecategorizeRequest(BaseModel):
     account_id: str | None = None
 
 
-class RecategorizeRowOut(BaseModel):
-    transaction_id: int
-    account_number_masked: str
-    transaction_date: str
-    raw_description: str
-    matched_label: str | None
-    amount: float
-    category: str
-    subcategory: str | None
-    contact_id: int | None
-    is_excluded: bool
-    exclusion_reason: str | None
-    needs_review: bool
-    is_paynow: bool
-    ai_suggested: bool
-    ai_category: str | None
-    ai_label: str | None
-    ai_rule_pattern: str | None
-
-
 class RecategorizeBatchOut(BaseModel):
     batch_id: str
     date_from: str
@@ -188,29 +182,11 @@ class RecategorizeBatchOut(BaseModel):
     account_id: str | None
     scanned: int
     changed: int
-    rows: list[RecategorizeRowOut]
+    rows: list[BatchRowOut]
     ai_status: str
     ai_warning: str | None
     ai_model: str | None
     ai_suggested_count: int
-
-
-class RecategorizeRowUpdateRequest(BaseModel):
-    """Mirrors StagingRowUpdateRequest exactly - see its own docstring-level
-    comment. Edits made from the recategorize review dialog only mutate the
-    in-memory pending batch, same as staging's row edits, until the batch is
-    committed."""
-
-    category: str
-    subcategory: str | None = None
-    save_as_rule: bool = False
-    rule_pattern: str | None = None
-    rule_priority: int | None = None
-    save_as_contact: bool = False
-    contact_name: str | None = None
-    contact_identifier: str | None = None
-    reject_ai: bool = False
-    restore_ai: bool = False
 
 
 class RecategorizeRuleCreateResult(BaseModel):
@@ -269,6 +245,12 @@ class RuleCreateRequest(BaseModel):
     target_subcategory: str | None = None
     is_exclusion_rule: bool = False
     exclusion_reason: str | None = None
+    # Which transaction direction this rule can ever match. Optional because
+    # a category-assigning rule's direction is fully implied by its own
+    # target_category (the router derives it when omitted) - only an
+    # exclusion rule, which has no real category to infer from, actually
+    # needs this supplied explicitly.
+    direction: Literal["inflow", "outflow"] | None = None
 
 
 class RuleUpdateRequest(BaseModel):
@@ -278,6 +260,7 @@ class RuleUpdateRequest(BaseModel):
     target_subcategory: str | None = None
     is_exclusion_rule: bool | None = None
     exclusion_reason: str | None = None
+    direction: Literal["inflow", "outflow"] | None = None
 
 
 class RuleOut(BaseModel):
@@ -288,6 +271,7 @@ class RuleOut(BaseModel):
     target_subcategory: str | None
     is_exclusion_rule: bool
     exclusion_reason: str | None
+    direction: Literal["inflow", "outflow"]
     is_default: bool
     display_label: str | None
 

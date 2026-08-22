@@ -1,20 +1,9 @@
-import {
-  useCommitBatch,
-  useCreateRuleFromStagingBatch,
-  useCurrentStagingBatch,
-  useDiscardBatch,
-  useUndoRuleFromStagingBatch,
-  useUpdateStagingRow,
-} from '../api/hooks'
-import { ReviewDialog, type ApplyRowBody, type ReviewRow, type ReviewStatCard } from './ReviewDialog'
+import { useBatchActions, useCurrentStagingBatch } from '../api/hooks'
+import { ReviewDialog, type ReviewRow, type ReviewStatCard } from './ReviewDialog'
 
 export function StagingReviewDialog({ onClose }: { onClose: () => void }) {
   const batchQ = useCurrentStagingBatch()
-  const commit = useCommitBatch()
-  const discard = useDiscardBatch()
-  const updateRow = useUpdateStagingRow(batchQ.data?.batch_id ?? '')
-  const createRule = useCreateRuleFromStagingBatch(batchQ.data?.batch_id ?? '')
-  const undoRule = useUndoRuleFromStagingBatch(batchQ.data?.batch_id ?? '')
+  const actions = useBatchActions('staging', batchQ.data?.batch_id ?? '')
 
   if (batchQ.isLoading) {
     return (
@@ -43,35 +32,17 @@ export function StagingReviewDialog({ onClose }: { onClose: () => void }) {
   const visibleRows = batch.rows.filter((r) => !r.is_duplicate)
 
   async function handleCommit() {
-    await commit.mutateAsync(batch.batch_id)
+    await actions.commit(batch.batch_id)
     onClose()
   }
 
   async function handleDiscard() {
-    await discard.mutateAsync(batch.batch_id)
+    await actions.discard(batch.batch_id)
     onClose()
   }
 
-  async function handleApplyRow(row: ReviewRow, body: ApplyRowBody) {
-    await updateRow.mutateAsync({
-      index: row.key,
-      body: {
-        category: body.category,
-        save_as_contact: body.save_as_contact,
-        contact_name: body.contact_name,
-        contact_identifier: body.contact_identifier,
-        reject_ai: body.reject_ai,
-        restore_ai: body.restore_ai,
-      },
-    })
-  }
-
-  async function handleCreateRule(_row: ReviewRow, matchPattern: string, targetCategory: string) {
-    return createRule.mutateAsync({ match_pattern: matchPattern, target_category: targetCategory })
-  }
-
   const rows: ReviewRow[] = visibleRows.map((r) => ({
-    key: r.index,
+    key: r.key,
     transaction_date: r.transaction_date,
     raw_description: r.raw_description,
     matched_label: r.matched_label,
@@ -110,12 +81,12 @@ export function StagingReviewDialog({ onClose }: { onClose: () => void }) {
       aiWarning={batch.ai_warning}
       aiModel={batch.ai_model}
       rows={rows}
-      onApplyRow={handleApplyRow}
-      applyPending={updateRow.isPending}
-      onCreateRule={handleCreateRule}
-      createRulePending={createRule.isPending}
-      onUndoRule={(payload) => undoRule.mutateAsync(payload).then(() => {})}
-      undoRulePending={undoRule.isPending}
+      onApplyRow={(row, body) => actions.applyRow(row.key, body)}
+      applyPending={actions.applyPending}
+      onCreateRule={(_row, matchPattern, targetCategory) => actions.createRule(matchPattern, targetCategory)}
+      createRulePending={actions.createRulePending}
+      onUndoRule={actions.undoRule}
+      undoRulePending={actions.undoRulePending}
       emptyMessage="Nothing new to commit."
       footer={
         <>
@@ -127,7 +98,7 @@ export function StagingReviewDialog({ onClose }: { onClose: () => void }) {
           )}
           <button
             onClick={handleDiscard}
-            disabled={discard.isPending}
+            disabled={actions.discardPending}
             className="text-[13px] font-semibold px-4.5 py-2.5 rounded-lg cursor-pointer bg-input disabled:opacity-60"
             style={{ border: '1px solid oklch(45% 0.15 25)', color: 'oklch(70% 0.18 25)' }}
           >
@@ -135,7 +106,7 @@ export function StagingReviewDialog({ onClose }: { onClose: () => void }) {
           </button>
           <button
             onClick={handleCommit}
-            disabled={commit.isPending || visibleRows.length === 0 || batch.ai_status === 'running'}
+            disabled={actions.commitPending || visibleRows.length === 0 || batch.ai_status === 'running'}
             title={batch.ai_status === 'running' ? 'Wait for AI categorization to finish, or close this dialog' : undefined}
             className="text-[13px] font-semibold px-5 py-2.5 rounded-lg border-none bg-accent text-accent-fg cursor-pointer disabled:opacity-60"
           >

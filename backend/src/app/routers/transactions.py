@@ -2,21 +2,21 @@ import sqlite3
 
 from fastapi import APIRouter, BackgroundTasks, Query
 
-from app import repo
+from app import contact_directory, repo, rule_catalog
 from app.config import get_ai_settings
 from app.db import get_conn
 from app.engine import recategorize_job
 from app.engine.ai_providers import AiCandidate, AiSuggestion, active_model_name, run_categorization_job
 from app.engine.ai_providers import cancellation as ai_cancellation
 from app.engine.rule_rerun import rerun_rules_on_batch
-from app.engine.rules import categorize
+from app.engine.rules import CategorizationRequest, CategorizationRuleset, categorize
 from app.errors import api_error
 from app.models import (
+    BatchRowOut,
+    BatchRowUpdateRequest,
     RecategorizeBatchOut,
     RecategorizeCommitResult,
     RecategorizeRequest,
-    RecategorizeRowOut,
-    RecategorizeRowUpdateRequest,
     RecategorizeRuleCreateResult,
     RecategorizeRuleUndoRequest,
     RefundPairingOut,
@@ -38,8 +38,8 @@ def _batch_to_out(batch: recategorize_job.RecategorizeBatch) -> RecategorizeBatc
         scanned=batch.scanned,
         changed=batch.changed,
         rows=[
-            RecategorizeRowOut(
-                transaction_id=r.transaction_id,
+            BatchRowOut(
+                key=r.transaction_id,
                 account_number_masked=r.account_number_masked,
                 transaction_date=r.transaction_date,
                 raw_description=r.raw_description,
@@ -51,6 +51,11 @@ def _batch_to_out(batch: recategorize_job.RecategorizeBatch) -> RecategorizeBatc
                 is_excluded=r.is_excluded,
                 exclusion_reason=r.exclusion_reason,
                 needs_review=r.needs_review,
+                # A recategorize batch is built from already-committed
+                # transactions, never freshly-parsed rows - dedup only
+                # applies to a staging batch (see engine/staging_store.py's
+                # StagingRow.is_duplicate).
+                is_duplicate=False,
                 is_paynow=r.is_paynow,
                 ai_suggested=r.ai_suggested,
                 ai_category=r.ai_category,
@@ -187,8 +192,8 @@ def recategorize_transactions(body: RecategorizeRequest, background_tasks: Backg
     where = " AND ".join(clauses)
 
     with get_conn() as conn:
-        rules = repo.fetch_active_rules(conn)
-        contact_identifiers = repo.fetch_contact_identifiers(conn)
+        rules = rule_catalog.fetch_active_rules(conn)
+        contact_identifiers = contact_directory.fetch_contact_identifiers(conn)
         category_directions = repo.fetch_category_directions(conn)
         ai_categories = repo.fetch_ai_target_categories(conn)
         has_card_account = conn.execute("SELECT 1 FROM accounts WHERE is_card = 1 LIMIT 1").fetchone() is not None
@@ -202,18 +207,24 @@ def recategorize_transactions(body: RecategorizeRequest, background_tasks: Backg
             params,
         ).fetchall()
 
+        ruleset = CategorizationRuleset(
+            rules=rules,
+            contact_identifiers=contact_identifiers,
+            category_directions=category_directions,
+            has_card_account=has_card_account,
+        )
+
         changed = 0
         ai_candidates: list[AiCandidate] = []
         rows_out: list[recategorize_job.RecategorizeRow] = []
         for row in rows:
             result = categorize(
-                row["raw_description"],
-                rules,
-                contact_identifiers,
-                amount=row["amount"],
-                category_directions=category_directions,
-                has_card_account=has_card_account,
-                posting_account_is_card=bool(row["account_is_card"]),
+                CategorizationRequest(
+                    raw_description=row["raw_description"],
+                    amount=row["amount"],
+                    posting_account_is_card=bool(row["account_is_card"]),
+                ),
+                ruleset,
             )
             before = (
                 row["category"],
@@ -303,7 +314,7 @@ def get_current_recategorize_batch():
 
 
 @router.patch("/recategorize/{batch_id}/rows/{transaction_id}", response_model=RecategorizeBatchOut)
-def update_recategorize_row(batch_id: str, transaction_id: int, body: RecategorizeRowUpdateRequest):
+def update_recategorize_row(batch_id: str, transaction_id: int, body: BatchRowUpdateRequest):
     """Mirrors routers/statements.py::update_staging_row exactly - edits the
     in-memory pending row only, never the DB (that only happens on commit)."""
     batch = recategorize_job.get_by_id(batch_id)
@@ -361,15 +372,16 @@ def create_rule_from_recategorize_batch(batch_id: str, body: RuleQuickCreateRequ
         raise api_error(422, "INVALID_RULE_PATTERN", "Rule pattern cannot be blank.")
 
     with get_conn() as conn:
-        rule_id = repo.insert_rule(
+        rule_id = rule_catalog.insert_rule(
             conn,
-            priority=repo.next_user_rule_priority(conn),
+            priority=rule_catalog.next_user_rule_priority(conn),
             match_pattern=body.match_pattern.strip(),
             target_category=body.target_category,
             target_subcategory=body.target_subcategory,
+            direction=rule_catalog.category_direction(conn, body.target_category),
         )
-        rules = repo.fetch_active_rules(conn)
-        contact_identifiers = repo.fetch_contact_identifiers(conn)
+        rules = rule_catalog.fetch_active_rules(conn)
+        contact_identifiers = contact_directory.fetch_contact_identifiers(conn)
         category_directions = repo.fetch_category_directions(conn)
 
     changes = rerun_rules_on_batch(

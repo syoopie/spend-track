@@ -137,7 +137,7 @@ export function DefaultRules() {
       {!rulesQ.isLoading && groups.length === 0 && (
         <div className="text-muted text-sm">No default rules match "{search}".</div>
       )}
-      <div className="flex flex-col gap-5">
+      <div className="grid grid-cols-2 gap-5 items-start">
         <DirectionSection title="Outflow Categories" groups={outflowGroups} defaultOpen={!!search} />
         <DirectionSection title="Inflow Categories" groups={inflowGroups} defaultOpen={!!search} />
       </div>
