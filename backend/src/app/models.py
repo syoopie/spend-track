@@ -117,7 +117,11 @@ class StagingRuleCreateResult(BaseModel):
     batch: StagingBatchOut
 
 
-class StagingRuleUndoRequest(BaseModel):
+class BatchRuleUndoRequest(BaseModel):
+    """Shared request body for undoing a rule-create action against either
+    kind of pending batch (previously StagingRuleUndoRequest/
+    RecategorizeRuleUndoRequest, identical fields under different names)."""
+
     rule_id: int
     rows: list[RuleRerunRowSnapshot]
 
@@ -195,11 +199,6 @@ class RecategorizeRuleCreateResult(BaseModel):
     rule_id: int
     updated_rows: list[RuleRerunRowSnapshot]
     batch: RecategorizeBatchOut
-
-
-class RecategorizeRuleUndoRequest(BaseModel):
-    rule_id: int
-    rows: list[RuleRerunRowSnapshot]
 
 
 class RecategorizeCommitResult(BaseModel):

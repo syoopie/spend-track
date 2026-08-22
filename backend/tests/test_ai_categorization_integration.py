@@ -116,13 +116,21 @@ def test_background_ai_task_no_op_after_batch_discarded(client, monkeypatch):
     """If the batch is discarded/committed before the background task's
     lookups run, it must exit quietly rather than crash or resurrect a
     deleted batch."""
+    from app.engine import batch_review
     from app.engine.ai_providers.base import AiCandidate
-    from app.routers.statements import _run_ai_categorization
+    from app.engine.staging_store import get_store
 
     fake = _FakeProvider(reachable=True)
     candidate = [AiCandidate(index=0, raw_description="X", amount=-1.0, direction="outflow")]
     # No batch was ever created with this id - simulates "already gone".
-    _run_ai_categorization("nonexistent-batch-id", candidate, [("Shopping", "outflow")], {"ai_provider": "ollama"})
+    batch_review.run_ai_job(
+        get_store(),
+        "nonexistent-batch-id",
+        candidate,
+        [("Shopping", "outflow")],
+        {"ai_provider": "ollama"},
+        "fallback",
+    )
 
 
 def test_patch_staging_row_accepts_rule_pattern(client, monkeypatch):
@@ -367,10 +375,10 @@ def test_staging_apply_ai_suggestions_skips_manually_edited_rows():
     """If the user resolves a row (via update_staging_row, which sets
     manually_edited=True) before the AI's suggestion for that same row
     comes back, the background job must not silently overwrite their
-    choice - see routers/statements.py::_apply_ai_suggestions."""
+    choice - see engine/batch_review.py::apply_ai_suggestions."""
+    from app.engine import batch_review
     from app.engine.ai_providers.base import AiSuggestion
-    from app.engine.staging_store import StagingBatch, StagingRow
-    from app.routers.statements import _apply_ai_suggestions
+    from app.engine.staging_store import StagingBatch, StagingRow, get_store
 
     edited_row = StagingRow(
         index=0, account_number="acc", transaction_date="2024-01-01", raw_description="X", matched_label=None,
@@ -388,7 +396,7 @@ def test_staging_apply_ai_suggestions_skips_manually_edited_rows():
         AiSuggestion(index=1, category="Shopping", display_label="Should apply", rule_pattern=None),
     ]
 
-    _apply_ai_suggestions(batch, suggestions)
+    batch_review.apply_ai_suggestions(get_store(), batch, suggestions)
 
     assert edited_row.category == "Others"  # untouched - the manual edit wins
     assert edited_row.ai_suggested is False
@@ -398,9 +406,9 @@ def test_staging_apply_ai_suggestions_skips_manually_edited_rows():
 
 
 def test_recategorize_apply_ai_suggestions_skips_manually_edited_rows():
+    from app.engine import batch_review
     from app.engine.ai_providers.base import AiSuggestion
-    from app.engine.recategorize_job import RecategorizeBatch, RecategorizeRow
-    from app.routers.transactions import _apply_ai_suggestions
+    from app.engine.recategorize_job import RecategorizeBatch, RecategorizeRow, get_store
 
     edited_row = RecategorizeRow(
         transaction_id=1, account_number_masked="***1234", transaction_date="2024-01-01", raw_description="X",
@@ -421,7 +429,7 @@ def test_recategorize_apply_ai_suggestions_skips_manually_edited_rows():
         AiSuggestion(index=2, category="Shopping", display_label="Should apply", rule_pattern=None),
     ]
 
-    _apply_ai_suggestions(batch, suggestions)
+    batch_review.apply_ai_suggestions(get_store(), batch, suggestions)
 
     assert edited_row.category == "Others"
     assert edited_row.ai_suggested is False
