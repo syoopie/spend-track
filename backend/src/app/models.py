@@ -1,4 +1,8 @@
+from typing import Literal
+
 from pydantic import BaseModel
+
+AiProviderKind = Literal["ollama", "openai_compatible", "anthropic"]
 
 
 class StagingAccountOut(BaseModel):
@@ -266,7 +270,7 @@ class SettingsOut(BaseModel):
     transfer_scheme_name: str
     supported_banks: list[str]
     ai_enabled: bool
-    ai_provider: str
+    ai_provider: AiProviderKind
     ollama_url: str
     ollama_model: str
     openai_base_url: str
@@ -280,7 +284,7 @@ class SettingsOut(BaseModel):
 
 class AiSettingsOut(BaseModel):
     ai_enabled: bool
-    ai_provider: str
+    ai_provider: AiProviderKind
     ollama_url: str
     ollama_model: str
     openai_base_url: str
@@ -294,7 +298,7 @@ class AiSettingsOut(BaseModel):
 
 class AiSettingsUpdateRequest(BaseModel):
     ai_enabled: bool | None = None
-    ai_provider: str | None = None
+    ai_provider: AiProviderKind | None = None
     ollama_url: str | None = None
     ollama_model: str | None = None
     openai_base_url: str | None = None

@@ -6,15 +6,8 @@ from app import repo
 from app.config import get_ai_settings
 from app.db import get_conn
 from app.engine import recategorize_job
-from app.engine.ai_providers import (
-    AiCandidate,
-    AiProviderResponseError,
-    AiProviderUnavailableError,
-    active_model_name,
-    build_provider,
-)
+from app.engine.ai_providers import AiCandidate, AiSuggestion, active_model_name, run_categorization_job
 from app.engine.ai_providers import cancellation as ai_cancellation
-from app.engine.paynow import is_paynow_transfer
 from app.engine.rules import categorize
 from app.errors import api_error
 from app.models import (
@@ -68,53 +61,36 @@ def _batch_to_out(batch: recategorize_job.RecategorizeBatch) -> RecategorizeBatc
     )
 
 
-def _run_ai_recategorize(
-    batch_id: str, candidates: list[AiCandidate], categories: list[tuple[str, str]], ai_settings: dict
-) -> None:
-    """Mirrors routers/statements.py::_run_ai_categorization exactly, down to
-    the batch-id re-check after the (possibly long) network call: this only
-    ever mutates the in-memory pending batch, never the DB - nothing is
-    written until commit_recategorize_batch runs."""
-    batch = recategorize_job.get_by_id(batch_id)
-    if batch is None:
-        return  # committed/discarded before the background task even started
-
-    provider = build_provider(ai_settings)
-    health = provider.check_health()
-    if not health.reachable:
-        batch.ai_warning = (
-            f"AI is enabled but the model can't be reached ({ai_settings['ai_provider']}: {health.error}) - "
-            "results were computed using rules only."
-        )
-        batch.ai_status = "failed"
-        return
-
-    try:
-        suggestions = provider.categorize(candidates, categories, cancel_key=batch_id)
-    except (AiProviderUnavailableError, AiProviderResponseError) as exc:
-        batch.ai_warning = (
-            f"AI is enabled but the request failed ({ai_settings['ai_provider']}: {exc}) - "
-            "results were computed using rules only."
-        )
-        batch.ai_status = "failed"
-        return
-
-    batch = recategorize_job.get_by_id(batch_id)  # re-check: may have been committed/discarded while thinking
-    if batch is None:
-        return
-
+def _apply_ai_suggestions(batch: recategorize_job.RecategorizeBatch, suggestions: list[AiSuggestion]) -> None:
     by_id = {r.transaction_id: r for r in batch.rows}
     for suggestion in suggestions:
         row = by_id.get(suggestion.index)
-        if row is None:
-            continue
+        if row is None or row.manually_edited:
+            continue  # unknown row, or the user already resolved it while the model was thinking
         row.category = suggestion.category
         row.matched_label = suggestion.display_label
         row.ai_suggested = True
         row.ai_category = suggestion.category
         row.ai_label = suggestion.display_label
         row.ai_rule_pattern = suggestion.rule_pattern
-    batch.ai_status = "done"
+
+
+def _run_ai_recategorize(
+    batch_id: str, candidates: list[AiCandidate], categories: list[tuple[str, str]], ai_settings: dict
+) -> None:
+    """Mirrors routers/statements.py::_run_ai_categorization exactly (both
+    call the shared ai_providers.run_categorization_job): this only ever
+    mutates the in-memory pending batch, never the DB - nothing is written
+    until commit_recategorize_batch runs."""
+    run_categorization_job(
+        batch_id,
+        get_batch=recategorize_job.get_by_id,
+        apply_suggestions=_apply_ai_suggestions,
+        candidates=candidates,
+        categories=categories,
+        ai_settings=ai_settings,
+        fallback_description="results were computed using rules only",
+    )
 
 
 def _paired_ids(conn: sqlite3.Connection) -> set[int]:
@@ -266,7 +242,7 @@ def recategorize_transactions(body: RecategorizeRequest, background_tasks: Backg
                     is_excluded=result.is_excluded,
                     exclusion_reason=result.exclusion_reason,
                     needs_review=result.needs_review,
-                    is_paynow=is_paynow_transfer(row["raw_description"].upper()),
+                    is_paynow=result.is_paynow,
                 )
             )
             if result.category in ("Others", "Other Income") and result.matched_label is None:
@@ -331,9 +307,11 @@ def update_recategorize_row(batch_id: str, transaction_id: int, body: Recategori
     if row is None:
         raise api_error(404, "RECATEGORIZE_ROW_NOT_FOUND", "No recategorize row for that transaction.")
 
-    # See routers/statements.py::update_staging_row's identical comment - the
-    # ai_* fields are a permanent record, never cleared here.
-    fields: dict = {"subcategory": body.subcategory, "needs_review": False}
+    # See routers/statements.py::update_staging_row's identical comments -
+    # the ai_* fields are a permanent record, never cleared here; setting
+    # manually_edited locks the row out of the background AI job's apply
+    # step so an in-flight suggestion can't overwrite this decision.
+    fields: dict = {"subcategory": body.subcategory, "needs_review": False, "manually_edited": True}
     if body.restore_ai:
         if row.ai_category is None:
             raise api_error(400, "NO_AI_SUGGESTION", "This row has no AI suggestion to restore.")

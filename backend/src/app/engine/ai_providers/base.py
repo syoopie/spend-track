@@ -14,6 +14,7 @@ model just not helping with that one row.
 """
 
 import json
+import re
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Iterator, Literal, Protocol
@@ -21,6 +22,7 @@ from typing import Iterator, Literal, Protocol
 import httpx
 
 from app.engine.ai_providers import cancellation
+from app.engine.naming import extract_display_name
 
 Direction = Literal["inflow", "outflow"]
 
@@ -93,10 +95,24 @@ def build_prompt(candidates: list[AiCandidate], categories: list[tuple[str, str]
     return (
         "You are categorizing personal bank transactions. For each transaction below, pick the single best "
         "matching category from the allowed list - you MUST only use a category whose direction matches the "
-        "transaction's own direction. Also provide a short, clean, human-readable display label (e.g. a merchant "
-        "or person's name, title-cased), and a short UPPERCASE substring of the raw description that would "
-        "reliably match this same merchant in future transactions (or null if the description is too generic/"
-        "one-off to make a reliable rule from).\n\n"
+        "transaction's own direction.\n\n"
+        "Also provide a short, clean, human-readable display label. Raw bank descriptions are full of noise that "
+        "must NOT end up in the label: payment-rail/processing boilerplate (NETS, POS, PAYNOW, GIRO, DEBIT-"
+        "CONSUMER, PURCHASE, TRANSFER, INWARD, OTHR, inward/outward markers), transaction reference codes, "
+        "terminal/batch IDs, and masked card or account numbers (long digit runs, or patterns like 'xxxxxx1234'). "
+        "Never just title-case the raw description and call it the label - strip the noise down to the actual "
+        "merchant or person's name first. If a code is glued directly onto a name with no space (e.g. "
+        "'HENG LI12306400', where '12306400' is a reference number stuck onto 'LI'), still drop the digit "
+        "portion rather than keeping it. Example: raw description "
+        '"NETS Debit-Consumer HENG LI12306400 xxxxxx5678" -> label "Heng Li", NOT "Nets Debit-Consumer Heng '
+        'Li12306400 Xxxxxx5678". If, after stripping all of that, nothing identifiable remains, use a short '
+        'generic label for what the transaction structurally looks like (e.g. "Card Purchase", "Bank Transfer") '
+        "instead of falling back to any of the raw noise.\n\n"
+        "Also provide a short UPPERCASE substring of the raw description that would reliably match this same "
+        "merchant in future transactions - it must be a stable brand/name fragment, never a reference code, "
+        "terminal ID, or masked card/account number (those are different on every transaction, so a rule built "
+        "from one would never match again). Use null if the description is too generic/one-off for a reliable "
+        "rule.\n\n"
         f"Allowed categories (name, direction):\n{category_lines}\n\n"
         f"Transactions:\n[{candidate_lines}]\n\n"
         'Respond with ONLY a JSON object of the exact shape {"results": [...]}, no other text - "results" must be '
@@ -106,14 +122,21 @@ def build_prompt(candidates: list[AiCandidate], categories: list[tuple[str, str]
     )
 
 
+_FENCE_OPEN_RE = re.compile(r"^```[a-zA-Z0-9]*\s*")
+_FENCE_CLOSE_RE = re.compile(r"\s*```$")
+
+
 def _strip_markdown_fence(text: str) -> str:
     """Some models wrap JSON in a ```json ... ``` fence despite instructions
-    not to add other text - strip it rather than fail to parse."""
+    not to add other text - strip it rather than fail to parse. Regex-based
+    (rather than splitting on the first newline) so a single-line fence with
+    no newline after the opening tag - e.g. ```json{"results": []}``` -
+    still strips cleanly instead of leaving the tag glued to the JSON."""
     text = text.strip()
-    if text.startswith("```"):
-        text = text.split("\n", 1)[-1]
-        if text.endswith("```"):
-            text = text[: -len("```")]
+    if not text.startswith("```"):
+        return text
+    text = _FENCE_OPEN_RE.sub("", text, count=1)
+    text = _FENCE_CLOSE_RE.sub("", text, count=1)
     return text.strip()
 
 
@@ -152,7 +175,13 @@ def parse_suggestions(
         if category not in direction_by_category or direction_by_category[category] != candidate.direction:
             continue  # not an allowed category, or wrong direction for this transaction - drop
 
-        display_label = (item.get("display_label") or "").strip() or candidate.raw_description.title()
+        # A model that skips the label entirely still shouldn't surface raw
+        # reference codes/masked numbers - fall back through the same
+        # noise-stripping used for rule/contact quick-apply defaults
+        # elsewhere (see naming.py's docstring) rather than a blind .title().
+        display_label = (item.get("display_label") or "").strip() or extract_display_name(
+            candidate.raw_description
+        ).title()
         rule_pattern = (item.get("rule_pattern") or "").strip() or None
 
         suggestions.append(

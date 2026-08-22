@@ -41,8 +41,7 @@ function RuleBuilderModal({ onClose }: { onClose: () => void }) {
             value={pattern}
             onChange={(e) => setPattern(e.target.value)}
             placeholder="e.g. NETFLIX"
-            className="w-full box-border px-3 py-2.5 rounded-lg border border-border bg-input text-text text-[13px]
-              outline-none focus:border-accent"
+            className="w-full box-border px-3 py-2.5 rounded-lg border border-border bg-input text-text text-[13px]"
           />
         </div>
 
@@ -70,8 +69,7 @@ function RuleBuilderModal({ onClose }: { onClose: () => void }) {
               value={exclusionReason}
               onChange={(e) => setExclusionReason(e.target.value)}
               placeholder="e.g. Self-transfer between own accounts"
-              className="w-full box-border px-3 py-2.5 rounded-lg border border-border bg-input text-text text-[13px]
-                outline-none focus:border-accent"
+              className="w-full box-border px-3 py-2.5 rounded-lg border border-border bg-input text-text text-[13px]"
             />
           </div>
         )}
@@ -86,8 +84,7 @@ function RuleBuilderModal({ onClose }: { onClose: () => void }) {
             value={priority}
             onChange={(e) => setPriority(e.target.value === '' ? '' : Number(e.target.value))}
             placeholder="auto"
-            className="w-20 box-border px-2.5 py-2 rounded-lg border border-border bg-input text-text text-[13px]
-              outline-none focus:border-accent text-right"
+            className="w-20 box-border px-2.5 py-2 rounded-lg border border-border bg-input text-text text-[13px] text-right"
           />
         </div>
       </div>
@@ -193,7 +190,7 @@ export function Rules() {
               </div>
               <button
                 onClick={() => deleteRule.mutate(r.id)}
-                className="text-xs text-muted-2 hover:text-danger-text bg-transparent border-none cursor-pointer opacity-0 group-hover:opacity-100"
+                className="text-xs text-muted-2 hover:text-danger-text bg-transparent border-none cursor-pointer opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
               >
                 Delete
               </button>

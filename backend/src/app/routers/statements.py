@@ -3,17 +3,10 @@ from fastapi import APIRouter, BackgroundTasks, File, Form, UploadFile
 from app import repo
 from app.config import get_ai_settings
 from app.db import get_conn
-from app.engine.ai_providers import (
-    AiCandidate,
-    AiProviderResponseError,
-    AiProviderUnavailableError,
-    active_model_name,
-    build_provider,
-)
+from app.engine.ai_providers import AiCandidate, AiSuggestion, active_model_name, run_categorization_job
 from app.engine.ai_providers import cancellation as ai_cancellation
 from app.engine.fingerprint import clean_description, compute_daily_sequence_indices, compute_fingerprint
 from app.engine.identity import derive_account_id
-from app.engine.paynow import is_paynow_transfer
 from app.engine.refunds import find_refund_pairs
 from app.engine.rules import categorize
 from app.engine.staging_store import StagingAccount, StagingBatch, StagingRow, get_store
@@ -96,52 +89,39 @@ def _ai_candidates(rows: list[StagingRow]) -> list[AiCandidate]:
     ]
 
 
-def _run_ai_categorization(
-    batch_id: str, candidates: list[AiCandidate], categories: list[tuple[str, str]], ai_settings: dict
-) -> None:
-    store = get_store()
+def _get_staging_batch_or_none(batch_id: str) -> StagingBatch | None:
     try:
-        batch = store.get(batch_id)
+        return get_store().get(batch_id)
     except KeyError:
-        return  # discarded/committed before the background task even started
+        return None
 
-    provider = build_provider(ai_settings)
-    health = provider.check_health()
-    if not health.reachable:
-        batch.ai_warning = (
-            f"AI is enabled but the model can't be reached ({ai_settings['ai_provider']}: {health.error}) - "
-            "this statement was categorized using rules only."
-        )
-        batch.ai_status = "failed"
-        return
 
-    try:
-        suggestions = provider.categorize(candidates, categories, cancel_key=batch_id)
-    except (AiProviderUnavailableError, AiProviderResponseError) as exc:
-        batch.ai_warning = (
-            f"AI is enabled but the request failed ({ai_settings['ai_provider']}: {exc}) - "
-            "this statement was categorized using rules only."
-        )
-        batch.ai_status = "failed"
-        return
-
-    try:
-        batch = store.get(batch_id)  # re-fetch: may have been committed/discarded while the model was thinking
-    except KeyError:
-        return
-
+def _apply_ai_suggestions(batch: StagingBatch, suggestions: list[AiSuggestion]) -> None:
     by_index = {r.index: r for r in batch.rows}
     for suggestion in suggestions:
         row = by_index.get(suggestion.index)
-        if row is None:
-            continue
+        if row is None or row.manually_edited:
+            continue  # unknown row, or the user already resolved it while the model was thinking
         row.category = suggestion.category
         row.matched_label = suggestion.display_label
         row.ai_suggested = True
         row.ai_category = suggestion.category
         row.ai_label = suggestion.display_label
         row.ai_rule_pattern = suggestion.rule_pattern
-    batch.ai_status = "done"
+
+
+def _run_ai_categorization(
+    batch_id: str, candidates: list[AiCandidate], categories: list[tuple[str, str]], ai_settings: dict
+) -> None:
+    run_categorization_job(
+        batch_id,
+        get_batch=_get_staging_batch_or_none,
+        apply_suggestions=_apply_ai_suggestions,
+        candidates=candidates,
+        categories=categories,
+        ai_settings=ai_settings,
+        fallback_description="this statement was categorized using rules only",
+    )
 
 
 @router.post("/upload", response_model=StagingBatchOut)
@@ -252,7 +232,7 @@ async def upload_statement(
                             contact_id=cat.contact_id,
                             needs_review=cat.needs_review,
                             is_duplicate=is_duplicate,
-                            is_paynow=is_paynow_transfer(tx.raw_description.upper()),
+                            is_paynow=cat.is_paynow,
                         )
                     )
                     row_index += 1
@@ -323,7 +303,11 @@ def update_staging_row(batch_id: str, index: int, body: StagingRowUpdateRequest)
     # trusts none of what the AI proposed, not just its category);
     # restore_ai re-applies the row's recorded ai_category/ai_label,
     # ignoring whatever `category` the request otherwise carries.
-    fields: dict = {"subcategory": body.subcategory, "needs_review": False}
+    # manually_edited locks this row out of the background AI job's apply
+    # step (see _apply_ai_suggestions) - once the user has explicitly acted
+    # on a row, an AI suggestion that was still in flight when they did
+    # can't silently overwrite that decision.
+    fields: dict = {"subcategory": body.subcategory, "needs_review": False, "manually_edited": True}
     if body.restore_ai:
         if row.ai_category is None:
             raise api_error(400, "NO_AI_SUGGESTION", "This row has no AI suggestion to restore.")

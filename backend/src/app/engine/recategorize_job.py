@@ -37,6 +37,8 @@ class RecategorizeRow:
     ai_category: str | None = None
     ai_label: str | None = None
     ai_rule_pattern: str | None = None
+    # See staging_store.py::StagingRow's identical field.
+    manually_edited: bool = False
 
 
 @dataclass

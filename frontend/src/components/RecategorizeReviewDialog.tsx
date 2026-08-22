@@ -60,7 +60,7 @@ export function RecategorizeReviewDialog({
           Re-run every categorization rule against transactions from{' '}
           <span className="text-text font-medium">{fmtMonthRangeLabel(range.from, range.to)}</span>
           {accountId ? ' for the selected account' : ' across all accounts'}. Nothing is applied until you review
-          and commit - this proposes the recomputed category, label, and exclusion status for each transaction in
+          and commit — this proposes the recomputed category, label, and exclusion status for each transaction in
           that range (including ones you've manually edited before) without changing anything yet.
         </div>
         {confirmError && <div className="text-[12px] text-danger-text mb-3">{confirmError}</div>}
