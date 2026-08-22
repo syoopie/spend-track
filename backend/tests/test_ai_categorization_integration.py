@@ -22,7 +22,7 @@ def _upload(client, path=ACCOUNT_SAMPLE):
 
 def _enable_ai(client):
     resp = client.patch(
-        "/api/settings/ai", json={"ai_enabled": True, "ai_provider": "ollama", "ollama_model": "llama3.1"}
+        "/api/ai", json={"ai_enabled": True, "ai_provider": "ollama", "ollama_model": "llama3.1"}
     )
     assert resp.status_code == 200, resp.text
 
@@ -134,7 +134,7 @@ def test_patch_staging_row_accepts_rule_pattern(client, monkeypatch):
     suggested = next(r for r in final["rows"] if r["ai_suggested"])
 
     resp = client.patch(
-        f"/api/statements/staging/{final['batch_id']}/rows/{suggested['index']}",
+        f"/api/statements/staging/{final['batch_id']}/rows/{suggested['key']}",
         json={
             "category": suggested["category"],
             "save_as_rule": True,
@@ -157,10 +157,10 @@ def test_staging_reject_then_restore_ai_suggestion(client, monkeypatch):
     fallback = "Other Income" if suggested["amount"] > 0 else "Others"
 
     rejected = client.patch(
-        f"/api/statements/staging/{final['batch_id']}/rows/{suggested['index']}",
+        f"/api/statements/staging/{final['batch_id']}/rows/{suggested['key']}",
         json={"category": fallback, "reject_ai": True},
     ).json()
-    rejected_row = next(r for r in rejected["rows"] if r["index"] == suggested["index"])
+    rejected_row = next(r for r in rejected["rows"] if r["key"] == suggested["key"])
     assert rejected_row["category"] == fallback
     assert rejected_row["matched_label"] is None
     # rejecting doesn't erase the AI's proposal - it stays available to restore
@@ -168,10 +168,10 @@ def test_staging_reject_then_restore_ai_suggestion(client, monkeypatch):
     assert rejected_row["ai_category"] == "Shopping"
 
     restored = client.patch(
-        f"/api/statements/staging/{final['batch_id']}/rows/{suggested['index']}",
+        f"/api/statements/staging/{final['batch_id']}/rows/{suggested['key']}",
         json={"category": fallback, "restore_ai": True},
     ).json()
-    restored_row = next(r for r in restored["rows"] if r["index"] == suggested["index"])
+    restored_row = next(r for r in restored["rows"] if r["key"] == suggested["key"])
     assert restored_row["category"] == "Shopping"
     assert restored_row["matched_label"] == "AI Label"
 
@@ -182,7 +182,7 @@ def test_staging_restore_ai_without_suggestion_404s(client):
     row = final["rows"][0]
 
     resp = client.patch(
-        f"/api/statements/staging/{final['batch_id']}/rows/{row['index']}",
+        f"/api/statements/staging/{final['batch_id']}/rows/{row['key']}",
         json={"category": row["category"], "restore_ai": True},
     )
     assert resp.status_code == 400
@@ -249,11 +249,11 @@ def test_recategorize_row_edit_syncs_into_current_batch(client, monkeypatch):
     suggested_row = next(r for r in current["rows"] if r["ai_suggested"])
 
     resp = client.patch(
-        f"/api/transactions/recategorize/{batch['batch_id']}/rows/{suggested_row['transaction_id']}",
+        f"/api/transactions/recategorize/{batch['batch_id']}/rows/{suggested_row['key']}",
         json={"category": "Transport", "save_as_rule": True, "rule_pattern": "MANUAL PATTERN"},
     )
     assert resp.status_code == 200
-    updated_row = next(r for r in resp.json()["rows"] if r["transaction_id"] == suggested_row["transaction_id"])
+    updated_row = next(r for r in resp.json()["rows"] if r["key"] == suggested_row["key"])
     assert updated_row["category"] == "Transport"
     # the AI's original suggestion is a permanent record - it survives a
     # manual override so the suggestion can still be restored later, even
@@ -277,11 +277,11 @@ def test_recategorize_reject_ai_suggestion_clears_label_and_flags(client, monkey
     fallback = "Other Income" if suggested_row["amount"] > 0 else "Others"
 
     resp = client.patch(
-        f"/api/transactions/recategorize/{batch['batch_id']}/rows/{suggested_row['transaction_id']}",
+        f"/api/transactions/recategorize/{batch['batch_id']}/rows/{suggested_row['key']}",
         json={"category": fallback, "reject_ai": True},
     )
     assert resp.status_code == 200
-    updated_row = next(r for r in resp.json()["rows"] if r["transaction_id"] == suggested_row["transaction_id"])
+    updated_row = next(r for r in resp.json()["rows"] if r["key"] == suggested_row["key"])
     assert updated_row["category"] == fallback
     assert updated_row["matched_label"] is None
     # rejecting is not an unrecoverable delete - the suggestion is retained
@@ -303,15 +303,15 @@ def test_recategorize_restore_ai_suggestion_after_reject(client, monkeypatch):
     fallback = "Other Income" if suggested_row["amount"] > 0 else "Others"
 
     client.patch(
-        f"/api/transactions/recategorize/{batch['batch_id']}/rows/{suggested_row['transaction_id']}",
+        f"/api/transactions/recategorize/{batch['batch_id']}/rows/{suggested_row['key']}",
         json={"category": fallback, "reject_ai": True},
     )
     resp = client.patch(
-        f"/api/transactions/recategorize/{batch['batch_id']}/rows/{suggested_row['transaction_id']}",
+        f"/api/transactions/recategorize/{batch['batch_id']}/rows/{suggested_row['key']}",
         json={"category": fallback, "restore_ai": True},
     )
     assert resp.status_code == 200
-    updated_row = next(r for r in resp.json()["rows"] if r["transaction_id"] == suggested_row["transaction_id"])
+    updated_row = next(r for r in resp.json()["rows"] if r["key"] == suggested_row["key"])
     assert updated_row["category"] == "Shopping"
     assert updated_row["matched_label"] == "AI Label"
     assert updated_row["ai_suggested"] is True
@@ -323,7 +323,7 @@ def test_recategorize_restore_ai_without_suggestion_404s(client):
     row = batch["rows"][0]
 
     resp = client.patch(
-        f"/api/transactions/recategorize/{batch['batch_id']}/rows/{row['transaction_id']}",
+        f"/api/transactions/recategorize/{batch['batch_id']}/rows/{row['key']}",
         json={"category": row["category"], "restore_ai": True},
     )
     assert resp.status_code == 400
@@ -433,5 +433,5 @@ def test_recategorize_apply_ai_suggestions_skips_manually_edited_rows():
 
 
 def test_update_ai_settings_rejects_unknown_provider(client):
-    resp = client.patch("/api/settings/ai", json={"ai_provider": "not-a-real-provider"})
+    resp = client.patch("/api/ai", json={"ai_provider": "not-a-real-provider"})
     assert resp.status_code == 422

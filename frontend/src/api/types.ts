@@ -5,8 +5,15 @@ export interface StagingAccount {
   is_new: boolean
 }
 
-export interface StagingRow {
-  index: number
+// Shared row shape for both a staging batch and a recategorize batch
+// (previously StagingRow/RecategorizeRow, identical fields under different
+// key names: `index` vs `transaction_id`) - `key` is whichever one applies,
+// matching the backend's BatchRowOut. A recategorize row's is_duplicate is
+// always false - dedup only applies to newly-parsed staging rows. Unifying
+// this is what lets components/ReviewDialog.tsx and useBatchActions() treat
+// both kinds of batch identically - see CONTEXT.md's BatchActions entry.
+export interface BatchRow {
+  key: number
   account_number_masked: string
   transaction_date: string
   raw_description: string
@@ -33,7 +40,7 @@ export interface StagingBatch {
   source_filenames: string[]
   bank_name: string
   accounts: StagingAccount[]
-  rows: StagingRow[]
+  rows: BatchRow[]
   new_extracted: number
   duplicates_skipped: number
   new_accounts_provisioned: number
@@ -44,7 +51,10 @@ export interface StagingBatch {
   ai_suggested_count: number
 }
 
-export interface StagingRowUpdateRequest {
+// Shared request body for editing one row of either a staging batch or a
+// recategorize batch (previously StagingRowUpdateRequest/
+// RecategorizeRowUpdateRequest, identical fields under different names).
+export interface BatchRowUpdateRequest {
   category: string
   subcategory?: string | null
   save_as_rule?: boolean
@@ -89,7 +99,10 @@ export interface StagingRuleCreateResult {
   batch: StagingBatch
 }
 
-export interface StagingRuleUndoRequest {
+// Shared request body for undoing a rule-create action against either kind
+// of batch (previously StagingRuleUndoRequest/RecategorizeRuleUndoRequest,
+// identical fields under different names).
+export interface BatchRuleUndoRequest {
   rule_id: number
   rows: RuleRerunRowSnapshot[]
 }
@@ -141,26 +154,6 @@ export interface RecategorizeRequest {
   account_id?: string | null
 }
 
-export interface RecategorizeRow {
-  transaction_id: number
-  account_number_masked: string
-  transaction_date: string
-  raw_description: string
-  matched_label: string | null
-  amount: number
-  category: string
-  subcategory: string | null
-  contact_id: number | null
-  is_excluded: boolean
-  exclusion_reason: string | null
-  needs_review: boolean
-  is_paynow: boolean
-  ai_suggested: boolean
-  ai_category: string | null
-  ai_label: string | null
-  ai_rule_pattern: string | null
-}
-
 export interface RecategorizeBatch {
   batch_id: string
   date_from: string
@@ -168,35 +161,17 @@ export interface RecategorizeBatch {
   account_id: string | null
   scanned: number
   changed: number
-  rows: RecategorizeRow[]
+  rows: BatchRow[]
   ai_status: AiJobStatus
   ai_warning: string | null
   ai_model: string | null
   ai_suggested_count: number
 }
 
-export interface RecategorizeRowUpdateRequest {
-  category: string
-  subcategory?: string | null
-  save_as_rule?: boolean
-  rule_pattern?: string | null
-  rule_priority?: number | null
-  save_as_contact?: boolean
-  contact_name?: string | null
-  contact_identifier?: string | null
-  reject_ai?: boolean
-  restore_ai?: boolean
-}
-
 export interface RecategorizeRuleCreateResult {
   rule_id: number
   updated_rows: RuleRerunRowSnapshot[]
   batch: RecategorizeBatch
-}
-
-export interface RecategorizeRuleUndoRequest {
-  rule_id: number
-  rows: RuleRerunRowSnapshot[]
 }
 
 export interface RecategorizeCommitResult {
@@ -244,6 +219,11 @@ export interface Rule {
   target_subcategory: string | null
   is_exclusion_rule: boolean
   exclusion_reason: string | null
+  // The one transaction direction this rule can ever match - a category
+  // rule's is always the same as its own target_category (the backend
+  // keeps them in sync), an exclusion rule's is independently chosen since
+  // it has no category to imply one.
+  direction: CategoryDirection
   is_default: boolean
   display_label: string | null
 }
@@ -255,6 +235,10 @@ export interface RuleCreateRequest {
   target_subcategory?: string | null
   is_exclusion_rule?: boolean
   exclusion_reason?: string | null
+  // Optional for a category rule (the backend derives it from
+  // target_category) - required in practice for an exclusion rule, which
+  // has nothing else to derive it from.
+  direction?: CategoryDirection | null
 }
 
 export interface RuleUpdateRequest {
@@ -264,6 +248,7 @@ export interface RuleUpdateRequest {
   target_subcategory?: string | null
   is_exclusion_rule?: boolean
   exclusion_reason?: string | null
+  direction?: CategoryDirection | null
 }
 
 export type CategoryDirection = 'inflow' | 'outflow'

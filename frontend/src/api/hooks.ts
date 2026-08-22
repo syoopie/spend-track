@@ -5,6 +5,8 @@ import type {
   AiSettings,
   AiSettingsUpdateRequest,
   AiStatus,
+  BatchRowUpdateRequest,
+  BatchRuleUndoRequest,
   CommitResult,
   Contact,
   ContactCreateRequest,
@@ -16,19 +18,16 @@ import type {
   RecategorizeBatch,
   RecategorizeCommitResult,
   RecategorizeRequest,
-  RecategorizeRowUpdateRequest,
   RecategorizeRuleCreateResult,
-  RecategorizeRuleUndoRequest,
   RefundPairing,
   Rule,
   RuleCreateRequest,
   RuleQuickCreateRequest,
+  RuleRerunRowSnapshot,
   RuleUpdateRequest,
   Settings,
   StagingBatch,
-  StagingRowUpdateRequest,
   StagingRuleCreateResult,
-  StagingRuleUndoRequest,
   Transaction,
   TransactionUpdateRequest,
   Category,
@@ -98,64 +97,6 @@ export function useCurrentRecategorizeBatch(enabled: boolean) {
   })
 }
 
-export function useUpdateRecategorizeRow(batchId: string) {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: ({ transactionId, body }: { transactionId: number; body: RecategorizeRowUpdateRequest }) =>
-      api.patch<RecategorizeBatch>(`/transactions/recategorize/${batchId}/rows/${transactionId}`, body),
-    onSuccess: (data) => qc.setQueryData(['recategorize-batch', 'current'], data),
-  })
-}
-
-// The review dialog's "Create Rule" action - separate from a plain row
-// category update (see ReviewDialog.tsx and StagingRuleCreateResult's own
-// comment in types.ts). Also invalidates the rules list so the Rules page
-// reflects the newly created rule if it's open in another tab.
-export function useCreateRuleFromRecategorizeBatch(batchId: string) {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (body: RuleQuickCreateRequest) =>
-      api.post<RecategorizeRuleCreateResult>(`/transactions/recategorize/${batchId}/rules`, body),
-    onSuccess: (data) => {
-      qc.setQueryData(['recategorize-batch', 'current'], data.batch)
-      qc.invalidateQueries({ queryKey: ['rules'] })
-    },
-  })
-}
-
-export function useUndoRuleFromRecategorizeBatch(batchId: string) {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (body: RecategorizeRuleUndoRequest) =>
-      api.post<RecategorizeBatch>(`/transactions/recategorize/${batchId}/rules/undo`, body),
-    onSuccess: (data) => {
-      qc.setQueryData(['recategorize-batch', 'current'], data)
-      qc.invalidateQueries({ queryKey: ['rules'] })
-    },
-  })
-}
-
-export function useCommitRecategorizeBatch() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (batchId: string) => api.post<RecategorizeCommitResult>(`/transactions/recategorize/${batchId}/commit`),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['transactions'] })
-      qc.invalidateQueries({ queryKey: ['dashboard-summary'] })
-      qc.invalidateQueries({ queryKey: ['monthly-totals'] })
-      qc.invalidateQueries({ queryKey: ['recategorize-batch'] })
-    },
-  })
-}
-
-export function useDiscardRecategorizeBatch() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (batchId: string) => api.delete(`/transactions/recategorize/${batchId}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['recategorize-batch'] }),
-  })
-}
-
 export function useRefundPairing(transactionId: number | null) {
   return useQuery({
     queryKey: ['refund-pairing', transactionId],
@@ -212,58 +153,124 @@ export function useCurrentStagingBatch() {
   })
 }
 
-export function useUpdateStagingRow(batchId: string) {
+// --- batch actions (staging + recategorize) ----------------------------------
+//
+// A staging batch and a recategorize batch share one backend row/action
+// shape (see BatchRow/BatchRowUpdateRequest in types.ts and CONTEXT.md's
+// PendingBatch/BatchActions entries) - what still differs between them is
+// only how a batch is *seeded* (useUploadStatement vs
+// useRecategorizeTransactions, above/below) and each kind's own URL prefix.
+// Everything from "edit a row" through "commit/discard" is one parameterized
+// set of hooks here, bundled by useBatchActions() into the single prop list
+// StagingReviewDialog and RecategorizeReviewDialog both hand to the shared
+// components/ReviewDialog.tsx.
+
+export type BatchKind = 'staging' | 'recategorize'
+
+function batchUrl(kind: BatchKind, batchId: string): string {
+  return kind === 'staging' ? `/statements/staging/${batchId}` : `/transactions/recategorize/${batchId}`
+}
+
+function batchQueryKey(kind: BatchKind): string {
+  return kind === 'staging' ? 'staging-batch' : 'recategorize-batch'
+}
+
+function useUpdateBatchRow(kind: BatchKind, batchId: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ index, body }: { index: number; body: StagingRowUpdateRequest }) =>
-      api.patch<StagingBatch>(`/statements/staging/${batchId}/rows/${index}`, body),
-    onSuccess: (data) => qc.setQueryData(['staging-batch', 'current'], data),
+    mutationFn: ({ key, body }: { key: number; body: BatchRowUpdateRequest }) =>
+      api.patch<StagingBatch | RecategorizeBatch>(`${batchUrl(kind, batchId)}/rows/${key}`, body),
+    onSuccess: (data) => qc.setQueryData([batchQueryKey(kind), 'current'], data),
   })
 }
 
-export function useCreateRuleFromStagingBatch(batchId: string) {
+// The review dialog's "Create Rule" action - separate from a plain row
+// category update (see ReviewDialog.tsx). Also invalidates the rules list
+// so the Rules page reflects the newly created rule if it's open elsewhere.
+function useCreateRuleFromBatch(kind: BatchKind, batchId: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (body: RuleQuickCreateRequest) =>
-      api.post<StagingRuleCreateResult>(`/statements/staging/${batchId}/rules`, body),
+      api.post<StagingRuleCreateResult | RecategorizeRuleCreateResult>(`${batchUrl(kind, batchId)}/rules`, body),
     onSuccess: (data) => {
-      qc.setQueryData(['staging-batch', 'current'], data.batch)
+      qc.setQueryData([batchQueryKey(kind), 'current'], data.batch)
       qc.invalidateQueries({ queryKey: ['rules'] })
     },
   })
 }
 
-export function useUndoRuleFromStagingBatch(batchId: string) {
+function useUndoRuleFromBatch(kind: BatchKind, batchId: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: StagingRuleUndoRequest) => api.post<StagingBatch>(`/statements/staging/${batchId}/rules/undo`, body),
+    mutationFn: (body: BatchRuleUndoRequest) =>
+      api.post<StagingBatch | RecategorizeBatch>(`${batchUrl(kind, batchId)}/rules/undo`, body),
     onSuccess: (data) => {
-      qc.setQueryData(['staging-batch', 'current'], data)
+      qc.setQueryData([batchQueryKey(kind), 'current'], data)
       qc.invalidateQueries({ queryKey: ['rules'] })
     },
   })
 }
 
-export function useCommitBatch() {
+function useCommitPendingBatch(kind: BatchKind) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (batchId: string) => api.post<CommitResult>(`/statements/staging/${batchId}/commit`),
+    mutationFn: (batchId: string) => api.post<CommitResult | RecategorizeCommitResult>(`${batchUrl(kind, batchId)}/commit`),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['accounts'] })
       qc.invalidateQueries({ queryKey: ['transactions'] })
       qc.invalidateQueries({ queryKey: ['dashboard-summary'] })
       qc.invalidateQueries({ queryKey: ['monthly-totals'] })
-      qc.invalidateQueries({ queryKey: ['staging-batch'] })
+      qc.invalidateQueries({ queryKey: [batchQueryKey(kind)] })
+      // Only an upload can provision a new account - a recategorize commit
+      // never touches the accounts table.
+      if (kind === 'staging') qc.invalidateQueries({ queryKey: ['accounts'] })
     },
   })
 }
 
-export function useDiscardBatch() {
+function useDiscardPendingBatch(kind: BatchKind) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (batchId: string) => api.delete(`/statements/staging/${batchId}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['staging-batch'] }),
+    mutationFn: (batchId: string) => api.delete(batchUrl(kind, batchId)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [batchQueryKey(kind)] }),
   })
+}
+
+export interface BatchActions {
+  applyRow: (key: number, body: BatchRowUpdateRequest) => Promise<void>
+  applyPending: boolean
+  createRule: (matchPattern: string, targetCategory: string) => Promise<{ rule_id: number; updated_rows: RuleRerunRowSnapshot[] }>
+  createRulePending: boolean
+  undoRule: (payload: BatchRuleUndoRequest) => Promise<void>
+  undoRulePending: boolean
+  commit: (batchId: string) => Promise<void>
+  commitPending: boolean
+  discard: (batchId: string) => Promise<void>
+  discardPending: boolean
+}
+
+// The one bundle of apply/createRule/undoRule/commit/discard callbacks plus
+// their pending flags that a review dialog needs, regardless of which kind
+// of PendingBatch it's showing - see CONTEXT.md's BatchActions entry.
+export function useBatchActions(kind: BatchKind, batchId: string): BatchActions {
+  const updateRow = useUpdateBatchRow(kind, batchId)
+  const createRule = useCreateRuleFromBatch(kind, batchId)
+  const undoRule = useUndoRuleFromBatch(kind, batchId)
+  const commit = useCommitPendingBatch(kind)
+  const discard = useDiscardPendingBatch(kind)
+
+  return {
+    applyRow: (key, body) => updateRow.mutateAsync({ key, body }).then(() => {}),
+    applyPending: updateRow.isPending,
+    createRule: (matchPattern, targetCategory) =>
+      createRule.mutateAsync({ match_pattern: matchPattern, target_category: targetCategory }),
+    createRulePending: createRule.isPending,
+    undoRule: (payload) => undoRule.mutateAsync(payload).then(() => {}),
+    undoRulePending: undoRule.isPending,
+    commit: (id) => commit.mutateAsync(id).then(() => {}),
+    commitPending: commit.isPending,
+    discard: (id) => discard.mutateAsync(id).then(() => {}),
+    discardPending: discard.isPending,
+  }
 }
 
 // --- contacts -----------------------------------------------------------------
@@ -361,10 +368,12 @@ export function useSettings() {
   return useQuery({ queryKey: ['settings'], queryFn: () => api.get<Settings>('/settings') })
 }
 
+// AI provider configuration lives under its own /api/ai prefix, not nested
+// under /api/settings/* - see CONTEXT.md's AI provider configuration entry.
 export function useAiStatus(enabled: boolean) {
   return useQuery({
     queryKey: ['ai-status'],
-    queryFn: () => api.get<AiStatus>('/settings/ai/status'),
+    queryFn: () => api.get<AiStatus>('/ai/status'),
     enabled,
     staleTime: 5 * 60 * 1000,
   })
@@ -373,7 +382,7 @@ export function useAiStatus(enabled: boolean) {
 export function useUpdateAiSettings() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: AiSettingsUpdateRequest) => api.patch<AiSettings>('/settings/ai', body),
+    mutationFn: (body: AiSettingsUpdateRequest) => api.patch<AiSettings>('/ai', body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['settings'] })
       qc.invalidateQueries({ queryKey: ['ai-status'] })
@@ -381,10 +390,13 @@ export function useUpdateAiSettings() {
   })
 }
 
+// Data lifecycle (relocate/reset/scoped deletes) lives under its own
+// /api/data-lifecycle prefix, not nested under /api/settings/* - see
+// CONTEXT.md's Data lifecycle entry.
 export function useRelocateDb() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (newPath: string) => api.post<Settings>('/settings/relocate', { new_path: newPath }),
+    mutationFn: (newPath: string) => api.post<Settings>('/data-lifecycle/relocate', { new_path: newPath }),
     onSuccess: (data) => qc.setQueryData(['settings'], data),
   })
 }
@@ -392,7 +404,7 @@ export function useRelocateDb() {
 export function useResetDb() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (confirm: string) => api.post('/settings/reset', { confirm }),
+    mutationFn: (confirm: string) => api.post('/data-lifecycle/reset', { confirm }),
     onSuccess: () => qc.invalidateQueries(),
   })
 }
@@ -400,7 +412,7 @@ export function useResetDb() {
 export function useDeleteAllRules() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (confirm: string) => api.post<DeleteScopeResult>('/settings/delete-rules', { confirm }),
+    mutationFn: (confirm: string) => api.post<DeleteScopeResult>('/data-lifecycle/delete-rules', { confirm }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['rules'] }),
   })
 }
@@ -408,7 +420,7 @@ export function useDeleteAllRules() {
 export function useDeleteAllContacts() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (confirm: string) => api.post<DeleteScopeResult>('/settings/delete-contacts', { confirm }),
+    mutationFn: (confirm: string) => api.post<DeleteScopeResult>('/data-lifecycle/delete-contacts', { confirm }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['contacts'] }),
   })
 }
@@ -416,7 +428,7 @@ export function useDeleteAllContacts() {
 export function useDeleteAllTransactions() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (confirm: string) => api.post<DeleteScopeResult>('/settings/delete-transactions', { confirm }),
+    mutationFn: (confirm: string) => api.post<DeleteScopeResult>('/data-lifecycle/delete-transactions', { confirm }),
     onSuccess: () => qc.invalidateQueries(),
   })
 }

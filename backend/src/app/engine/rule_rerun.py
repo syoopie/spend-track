@@ -15,7 +15,7 @@ instead of depending on either store.
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
-from app.engine.rules import categorize
+from app.engine.rules import CategorizationRequest, CategorizationRuleset, categorize
 
 # The fields a categorize() result can change and that a rule-rerun undo
 # needs to be able to restore verbatim - mirrors exactly what
@@ -58,18 +58,23 @@ def rerun_rules_on_batch(
     Returns one dict per changed row: {"key": ..., **previous_field_values} -
     everything the caller needs to offer an undo (see
     StagingRuleUndoRequest/RecategorizeRuleUndoRequest in models.py)."""
+    ruleset = CategorizationRuleset(
+        rules=rules,
+        contact_identifiers=contact_identifiers,
+        category_directions=category_directions,
+        has_card_account=has_card_account,
+    )
     changes: list[dict[str, Any]] = []
     for row in rows:
         if getattr(row, "manually_edited", False) or getattr(row, "is_duplicate", False):
             continue
         result = categorize(
-            row.raw_description,
-            rules,
-            contact_identifiers,
-            amount=row.amount,
-            category_directions=category_directions,
-            has_card_account=has_card_account,
-            posting_account_is_card=row.is_card_account,
+            CategorizationRequest(
+                raw_description=row.raw_description,
+                amount=row.amount,
+                posting_account_is_card=row.is_card_account,
+            ),
+            ruleset,
         )
         after = {
             "category": result.category,

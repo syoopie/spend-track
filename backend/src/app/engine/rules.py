@@ -19,7 +19,7 @@ name. category_directions must reflect the live `categories` table
 treated as outflow, matching the column's own DB default.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Mapping, Sequence
 
 from app.engine import paynow
@@ -28,6 +28,33 @@ from app.engine.card_payments import looks_like_card_bill_payment
 CARD_PAYMENT_EXCLUSION_REASON = (
     "Credit card bill payment - the actual spending is already counted on the card's own statement"
 )
+
+
+@dataclass
+class CategorizationRequest:
+    """The per-row half of categorize()'s input - built fresh for each
+    transaction being categorized. posting_account_is_card lives here
+    (rather than on CategorizationRuleset) because it depends on which
+    account this specific transaction posted to, not on the pass as a
+    whole - a single upload can mix rows from both a bank and a card
+    account."""
+
+    raw_description: str
+    amount: float = 0.0
+    posting_account_is_card: bool = False
+
+
+@dataclass
+class CategorizationRuleset:
+    """The per-pass half of categorize()'s input - built once per upload,
+    recategorize, or rule-rerun pass and reused unchanged across every row
+    in that pass, since none of these fields depend on the row being
+    categorized."""
+
+    rules: Sequence[Mapping[str, Any]]
+    contact_identifiers: Sequence[Mapping[str, Any]]
+    category_directions: Mapping[str, str] = field(default_factory=dict)
+    has_card_account: bool = False
 
 
 @dataclass
@@ -79,23 +106,28 @@ def find_matching_contact(
     return None
 
 
-def categorize(
-    raw_description: str,
-    rules: Sequence[Mapping[str, Any]],
-    contact_identifiers: Sequence[Mapping[str, Any]],
-    *,
-    amount: float = 0.0,
-    category_directions: Mapping[str, str] = {},
-    has_card_account: bool = False,
-    posting_account_is_card: bool = False,
-) -> Categorization:
-    """has_card_account: True if any credit card account is known - already
+def categorize(request: CategorizationRequest, ruleset: CategorizationRuleset) -> Categorization:
+    """request carries the per-row inputs (description, amount, and which
+    kind of account it posted to); ruleset carries the per-pass inputs
+    (rules, contacts, category directions, and whether any card account is
+    known) that stay the same across every row in one upload/recategorize/
+    rerun pass - see CategorizationRequest/CategorizationRuleset above.
+
+    has_card_account: True if any credit card account is known - already
     committed, or parsed in the same upload batch. posting_account_is_card:
     True if the transaction being categorized itself lives on a card
     account (never auto-excluded as a "pay my card bill" transfer - a card
     can't pay itself). amount: signed transaction amount - drives both the
     inflow/outflow direction check against category_directions and the
     "PayNow from/to" label wording."""
+    raw_description = request.raw_description
+    amount = request.amount
+    posting_account_is_card = request.posting_account_is_card
+    rules = ruleset.rules
+    contact_identifiers = ruleset.contact_identifiers
+    category_directions = ruleset.category_directions
+    has_card_account = ruleset.has_card_account
+
     desc_upper = raw_description.upper()
     direction = _direction_of(amount)
     is_paynow = paynow.is_paynow_transfer(desc_upper)
@@ -103,6 +135,8 @@ def categorize(
     for rule in rules:  # must already be sorted by priority ASC
         if rule["match_pattern"].upper() in desc_upper:
             if rule["is_exclusion_rule"]:
+                if rule["direction"] != direction:
+                    continue  # this exclusion rule was scoped to the other direction - keep looking
                 return Categorization(
                     category=_fallback_category(direction),
                     subcategory=None,

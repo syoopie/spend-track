@@ -1,16 +1,8 @@
 import { useState } from 'react'
-import {
-  useCommitRecategorizeBatch,
-  useCreateRuleFromRecategorizeBatch,
-  useCurrentRecategorizeBatch,
-  useDiscardRecategorizeBatch,
-  useRecategorizeTransactions,
-  useUndoRuleFromRecategorizeBatch,
-  useUpdateRecategorizeRow,
-} from '../api/hooks'
+import { useBatchActions, useCurrentRecategorizeBatch, useRecategorizeTransactions } from '../api/hooks'
 import { fmtMonthRangeLabel } from '../lib/format'
 import { Modal } from './Modal'
-import { ReviewDialog, type ApplyRowBody, type ReviewRow, type ReviewStatCard } from './ReviewDialog'
+import { ReviewDialog, type ReviewRow, type ReviewStatCard } from './ReviewDialog'
 
 // The exact same review/commit/discard flow as staging's upload
 // (StagingReviewDialog): the POST proposes a pending batch, nothing is
@@ -31,13 +23,9 @@ export function RecategorizeReviewDialog({
   // the Recategorize button again) - only fall back to the confirm prompt
   // once we know for certain there isn't one.
   const batchQ = useCurrentRecategorizeBatch(true)
-  const commit = useCommitRecategorizeBatch()
-  const discard = useDiscardRecategorizeBatch()
   // Hooks must run unconditionally regardless of which view below renders -
   // an empty batchId is inert until a batch actually exists.
-  const updateRow = useUpdateRecategorizeRow(batchQ.data?.batch_id ?? '')
-  const createRule = useCreateRuleFromRecategorizeBatch(batchQ.data?.batch_id ?? '')
-  const undoRule = useUndoRuleFromRecategorizeBatch(batchQ.data?.batch_id ?? '')
+  const actions = useBatchActions('recategorize', batchQ.data?.batch_id ?? '')
   const [confirmError, setConfirmError] = useState<string | null>(null)
 
   function handleConfirm() {
@@ -90,35 +78,17 @@ export function RecategorizeReviewDialog({
   const batch = batchQ.data
 
   async function handleCommit() {
-    await commit.mutateAsync(batch.batch_id)
+    await actions.commit(batch.batch_id)
     onClose()
   }
 
   async function handleDiscard() {
-    await discard.mutateAsync(batch.batch_id)
+    await actions.discard(batch.batch_id)
     onClose()
   }
 
-  async function handleApplyRow(row: ReviewRow, body: ApplyRowBody) {
-    await updateRow.mutateAsync({
-      transactionId: row.key,
-      body: {
-        category: body.category,
-        save_as_contact: body.save_as_contact,
-        contact_name: body.contact_name,
-        contact_identifier: body.contact_identifier,
-        reject_ai: body.reject_ai,
-        restore_ai: body.restore_ai,
-      },
-    })
-  }
-
-  async function handleCreateRule(_row: ReviewRow, matchPattern: string, targetCategory: string) {
-    return createRule.mutateAsync({ match_pattern: matchPattern, target_category: targetCategory })
-  }
-
   const rows: ReviewRow[] = batch.rows.map((r) => ({
-    key: r.transaction_id,
+    key: r.key,
     transaction_date: r.transaction_date,
     raw_description: r.raw_description,
     matched_label: r.matched_label,
@@ -153,12 +123,12 @@ export function RecategorizeReviewDialog({
       aiWarning={batch.ai_warning}
       aiModel={batch.ai_model}
       rows={rows}
-      onApplyRow={handleApplyRow}
-      applyPending={updateRow.isPending}
-      onCreateRule={handleCreateRule}
-      createRulePending={createRule.isPending}
-      onUndoRule={(payload) => undoRule.mutateAsync(payload).then(() => {})}
-      undoRulePending={undoRule.isPending}
+      onApplyRow={(row, body) => actions.applyRow(row.key, body)}
+      applyPending={actions.applyPending}
+      onCreateRule={(_row, matchPattern, targetCategory) => actions.createRule(matchPattern, targetCategory)}
+      createRulePending={actions.createRulePending}
+      onUndoRule={actions.undoRule}
+      undoRulePending={actions.undoRulePending}
       emptyMessage="No transactions in this range."
       footer={
         <>
@@ -170,7 +140,7 @@ export function RecategorizeReviewDialog({
           )}
           <button
             onClick={handleDiscard}
-            disabled={discard.isPending}
+            disabled={actions.discardPending}
             className="text-[13px] font-semibold px-4.5 py-2.5 rounded-lg cursor-pointer bg-input disabled:opacity-60"
             style={{ border: '1px solid oklch(45% 0.15 25)', color: 'oklch(70% 0.18 25)' }}
           >
@@ -178,7 +148,7 @@ export function RecategorizeReviewDialog({
           </button>
           <button
             onClick={handleCommit}
-            disabled={commit.isPending || batch.rows.length === 0 || batch.ai_status === 'running'}
+            disabled={actions.commitPending || batch.rows.length === 0 || batch.ai_status === 'running'}
             title={batch.ai_status === 'running' ? 'Wait for AI categorization to finish, or close this dialog' : undefined}
             className="text-[13px] font-semibold px-5 py-2.5 rounded-lg border-none bg-accent text-accent-fg cursor-pointer disabled:opacity-60"
           >

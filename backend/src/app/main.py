@@ -5,7 +5,18 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.db import init_db
-from app.routers import accounts, categories, contacts, dashboard, rules, settings, statements, transactions
+from app.routers import (
+    accounts,
+    ai_settings,
+    categories,
+    contacts,
+    dashboard,
+    data_lifecycle,
+    rules,
+    settings,
+    statements,
+    transactions,
+)
 
 
 @asynccontextmanager
@@ -31,6 +42,8 @@ app.include_router(contacts.router)
 app.include_router(rules.router)
 app.include_router(categories.router)
 app.include_router(settings.router)
+app.include_router(ai_settings.router)
+app.include_router(data_lifecycle.router)
 app.include_router(dashboard.router)
 
 

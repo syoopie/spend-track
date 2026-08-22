@@ -207,15 +207,15 @@ def test_recategorize_row_edit_is_staged_until_commit(client):
     row = batch["rows"][0]
 
     resp = client.patch(
-        f"/api/transactions/recategorize/{batch['batch_id']}/rows/{row['transaction_id']}",
+        f"/api/transactions/recategorize/{batch['batch_id']}/rows/{row['key']}",
         json={"category": "Entertainment", "save_as_rule": True, "rule_pattern": "MANUAL RULE PATTERN"},
     )
     assert resp.status_code == 200
-    updated_row = next(r for r in resp.json()["rows"] if r["transaction_id"] == row["transaction_id"])
+    updated_row = next(r for r in resp.json()["rows"] if r["key"] == row["key"])
     assert updated_row["category"] == "Entertainment"
 
     # not written to the DB yet
-    still_unwritten = next(t for t in client.get("/api/transactions").json() if t["id"] == row["transaction_id"])
+    still_unwritten = next(t for t in client.get("/api/transactions").json() if t["id"] == row["key"])
     assert still_unwritten["category"] != "Entertainment"
 
     # the rule itself, though, is created immediately (independent of commit)
@@ -224,7 +224,7 @@ def test_recategorize_row_edit_is_staged_until_commit(client):
 
     # committing writes the edited value
     client.post(f"/api/transactions/recategorize/{batch['batch_id']}/commit")
-    written = next(t for t in client.get("/api/transactions").json() if t["id"] == row["transaction_id"])
+    written = next(t for t in client.get("/api/transactions").json() if t["id"] == row["key"])
     assert written["category"] == "Entertainment"
 
 
@@ -349,13 +349,40 @@ def test_exclusion_rule_create_and_update(client):
     assert updated["exclusion_reason"] == "Updated reason"
 
 
+def test_rule_direction_is_derived_from_category_when_omitted(client):
+    outflow = client.post("/api/rules", json={"match_pattern": "SP GROUP", "target_category": "Bills & Fees"}).json()
+    assert outflow["direction"] == "outflow"
+    inflow = client.post("/api/rules", json={"match_pattern": "PAYROLL", "target_category": "Salary"}).json()
+    assert inflow["direction"] == "inflow"
+
+
+def test_exclusion_rule_direction_defaults_to_outflow_but_is_settable(client):
+    default_direction = client.post(
+        "/api/rules", json={"match_pattern": "SELF XFER", "is_exclusion_rule": True, "exclusion_reason": "x"}
+    ).json()
+    assert default_direction["direction"] == "outflow"
+
+    inflow_exclusion = client.post(
+        "/api/rules",
+        json={"match_pattern": "REVERSED XFER", "is_exclusion_rule": True, "exclusion_reason": "x", "direction": "inflow"},
+    ).json()
+    assert inflow_exclusion["direction"] == "inflow"
+
+
+def test_updating_rule_category_recomputes_direction(client):
+    r = client.post("/api/rules", json={"match_pattern": "SP GROUP", "target_category": "Bills & Fees"}).json()
+    assert r["direction"] == "outflow"
+    updated = client.patch(f"/api/rules/{r['id']}", json={"target_category": "Salary"}).json()
+    assert updated["direction"] == "inflow"
+
+
 # --- settings ---------------------------------------------------------------
 
 
 def test_get_settings_reports_path_and_size(client):
     _upload_and_commit(client)
     resp = client.get("/api/settings").json()
-    assert resp["schema_version"] == 5
+    assert resp["schema_version"] == 6
     assert resp["size_bytes"] > 0
     assert resp["country_code"] == "SG"
     assert resp["currency_code"] == "SGD"
@@ -366,7 +393,7 @@ def test_get_settings_reports_path_and_size(client):
 
 def test_reset_requires_delete_confirmation(client):
     _upload_and_commit(client)
-    resp = client.post("/api/settings/reset", json={"confirm": "nope"})
+    resp = client.post("/api/data-lifecycle/reset", json={"confirm": "nope"})
     assert resp.status_code == 400
     assert resp.json()["detail"]["code"] == "RESET_CONFIRMATION_MISMATCH"
 
@@ -375,7 +402,7 @@ def test_reset_wipes_data_and_reinitializes_schema(client):
     _upload_and_commit(client)
     assert len(client.get("/api/transactions", params={"include_excluded": True}).json()) == 39
 
-    resp = client.post("/api/settings/reset", json={"confirm": "DELETE"})
+    resp = client.post("/api/data-lifecycle/reset", json={"confirm": "DELETE"})
     assert resp.status_code == 204
 
     assert client.get("/api/transactions").json() == []
@@ -388,11 +415,11 @@ def test_delete_rules_requires_confirmation_and_only_removes_user_rules(client):
     client.post("/api/rules", json={"match_pattern": "SP GROUP", "target_category": "Bills & Fees"})
     default_count_before = len(client.get("/api/rules", params={"include_default": True}).json())
 
-    resp = client.post("/api/settings/delete-rules", json={"confirm": "nope"})
+    resp = client.post("/api/data-lifecycle/delete-rules", json={"confirm": "nope"})
     assert resp.status_code == 400
     assert resp.json()["detail"]["code"] == "RESET_CONFIRMATION_MISMATCH"
 
-    resp = client.post("/api/settings/delete-rules", json={"confirm": "DELETE"})
+    resp = client.post("/api/data-lifecycle/delete-rules", json={"confirm": "DELETE"})
     assert resp.status_code == 200
     assert resp.json()["deleted_count"] == 1
 
@@ -407,7 +434,7 @@ def test_delete_contacts_removes_all_contacts_and_identifiers(client):
         "/api/contacts",
         json={"name": "Auntie Mei", "default_category": "Paynow", "identifiers": ["+65 9123 4567"]},
     )
-    resp = client.post("/api/settings/delete-contacts", json={"confirm": "DELETE"})
+    resp = client.post("/api/data-lifecycle/delete-contacts", json={"confirm": "DELETE"})
     assert resp.status_code == 200
     assert resp.json()["deleted_count"] == 1
     assert client.get("/api/contacts").json() == []
@@ -428,7 +455,7 @@ def test_delete_contacts_nulls_out_contact_id_on_linked_transactions(client):
     linked = next(t for t in client.get("/api/transactions").json() if t["id"] == tx_id)
     assert linked["contact_id"] == contact["id"]
 
-    resp = client.post("/api/settings/delete-contacts", json={"confirm": "DELETE"})
+    resp = client.post("/api/data-lifecycle/delete-contacts", json={"confirm": "DELETE"})
     assert resp.status_code == 200
 
     survivor = next(t for t in client.get("/api/transactions").json() if t["id"] == tx_id)
@@ -437,7 +464,7 @@ def test_delete_contacts_nulls_out_contact_id_on_linked_transactions(client):
 
 def test_delete_transactions_clears_transactions_but_keeps_accounts(client):
     _upload_and_commit(client)
-    resp = client.post("/api/settings/delete-transactions", json={"confirm": "DELETE"})
+    resp = client.post("/api/data-lifecycle/delete-transactions", json={"confirm": "DELETE"})
     assert resp.status_code == 200
     assert resp.json()["deleted_count"] == 39
     assert client.get("/api/transactions").json() == []
@@ -456,7 +483,7 @@ def test_relocate_moves_db_file_and_updates_config(tmp_path, monkeypatch):
         new_dir.mkdir()
         new_path = str(new_dir / "moved.db")
 
-        resp = client.post("/api/settings/relocate", json={"new_path": new_path})
+        resp = client.post("/api/data-lifecycle/relocate", json={"new_path": new_path})
         assert resp.status_code == 200
         assert resp.json()["db_path"] == new_path
 
@@ -473,7 +500,7 @@ def test_relocate_moves_db_file_and_updates_config(tmp_path, monkeypatch):
 def test_relocate_to_the_same_path_is_rejected(client):
     _upload_and_commit(client)
     current_path = client.get("/api/settings").json()["db_path"]
-    resp = client.post("/api/settings/relocate", json={"new_path": current_path})
+    resp = client.post("/api/data-lifecycle/relocate", json={"new_path": current_path})
     assert resp.status_code == 400
     assert resp.json()["detail"]["code"] == "RELOCATE_SAME_PATH"
 
