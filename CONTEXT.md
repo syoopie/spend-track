@@ -30,6 +30,20 @@ etc. still differ — their batch-level metadata genuinely differs: source_filen
 date_from/date_to/scanned, so forcing one shape there would just trade real duplication for a pile of
 kind-conditional nullable fields). That's what makes `BatchActions` (below) viable on the frontend.
 
+**Landed (step 3):** the *implementations* behind those unified shapes are one module now too —
+`engine/batch_review.py` — not just their storage and wire format. `apply_row_update`, `create_rule_and_rerun`,
+`undo_rule`, `apply_ai_suggestions`, and `run_ai_job` each used to be written twice, one router below the step-1/2
+seam (`update_staging_row`/`update_recategorize_row` and friends), generic only up to "same JSON shape" but not
+"same code." `batch_review.py`'s functions take a `PendingBatchStore` instance directly and read `store.row_key_field`
+(now a public attribute, not `_row_key_field`) wherever the old code branched on `index` vs `transaction_id` —
+`routers/statements.py`/`routers/transactions.py` shrank to thin adapters: fetch their own store
+(`get_store()`/`recategorize_job.get_store()` — the latter newly exposed, mirroring staging's), call in, wrap the
+result in their own response type. `StagingRuleUndoRequest`/`RecategorizeRuleUndoRequest` (identical fields) also
+collapsed into one `BatchRuleUndoRequest`, matching the frontend's `types.ts`, which already had this name from
+step 2. Direct unit tests live in `test_batch_review.py`, including one against a bespoke non-Staging/Recategorize
+row shape (`test_apply_ai_suggestions_is_generic_over_the_store_shape`) to prove the module is genuinely
+store-agnostic, not staging-shaped with recategorize duct-taped on.
+
 ## CategorizationRequest / CategorizationRuleset
 
 **Landed.** The deepened interface for `engine/rules.py::categorize()`, replacing its previous 7 loose
@@ -94,9 +108,14 @@ full settings snapshot the frontend expects. `frontend/src/api/hooks.ts`'s `useR
 `Settings.tsx` into its own component: `AppearanceSection` now lives in `frontend/src/components/AppearanceSection.tsx`.
 
 `routers/settings.py` itself is now just the Settings-page overview: `GET /api/settings` aggregates localization +
-the (still-redacted) AI fields + db-file info into one snapshot, via `build_settings_out`. The rest of
-`Settings.tsx` (`AiSection`, the Database/Danger-Zone cards and their modals) was left in place — not part of any
-locked decision from the grilling loop, so not restructured in this pass.
+the (still-redacted) AI fields + db-file info into one snapshot, via `build_settings_out`. `AiSection` itself was
+left inline in `Settings.tsx` at the time — not part of any locked decision from that grilling loop, so not
+restructured in that pass. **Landed (frontend follow-up):** `AiSection` is now its own file,
+`frontend/src/components/AiSection.tsx`, mirroring the `AppearanceSection` precedent exactly — the frontend file
+layout now matches the backend module boundary (`routers/ai_settings.py`'s own `/api/ai` prefix) that already
+existed. `Settings.tsx` dropped from 656 to ~320 lines; the Database/Danger-Zone cards and their modals
+(`RelocateModal`, `ScopedDeleteModal`, `NuclearResetModal`) stayed in `Settings.tsx` — genuinely page-specific,
+not a reusable section.
 
 ## BatchActions
 

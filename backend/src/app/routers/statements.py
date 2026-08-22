@@ -3,25 +3,26 @@ from fastapi import APIRouter, BackgroundTasks, File, Form, UploadFile
 from app import contact_directory, repo, rule_catalog
 from app.config import get_ai_settings
 from app.db import get_conn
-from app.engine.ai_providers import AiCandidate, AiSuggestion, active_model_name, run_categorization_job
+from app.engine import batch_review
+from app.engine.ai_providers import AiCandidate, active_model_name
 from app.engine.ai_providers import cancellation as ai_cancellation
+from app.engine.batch_review import BatchNotFoundError, InvalidRulePatternError, NoAiSuggestionError, RowNotFoundError
 from app.engine.fingerprint import clean_description, compute_daily_sequence_indices, compute_fingerprint
 from app.engine.identity import derive_account_id
 from app.engine.refunds import find_refund_pairs
-from app.engine.rule_rerun import rerun_rules_on_batch
 from app.engine.rules import CategorizationRequest, CategorizationRuleset, categorize
 from app.engine.staging_store import StagingAccount, StagingBatch, StagingRow, get_store
 from app.errors import api_error
 from app.models import (
     BatchRowOut,
     BatchRowUpdateRequest,
+    BatchRuleUndoRequest,
     CommitResult,
     RuleQuickCreateRequest,
     RuleRerunRowSnapshot,
     StagingAccountOut,
     StagingBatchOut,
     StagingRuleCreateResult,
-    StagingRuleUndoRequest,
 )
 from app.parsing.base import UnparseableStatementError
 from app.parsing.pdf_io import EncryptedPdfError, IncorrectPasswordError, open_pdf
@@ -92,41 +93,6 @@ def _ai_candidates(rows: list[StagingRow]) -> list[AiCandidate]:
         for r in rows
         if r.category in ("Others", "Other Income") and r.matched_label is None and not r.is_duplicate
     ]
-
-
-def _get_staging_batch_or_none(batch_id: str) -> StagingBatch | None:
-    try:
-        return get_store().get(batch_id)
-    except KeyError:
-        return None
-
-
-def _apply_ai_suggestions(batch: StagingBatch, suggestions: list[AiSuggestion]) -> None:
-    by_index = {r.index: r for r in batch.rows}
-    for suggestion in suggestions:
-        row = by_index.get(suggestion.index)
-        if row is None or row.manually_edited:
-            continue  # unknown row, or the user already resolved it while the model was thinking
-        row.category = suggestion.category
-        row.matched_label = suggestion.display_label
-        row.ai_suggested = True
-        row.ai_category = suggestion.category
-        row.ai_label = suggestion.display_label
-        row.ai_rule_pattern = suggestion.rule_pattern
-
-
-def _run_ai_categorization(
-    batch_id: str, candidates: list[AiCandidate], categories: list[tuple[str, str]], ai_settings: dict
-) -> None:
-    run_categorization_job(
-        batch_id,
-        get_batch=_get_staging_batch_or_none,
-        apply_suggestions=_apply_ai_suggestions,
-        candidates=candidates,
-        categories=categories,
-        ai_settings=ai_settings,
-        fallback_description="this statement was categorized using rules only",
-    )
 
 
 @router.post("/upload", response_model=StagingBatchOut)
@@ -273,7 +239,15 @@ async def upload_statement(
     if ai_settings["ai_enabled"] and candidates:
         batch.ai_status = "running"
         batch.ai_model = active_model_name(ai_settings)
-        background_tasks.add_task(_run_ai_categorization, batch.batch_id, candidates, ai_categories, ai_settings)
+        background_tasks.add_task(
+            batch_review.run_ai_job,
+            get_store(),
+            batch.batch_id,
+            candidates,
+            ai_categories,
+            ai_settings,
+            "this statement was categorized using rules only",
+        )
     else:
         batch.ai_status = "done" if ai_settings["ai_enabled"] else "disabled"
 
@@ -299,56 +273,14 @@ def get_staging_batch(batch_id: str):
 
 @router.patch("/staging/{batch_id}/rows/{index}", response_model=StagingBatchOut)
 def update_staging_row(batch_id: str, index: int, body: BatchRowUpdateRequest):
-    store = get_store()
     try:
-        batch = store.get(batch_id)
-    except KeyError:
+        batch = batch_review.apply_row_update(get_store(), batch_id, index, body)
+    except BatchNotFoundError:
         raise api_error(404, "STAGING_BATCH_NOT_FOUND", "No staging batch with that id.")
-
-    row = next((r for r in batch.rows if r.index == index), None)
-    if row is None:
+    except RowNotFoundError:
         raise api_error(404, "STAGING_ROW_NOT_FOUND", "No staging row at that index.")
-
-    # ai_suggested/ai_category/ai_label/ai_rule_pattern are never cleared
-    # here - they're a permanent record of what the AI proposed (see
-    # StagingRow's docstring comment), so a rejected suggestion can always be
-    # restored later. reject_ai clears matched_label back to null (the user
-    # trusts none of what the AI proposed, not just its category);
-    # restore_ai re-applies the row's recorded ai_category/ai_label,
-    # ignoring whatever `category` the request otherwise carries.
-    # manually_edited locks this row out of the background AI job's apply
-    # step (see _apply_ai_suggestions) - once the user has explicitly acted
-    # on a row, an AI suggestion that was still in flight when they did
-    # can't silently overwrite that decision.
-    fields: dict = {"subcategory": body.subcategory, "needs_review": False, "manually_edited": True}
-    if body.restore_ai:
-        if row.ai_category is None:
-            raise api_error(400, "NO_AI_SUGGESTION", "This row has no AI suggestion to restore.")
-        fields["category"] = row.ai_category
-        fields["matched_label"] = row.ai_label
-    elif body.reject_ai:
-        fields["category"] = body.category
-        fields["matched_label"] = None
-    else:
-        fields["category"] = body.category
-    store.update_row(batch_id, index, **fields)
-
-    with get_conn() as conn:
-        contact_id = repo.apply_save_as_rule_and_contact(
-            conn,
-            raw_description=row.raw_description,
-            category=body.category,
-            subcategory=body.subcategory,
-            save_as_rule=body.save_as_rule,
-            rule_pattern=body.rule_pattern,
-            rule_priority=body.rule_priority,
-            save_as_contact=body.save_as_contact,
-            contact_name=body.contact_name,
-            contact_identifier=body.contact_identifier,
-        )
-        if contact_id is not None:
-            store.update_row(batch_id, index, contact_id=contact_id)
-
+    except NoAiSuggestionError:
+        raise api_error(400, "NO_AI_SUGGESTION", "This row has no AI suggestion to restore.")
     return _batch_to_response(batch)
 
 
@@ -360,30 +292,12 @@ def create_rule_from_staging_batch(batch_id: str, body: RuleQuickCreateRequest):
     other still-unresolved row in this batch so the new rule doesn't just
     affect the one transaction that prompted it. Returns each changed row's
     *previous* values so the frontend can offer an undo."""
-    store = get_store()
     try:
-        batch = store.get(batch_id)
-    except KeyError:
+        rule_id, changes, batch = batch_review.create_rule_and_rerun(get_store(), batch_id, body)
+    except BatchNotFoundError:
         raise api_error(404, "STAGING_BATCH_NOT_FOUND", "No staging batch with that id.")
-    if not body.match_pattern.strip():
+    except InvalidRulePatternError:
         raise api_error(422, "INVALID_RULE_PATTERN", "Rule pattern cannot be blank.")
-
-    with get_conn() as conn:
-        rule_id = rule_catalog.insert_rule(
-            conn,
-            priority=rule_catalog.next_user_rule_priority(conn),
-            match_pattern=body.match_pattern.strip(),
-            target_category=body.target_category,
-            target_subcategory=body.target_subcategory,
-            direction=rule_catalog.category_direction(conn, body.target_category),
-        )
-        rules = rule_catalog.fetch_active_rules(conn)
-        contact_identifiers = contact_directory.fetch_contact_identifiers(conn)
-        category_directions = repo.fetch_category_directions(conn)
-
-    changes = rerun_rules_on_batch(
-        batch.rows, "index", rules, contact_identifiers, category_directions, batch.has_card_account
-    )
     return StagingRuleCreateResult(
         rule_id=rule_id,
         updated_rows=[RuleRerunRowSnapshot(**c) for c in changes],
@@ -392,36 +306,15 @@ def create_rule_from_staging_batch(batch_id: str, body: RuleQuickCreateRequest):
 
 
 @router.post("/staging/{batch_id}/rules/undo", response_model=StagingBatchOut)
-def undo_rule_from_staging_batch(batch_id: str, body: StagingRuleUndoRequest):
+def undo_rule_from_staging_batch(batch_id: str, body: BatchRuleUndoRequest):
     """Reverses exactly one create_rule_from_staging_batch call: deletes the
     rule it created and restores every row it touched to the previous values
     that call returned - the frontend passes those straight back, it never
     recomputes them itself."""
-    store = get_store()
     try:
-        batch = store.get(batch_id)
-    except KeyError:
+        batch = batch_review.undo_rule(get_store(), batch_id, body)
+    except BatchNotFoundError:
         raise api_error(404, "STAGING_BATCH_NOT_FOUND", "No staging batch with that id.")
-
-    with get_conn() as conn:
-        conn.execute("DELETE FROM rules WHERE id = ? AND is_default = 0", (body.rule_id,))
-
-    for snap in body.rows:
-        try:
-            store.update_row(
-                batch_id,
-                snap.key,
-                category=snap.category,
-                subcategory=snap.subcategory,
-                matched_label=snap.matched_label,
-                is_excluded=snap.is_excluded,
-                exclusion_reason=snap.exclusion_reason,
-                contact_id=snap.contact_id,
-                needs_review=snap.needs_review,
-                manually_edited=False,
-            )
-        except KeyError:
-            continue  # row no longer exists - nothing left to restore for it
     return _batch_to_response(batch)
 
 
@@ -518,7 +411,7 @@ def discard_staging_batch(batch_id: str):
     get_store().delete(batch_id)
     # If a background AI categorization call for this batch is still in
     # flight, its result would just be thrown away by the batch-id guard in
-    # _run_ai_categorization anyway - this actively interrupts the HTTP call
+    # batch_review.run_ai_job anyway - this actively interrupts the HTTP call
     # itself (best-effort, see ai_providers/cancellation.py) so a discarded
     # batch doesn't leave an expensive cloud request running for nothing.
     ai_cancellation.cancel(batch_id)

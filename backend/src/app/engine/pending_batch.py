@@ -28,7 +28,11 @@ B = TypeVar("B", bound=_HasBatchId)
 class PendingBatchStore(Generic[B]):
     def __init__(self, row_key_field: str, batch_noun: str, row_noun: str) -> None:
         self._batch: B | None = None
-        self._row_key_field = row_key_field
+        # Public: engine/batch_review.py looks this up generically (row
+        # lookups, and to tell rerun_rules_on_batch which field a changed
+        # row's "key" is) without needing to know StagingRow from
+        # RecategorizeRow.
+        self.row_key_field = row_key_field
         self._batch_noun = batch_noun
         self._row_noun = row_noun
 
@@ -55,7 +59,7 @@ class PendingBatchStore(Generic[B]):
 
     def update_row(self, batch_id: str, key: Any, **fields: Any) -> Any:
         batch = self.get(batch_id)
-        row = next((r for r in batch.rows if getattr(r, self._row_key_field) == key), None)
+        row = next((r for r in batch.rows if getattr(r, self.row_key_field) == key), None)
         if row is None:
             raise KeyError(f"No {self._row_noun} {key}")
         for field_name, value in fields.items():

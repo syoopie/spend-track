@@ -5,20 +5,20 @@ from fastapi import APIRouter, BackgroundTasks, Query
 from app import contact_directory, repo, rule_catalog
 from app.config import get_ai_settings
 from app.db import get_conn
-from app.engine import recategorize_job
-from app.engine.ai_providers import AiCandidate, AiSuggestion, active_model_name, run_categorization_job
+from app.engine import batch_review, recategorize_job
+from app.engine.ai_providers import AiCandidate, active_model_name
 from app.engine.ai_providers import cancellation as ai_cancellation
-from app.engine.rule_rerun import rerun_rules_on_batch
+from app.engine.batch_review import BatchNotFoundError, InvalidRulePatternError, NoAiSuggestionError, RowNotFoundError
 from app.engine.rules import CategorizationRequest, CategorizationRuleset, categorize
 from app.errors import api_error
 from app.models import (
     BatchRowOut,
     BatchRowUpdateRequest,
+    BatchRuleUndoRequest,
     RecategorizeBatchOut,
     RecategorizeCommitResult,
     RecategorizeRequest,
     RecategorizeRuleCreateResult,
-    RecategorizeRuleUndoRequest,
     RefundPairingOut,
     RuleQuickCreateRequest,
     RuleRerunRowSnapshot,
@@ -68,38 +68,6 @@ def _batch_to_out(batch: recategorize_job.RecategorizeBatch) -> RecategorizeBatc
         ai_warning=batch.ai_warning,
         ai_model=batch.ai_model,
         ai_suggested_count=sum(1 for r in batch.rows if r.ai_suggested),
-    )
-
-
-def _apply_ai_suggestions(batch: recategorize_job.RecategorizeBatch, suggestions: list[AiSuggestion]) -> None:
-    by_id = {r.transaction_id: r for r in batch.rows}
-    for suggestion in suggestions:
-        row = by_id.get(suggestion.index)
-        if row is None or row.manually_edited:
-            continue  # unknown row, or the user already resolved it while the model was thinking
-        row.category = suggestion.category
-        row.matched_label = suggestion.display_label
-        row.ai_suggested = True
-        row.ai_category = suggestion.category
-        row.ai_label = suggestion.display_label
-        row.ai_rule_pattern = suggestion.rule_pattern
-
-
-def _run_ai_recategorize(
-    batch_id: str, candidates: list[AiCandidate], categories: list[tuple[str, str]], ai_settings: dict
-) -> None:
-    """Mirrors routers/statements.py::_run_ai_categorization exactly (both
-    call the shared ai_providers.run_categorization_job): this only ever
-    mutates the in-memory pending batch, never the DB - nothing is written
-    until commit_recategorize_batch runs."""
-    run_categorization_job(
-        batch_id,
-        get_batch=recategorize_job.get_by_id,
-        apply_suggestions=_apply_ai_suggestions,
-        candidates=candidates,
-        categories=categories,
-        ai_settings=ai_settings,
-        fallback_description="results were computed using rules only",
     )
 
 
@@ -178,7 +146,7 @@ def recategorize_transactions(body: RecategorizeRequest, background_tasks: Backg
     (see commit_recategorize_batch/discard_recategorize_batch below), and if
     AI is enabled a second pass over whatever's left in the Others/Other
     Income fallback runs in the background against the pending batch's rows,
-    same as upload's (see _run_ai_recategorize)."""
+    same as upload's (see engine/batch_review.py::run_ai_job)."""
     if recategorize_job.current() is not None:
         raise api_error(
             409, "RECATEGORIZE_BATCH_EXISTS", "Commit or discard the pending recategorize batch before running another."
@@ -300,7 +268,15 @@ def recategorize_transactions(body: RecategorizeRequest, background_tasks: Backg
             409, "RECATEGORIZE_BATCH_EXISTS", "Commit or discard the pending recategorize batch before running another."
         )
     if ai_status == "running":
-        background_tasks.add_task(_run_ai_recategorize, batch.batch_id, ai_candidates, ai_categories, ai_settings)
+        background_tasks.add_task(
+            batch_review.run_ai_job,
+            recategorize_job.get_store(),
+            batch.batch_id,
+            ai_candidates,
+            ai_categories,
+            ai_settings,
+            "results were computed using rules only",
+        )
 
     return _batch_to_out(batch)
 
@@ -315,78 +291,28 @@ def get_current_recategorize_batch():
 
 @router.patch("/recategorize/{batch_id}/rows/{transaction_id}", response_model=RecategorizeBatchOut)
 def update_recategorize_row(batch_id: str, transaction_id: int, body: BatchRowUpdateRequest):
-    """Mirrors routers/statements.py::update_staging_row exactly - edits the
-    in-memory pending row only, never the DB (that only happens on commit)."""
-    batch = recategorize_job.get_by_id(batch_id)
-    if batch is None:
+    """See engine/batch_review.py::apply_row_update - edits the in-memory
+    pending row only, never the DB (that only happens on commit)."""
+    try:
+        batch = batch_review.apply_row_update(recategorize_job.get_store(), batch_id, transaction_id, body)
+    except BatchNotFoundError:
         raise api_error(404, "RECATEGORIZE_BATCH_NOT_FOUND", "No recategorize batch with that id.")
-
-    row = next((r for r in batch.rows if r.transaction_id == transaction_id), None)
-    if row is None:
+    except RowNotFoundError:
         raise api_error(404, "RECATEGORIZE_ROW_NOT_FOUND", "No recategorize row for that transaction.")
-
-    # See routers/statements.py::update_staging_row's identical comments -
-    # the ai_* fields are a permanent record, never cleared here; setting
-    # manually_edited locks the row out of the background AI job's apply
-    # step so an in-flight suggestion can't overwrite this decision.
-    fields: dict = {"subcategory": body.subcategory, "needs_review": False, "manually_edited": True}
-    if body.restore_ai:
-        if row.ai_category is None:
-            raise api_error(400, "NO_AI_SUGGESTION", "This row has no AI suggestion to restore.")
-        fields["category"] = row.ai_category
-        fields["matched_label"] = row.ai_label
-    elif body.reject_ai:
-        fields["category"] = body.category
-        fields["matched_label"] = None
-    else:
-        fields["category"] = body.category
-    recategorize_job.update_row(batch_id, transaction_id, **fields)
-
-    with get_conn() as conn:
-        contact_id = repo.apply_save_as_rule_and_contact(
-            conn,
-            raw_description=row.raw_description,
-            category=body.category,
-            subcategory=body.subcategory,
-            save_as_rule=body.save_as_rule,
-            rule_pattern=body.rule_pattern,
-            rule_priority=body.rule_priority,
-            save_as_contact=body.save_as_contact,
-            contact_name=body.contact_name,
-            contact_identifier=body.contact_identifier,
-        )
-        if contact_id is not None:
-            recategorize_job.update_row(batch_id, transaction_id, contact_id=contact_id)
-
-    return _batch_to_out(recategorize_job.get_by_id(batch_id))
+    except NoAiSuggestionError:
+        raise api_error(400, "NO_AI_SUGGESTION", "This row has no AI suggestion to restore.")
+    return _batch_to_out(batch)
 
 
 @router.post("/recategorize/{batch_id}/rules", response_model=RecategorizeRuleCreateResult)
 def create_rule_from_recategorize_batch(batch_id: str, body: RuleQuickCreateRequest):
-    """Mirrors routers/statements.py::create_rule_from_staging_batch exactly
-    - see its docstring."""
-    batch = recategorize_job.get_by_id(batch_id)
-    if batch is None:
+    """See engine/batch_review.py::create_rule_and_rerun."""
+    try:
+        rule_id, changes, batch = batch_review.create_rule_and_rerun(recategorize_job.get_store(), batch_id, body)
+    except BatchNotFoundError:
         raise api_error(404, "RECATEGORIZE_BATCH_NOT_FOUND", "No recategorize batch with that id.")
-    if not body.match_pattern.strip():
+    except InvalidRulePatternError:
         raise api_error(422, "INVALID_RULE_PATTERN", "Rule pattern cannot be blank.")
-
-    with get_conn() as conn:
-        rule_id = rule_catalog.insert_rule(
-            conn,
-            priority=rule_catalog.next_user_rule_priority(conn),
-            match_pattern=body.match_pattern.strip(),
-            target_category=body.target_category,
-            target_subcategory=body.target_subcategory,
-            direction=rule_catalog.category_direction(conn, body.target_category),
-        )
-        rules = rule_catalog.fetch_active_rules(conn)
-        contact_identifiers = contact_directory.fetch_contact_identifiers(conn)
-        category_directions = repo.fetch_category_directions(conn)
-
-    changes = rerun_rules_on_batch(
-        batch.rows, "transaction_id", rules, contact_identifiers, category_directions, batch.has_card_account
-    )
     return RecategorizeRuleCreateResult(
         rule_id=rule_id,
         updated_rows=[RuleRerunRowSnapshot(**c) for c in changes],
@@ -395,32 +321,12 @@ def create_rule_from_recategorize_batch(batch_id: str, body: RuleQuickCreateRequ
 
 
 @router.post("/recategorize/{batch_id}/rules/undo", response_model=RecategorizeBatchOut)
-def undo_rule_from_recategorize_batch(batch_id: str, body: RecategorizeRuleUndoRequest):
-    """Mirrors routers/statements.py::undo_rule_from_staging_batch exactly -
-    see its docstring."""
-    batch = recategorize_job.get_by_id(batch_id)
-    if batch is None:
+def undo_rule_from_recategorize_batch(batch_id: str, body: BatchRuleUndoRequest):
+    """See engine/batch_review.py::undo_rule."""
+    try:
+        batch = batch_review.undo_rule(recategorize_job.get_store(), batch_id, body)
+    except BatchNotFoundError:
         raise api_error(404, "RECATEGORIZE_BATCH_NOT_FOUND", "No recategorize batch with that id.")
-
-    with get_conn() as conn:
-        conn.execute("DELETE FROM rules WHERE id = ? AND is_default = 0", (body.rule_id,))
-
-    for snap in body.rows:
-        try:
-            recategorize_job.update_row(
-                batch_id,
-                snap.key,
-                category=snap.category,
-                subcategory=snap.subcategory,
-                matched_label=snap.matched_label,
-                is_excluded=snap.is_excluded,
-                exclusion_reason=snap.exclusion_reason,
-                contact_id=snap.contact_id,
-                needs_review=snap.needs_review,
-                manually_edited=False,
-            )
-        except KeyError:
-            continue  # row no longer exists - nothing left to restore for it
     return _batch_to_out(batch)
 
 

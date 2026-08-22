@@ -56,8 +56,8 @@ def rerun_rules_on_batch(
     AI job itself follows.
 
     Returns one dict per changed row: {"key": ..., **previous_field_values} -
-    everything the caller needs to offer an undo (see
-    StagingRuleUndoRequest/RecategorizeRuleUndoRequest in models.py)."""
+    everything the caller needs to offer an undo (see BatchRuleUndoRequest
+    in models.py)."""
     ruleset = CategorizationRuleset(
         rules=rules,
         contact_identifiers=contact_identifiers,

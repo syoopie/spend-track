@@ -73,6 +73,14 @@ _store: PendingBatchStore[RecategorizeBatch] = PendingBatchStore(
 )
 
 
+def get_store() -> PendingBatchStore[RecategorizeBatch]:
+    """Exposes the singleton itself - see staging_store.py's get_store() -
+    so engine/batch_review.py can operate on either kind of pending batch
+    generically instead of every caller going through this module's
+    per-field wrapper functions."""
+    return _store
+
+
 def create(batch: RecategorizeBatch) -> str:
     return _store.create(batch)
 
