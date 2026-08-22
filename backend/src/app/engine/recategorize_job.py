@@ -31,6 +31,9 @@ class RecategorizeRow:
     # See staging_store.py::StagingRow's identical field - permanent, set
     # once at row creation, never touched by the update endpoint.
     is_paynow: bool = False
+    # See staging_store.py::StagingRow's identical field - needed by
+    # engine/rule_rerun.py to re-call categorize() correctly.
+    is_card_account: bool = False
     # See staging_store.py::StagingRow's identical fields for why these
     # persist forever instead of being cleared on accept/reject.
     ai_suggested: bool = False
@@ -53,6 +56,8 @@ class RecategorizeBatch:
     ai_warning: str | None = None
     ai_model: str | None = None
     batch_id: str = field(default_factory=lambda: uuid.uuid4().hex)
+    # See staging_store.py::StagingBatch's identical field.
+    has_card_account: bool = False
 
 
 _batch: RecategorizeBatch | None = None

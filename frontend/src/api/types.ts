@@ -57,6 +57,43 @@ export interface StagingRowUpdateRequest {
   restore_ai?: boolean
 }
 
+// The "Create Rule" action's own request/response shape - deliberately
+// separate from StagingRowUpdateRequest's save_as_rule flag (see
+// ReviewDialog.tsx): applying a category to one row and creating a
+// persistent rule from it are two distinct actions with two distinct
+// outcomes, not one checkbox bolted onto Apply.
+export interface RuleQuickCreateRequest {
+  match_pattern: string
+  target_category: string
+  target_subcategory?: string | null
+}
+
+// Both directions of a rule-rerun's row diff - the server returns one of
+// these per row a newly created rule changed (holding that row's *previous*
+// values, so the frontend can offer an undo), and the same shape is echoed
+// straight back to the undo endpoint to restore it.
+export interface RuleRerunRowSnapshot {
+  key: number
+  category: string
+  subcategory: string | null
+  matched_label: string | null
+  is_excluded: boolean
+  exclusion_reason: string | null
+  contact_id: number | null
+  needs_review: boolean
+}
+
+export interface StagingRuleCreateResult {
+  rule_id: number
+  updated_rows: RuleRerunRowSnapshot[]
+  batch: StagingBatch
+}
+
+export interface StagingRuleUndoRequest {
+  rule_id: number
+  rows: RuleRerunRowSnapshot[]
+}
+
 export interface CommitResult {
   transactions_committed: number
   duplicates_skipped: number
@@ -151,6 +188,17 @@ export interface RecategorizeRowUpdateRequest {
   restore_ai?: boolean
 }
 
+export interface RecategorizeRuleCreateResult {
+  rule_id: number
+  updated_rows: RuleRerunRowSnapshot[]
+  batch: RecategorizeBatch
+}
+
+export interface RecategorizeRuleUndoRequest {
+  rule_id: number
+  rows: RuleRerunRowSnapshot[]
+}
+
 export interface RecategorizeCommitResult {
   transactions_committed: number
 }
@@ -203,6 +251,15 @@ export interface Rule {
 export interface RuleCreateRequest {
   priority?: number | null
   match_pattern: string
+  target_category?: string | null
+  target_subcategory?: string | null
+  is_exclusion_rule?: boolean
+  exclusion_reason?: string | null
+}
+
+export interface RuleUpdateRequest {
+  priority?: number | null
+  match_pattern?: string
   target_category?: string | null
   target_subcategory?: string | null
   is_exclusion_rule?: boolean

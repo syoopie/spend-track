@@ -17,12 +17,18 @@ import type {
   RecategorizeCommitResult,
   RecategorizeRequest,
   RecategorizeRowUpdateRequest,
+  RecategorizeRuleCreateResult,
+  RecategorizeRuleUndoRequest,
   RefundPairing,
   Rule,
   RuleCreateRequest,
+  RuleQuickCreateRequest,
+  RuleUpdateRequest,
   Settings,
   StagingBatch,
   StagingRowUpdateRequest,
+  StagingRuleCreateResult,
+  StagingRuleUndoRequest,
   Transaction,
   TransactionUpdateRequest,
   Category,
@@ -98,6 +104,34 @@ export function useUpdateRecategorizeRow(batchId: string) {
     mutationFn: ({ transactionId, body }: { transactionId: number; body: RecategorizeRowUpdateRequest }) =>
       api.patch<RecategorizeBatch>(`/transactions/recategorize/${batchId}/rows/${transactionId}`, body),
     onSuccess: (data) => qc.setQueryData(['recategorize-batch', 'current'], data),
+  })
+}
+
+// The review dialog's "Create Rule" action - separate from a plain row
+// category update (see ReviewDialog.tsx and StagingRuleCreateResult's own
+// comment in types.ts). Also invalidates the rules list so the Rules page
+// reflects the newly created rule if it's open in another tab.
+export function useCreateRuleFromRecategorizeBatch(batchId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: RuleQuickCreateRequest) =>
+      api.post<RecategorizeRuleCreateResult>(`/transactions/recategorize/${batchId}/rules`, body),
+    onSuccess: (data) => {
+      qc.setQueryData(['recategorize-batch', 'current'], data.batch)
+      qc.invalidateQueries({ queryKey: ['rules'] })
+    },
+  })
+}
+
+export function useUndoRuleFromRecategorizeBatch(batchId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: RecategorizeRuleUndoRequest) =>
+      api.post<RecategorizeBatch>(`/transactions/recategorize/${batchId}/rules/undo`, body),
+    onSuccess: (data) => {
+      qc.setQueryData(['recategorize-batch', 'current'], data)
+      qc.invalidateQueries({ queryKey: ['rules'] })
+    },
   })
 }
 
@@ -187,6 +221,29 @@ export function useUpdateStagingRow(batchId: string) {
   })
 }
 
+export function useCreateRuleFromStagingBatch(batchId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: RuleQuickCreateRequest) =>
+      api.post<StagingRuleCreateResult>(`/statements/staging/${batchId}/rules`, body),
+    onSuccess: (data) => {
+      qc.setQueryData(['staging-batch', 'current'], data.batch)
+      qc.invalidateQueries({ queryKey: ['rules'] })
+    },
+  })
+}
+
+export function useUndoRuleFromStagingBatch(batchId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: StagingRuleUndoRequest) => api.post<StagingBatch>(`/statements/staging/${batchId}/rules/undo`, body),
+    onSuccess: (data) => {
+      qc.setQueryData(['staging-batch', 'current'], data)
+      qc.invalidateQueries({ queryKey: ['rules'] })
+    },
+  })
+}
+
 export function useCommitBatch() {
   const qc = useQueryClient()
   return useMutation({
@@ -261,6 +318,14 @@ export function useCreateRule() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (body: RuleCreateRequest) => api.post<Rule>('/rules', body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['rules'] }),
+  })
+}
+
+export function useUpdateRule() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, body }: { id: number; body: RuleUpdateRequest }) => api.patch<Rule>(`/rules/${id}`, body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['rules'] }),
   })
 }

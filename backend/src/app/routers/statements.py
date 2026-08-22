@@ -8,15 +8,20 @@ from app.engine.ai_providers import cancellation as ai_cancellation
 from app.engine.fingerprint import clean_description, compute_daily_sequence_indices, compute_fingerprint
 from app.engine.identity import derive_account_id
 from app.engine.refunds import find_refund_pairs
+from app.engine.rule_rerun import rerun_rules_on_batch
 from app.engine.rules import categorize
 from app.engine.staging_store import StagingAccount, StagingBatch, StagingRow, get_store
 from app.errors import api_error
 from app.models import (
     CommitResult,
+    RuleQuickCreateRequest,
+    RuleRerunRowSnapshot,
     StagingAccountOut,
     StagingBatchOut,
     StagingRowOut,
     StagingRowUpdateRequest,
+    StagingRuleCreateResult,
+    StagingRuleUndoRequest,
 )
 from app.parsing.base import UnparseableStatementError
 from app.parsing.pdf_io import EncryptedPdfError, IncorrectPasswordError, open_pdf
@@ -233,6 +238,7 @@ async def upload_statement(
                             needs_review=cat.needs_review,
                             is_duplicate=is_duplicate,
                             is_paynow=cat.is_paynow,
+                            is_card_account=parsed_account.is_card,
                         )
                     )
                     row_index += 1
@@ -243,6 +249,7 @@ async def upload_statement(
         bank_name=bank_names.pop() if len(bank_names) == 1 else " + ".join(sorted(bank_names)),
         accounts=staging_accounts,
         rows=staging_rows,
+        has_card_account=has_card_account,
     )
     try:
         get_store().create(batch)
@@ -336,6 +343,78 @@ def update_staging_row(batch_id: str, index: int, body: StagingRowUpdateRequest)
         if contact_id is not None:
             store.update_row(batch_id, index, contact_id=contact_id)
 
+    return _batch_to_response(batch)
+
+
+@router.post("/staging/{batch_id}/rules", response_model=StagingRuleCreateResult)
+def create_rule_from_staging_batch(batch_id: str, body: RuleQuickCreateRequest):
+    """The review dialog's "Create Rule" action - a separate, explicit step
+    from applying a category to one row (see ReviewDialog.tsx): creates a
+    persistent rule, then immediately re-runs categorize() against every
+    other still-unresolved row in this batch so the new rule doesn't just
+    affect the one transaction that prompted it. Returns each changed row's
+    *previous* values so the frontend can offer an undo."""
+    store = get_store()
+    try:
+        batch = store.get(batch_id)
+    except KeyError:
+        raise api_error(404, "STAGING_BATCH_NOT_FOUND", "No staging batch with that id.")
+    if not body.match_pattern.strip():
+        raise api_error(422, "INVALID_RULE_PATTERN", "Rule pattern cannot be blank.")
+
+    with get_conn() as conn:
+        rule_id = repo.insert_rule(
+            conn,
+            priority=repo.next_user_rule_priority(conn),
+            match_pattern=body.match_pattern.strip(),
+            target_category=body.target_category,
+            target_subcategory=body.target_subcategory,
+        )
+        rules = repo.fetch_active_rules(conn)
+        contact_identifiers = repo.fetch_contact_identifiers(conn)
+        category_directions = repo.fetch_category_directions(conn)
+
+    changes = rerun_rules_on_batch(
+        batch.rows, "index", rules, contact_identifiers, category_directions, batch.has_card_account
+    )
+    return StagingRuleCreateResult(
+        rule_id=rule_id,
+        updated_rows=[RuleRerunRowSnapshot(**c) for c in changes],
+        batch=_batch_to_response(batch),
+    )
+
+
+@router.post("/staging/{batch_id}/rules/undo", response_model=StagingBatchOut)
+def undo_rule_from_staging_batch(batch_id: str, body: StagingRuleUndoRequest):
+    """Reverses exactly one create_rule_from_staging_batch call: deletes the
+    rule it created and restores every row it touched to the previous values
+    that call returned - the frontend passes those straight back, it never
+    recomputes them itself."""
+    store = get_store()
+    try:
+        batch = store.get(batch_id)
+    except KeyError:
+        raise api_error(404, "STAGING_BATCH_NOT_FOUND", "No staging batch with that id.")
+
+    with get_conn() as conn:
+        conn.execute("DELETE FROM rules WHERE id = ? AND is_default = 0", (body.rule_id,))
+
+    for snap in body.rows:
+        try:
+            store.update_row(
+                batch_id,
+                snap.key,
+                category=snap.category,
+                subcategory=snap.subcategory,
+                matched_label=snap.matched_label,
+                is_excluded=snap.is_excluded,
+                exclusion_reason=snap.exclusion_reason,
+                contact_id=snap.contact_id,
+                needs_review=snap.needs_review,
+                manually_edited=False,
+            )
+        except KeyError:
+            continue  # row no longer exists - nothing left to restore for it
     return _batch_to_response(batch)
 
 

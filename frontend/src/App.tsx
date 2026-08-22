@@ -1,5 +1,6 @@
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import { useAiStatus, useSettings } from './api/hooks'
+import { PendingReviewBanner } from './components/PendingReviewBanner'
 import { Sidebar } from './components/Sidebar'
 import { UploadProvider } from './components/UploadProvider'
 import { Dashboard } from './pages/Dashboard'
@@ -24,6 +25,7 @@ function MainLayout() {
     <div className="flex h-screen w-full overflow-hidden">
       <Sidebar />
       <div className="flex-1 overflow-y-auto min-w-0">
+        <PendingReviewBanner />
         <Outlet />
       </div>
     </div>

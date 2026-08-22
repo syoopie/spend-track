@@ -50,6 +50,12 @@ class StagingRow:
     # "Save as contact mapping" (PayNow-only) vs. "Save as rule" (everything
     # else) even after the row has already been resolved once.
     is_paynow: bool = False
+    # Set once at row creation from the posting account's is_card, same
+    # "permanent, never touched by the update endpoint" contract as
+    # is_paynow above - engine/rule_rerun.py needs it to re-call categorize()
+    # with the right posting_account_is_card without re-deriving it from
+    # batch.accounts each time.
+    is_card_account: bool = False
     # ai_suggested/ai_category/ai_label/ai_rule_pattern are a permanent record
     # of what the AI proposed for this row - set once by the background AI
     # job and never cleared afterward, even when the user rejects or
@@ -85,6 +91,11 @@ class StagingBatch:
     ai_status: str = "disabled"
     ai_warning: str | None = None
     ai_model: str | None = None
+    # Whether any card account was known at parse time - see engine/rules.py
+    # categorize()'s has_card_account parameter. Stored on the batch (one
+    # value for the whole upload) so engine/rule_rerun.py can re-call
+    # categorize() later without redoing the accounts-table scan.
+    has_card_account: bool = False
 
 
 class StagingStore:
