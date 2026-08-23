@@ -1,9 +1,16 @@
+import glob
 import io
 
 import pytest
 from fastapi.testclient import TestClient
 
-ACCOUNT_SAMPLE = "../PDF Examples/UOB/Account Statements/REDACTED_SAMPLE_ACCOUNT_STATEMENT.pdf"
+# PDF Examples/ is an optional, gitignored local folder for testing against
+# your own real statements - discovered by glob rather than a hardcoded
+# filename so no real statement's filename ever ends up in tracked source,
+# and skipped entirely when absent (a fresh clone has none) rather than
+# failing. See test_uob_account_parser.py for the same pattern.
+_ACCOUNT_SAMPLES = sorted(glob.glob("../PDF Examples/UOB/Account Statements/*.pdf"))
+ACCOUNT_SAMPLE = _ACCOUNT_SAMPLES[0] if _ACCOUNT_SAMPLES else None
 
 
 @pytest.fixture
@@ -16,6 +23,8 @@ def client(tmp_path, monkeypatch):
 
 
 def _upload_and_commit(client, path=ACCOUNT_SAMPLE):
+    if path is None:
+        pytest.skip("No real UOB statements found locally (optional, gitignored PDF Examples/ folder)")
     with open(path, "rb") as f:
         resp = client.post(
             "/api/statements/upload", files={"files": ("statement.pdf", f, "application/pdf")}

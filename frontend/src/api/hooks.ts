@@ -156,9 +156,8 @@ export function useCurrentStagingBatch() {
 // --- batch actions (staging + recategorize) ----------------------------------
 //
 // A staging batch and a recategorize batch share one backend row/action
-// shape (see BatchRow/BatchRowUpdateRequest in types.ts and CONTEXT.md's
-// PendingBatch/BatchActions entries) - what still differs between them is
-// only how a batch is *seeded* (useUploadStatement vs
+// shape (see BatchRow/BatchRowUpdateRequest in types.ts) - what still
+// differs between them is only how a batch is *seeded* (useUploadStatement vs
 // useRecategorizeTransactions, above/below) and each kind's own URL prefix.
 // Everything from "edit a row" through "commit/discard" is one parameterized
 // set of hooks here, bundled by useBatchActions() into the single prop list
@@ -250,7 +249,7 @@ export interface BatchActions {
 
 // The one bundle of apply/createRule/undoRule/commit/discard callbacks plus
 // their pending flags that a review dialog needs, regardless of which kind
-// of PendingBatch it's showing - see CONTEXT.md's BatchActions entry.
+// of PendingBatch it's showing.
 export function useBatchActions(kind: BatchKind, batchId: string): BatchActions {
   const updateRow = useUpdateBatchRow(kind, batchId)
   const createRule = useCreateRuleFromBatch(kind, batchId)
@@ -369,7 +368,7 @@ export function useSettings() {
 }
 
 // AI provider configuration lives under its own /api/ai prefix, not nested
-// under /api/settings/* - see CONTEXT.md's AI provider configuration entry.
+// under /api/settings/*.
 export function useAiStatus(enabled: boolean) {
   return useQuery({
     queryKey: ['ai-status'],
@@ -391,8 +390,7 @@ export function useUpdateAiSettings() {
 }
 
 // Data lifecycle (relocate/reset/scoped deletes) lives under its own
-// /api/data-lifecycle prefix, not nested under /api/settings/* - see
-// CONTEXT.md's Data lifecycle entry.
+// /api/data-lifecycle prefix, not nested under /api/settings/*.
 export function useRelocateDb() {
   const qc = useQueryClient()
   return useMutation({

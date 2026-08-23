@@ -1,4 +1,5 @@
-# Real bank statements with personal/financial info - never commit these
+# Optional: your own real bank statements for local testing (never commit -
+# a real statement contains a real name, address, and account numbers)
 PDF Examples/
 
 # Python

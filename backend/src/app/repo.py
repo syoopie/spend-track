@@ -3,7 +3,7 @@ orchestration that spans both the rule catalog and the contact directory.
 
 Rule creation/priority-allocation/direction-derivation lives in
 rule_catalog.py; contact creation/identifier-lookup lives in
-contact_directory.py (see CONTEXT.md) - this module is what's left once
+contact_directory.py - this module is what's left once
 those two are their own deep modules: pure `categories`-table reads, plus
 apply_save_as_rule_and_contact, which is genuinely cross-cutting (a single
 "Save as rule" + "Save as contact mapping" quick action can create both a

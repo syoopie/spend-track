@@ -8,8 +8,9 @@ routers/transactions.py (recategorize) even after the storage layer
 BatchRuleUndoRequest) were unified in an earlier pass. This module is the one
 implementation, generic over any PendingBatchStore; both routers now call in
 and wrap the result in their own batch-specific response type
-(StagingBatchOut/RecategorizeBatchOut - those still differ genuinely, see
-CONTEXT.md, so this module never builds a response itself)."""
+(StagingBatchOut/RecategorizeBatchOut - those still differ genuinely, since
+their batch-level metadata is genuinely different shapes, so this module
+never builds a response itself)."""
 
 from typing import Any
 

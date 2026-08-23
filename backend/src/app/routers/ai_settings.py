@@ -1,9 +1,9 @@
 """AI provider configuration: validates and redacts the Ollama /
 OpenAI-compatible / Anthropic provider settings. Its own top-level
 `/api/ai` prefix (rather than nested under `/api/settings/*`) reflects the
-module boundary in the route surface, not just the file layout - see
-CONTEXT.md's AI provider configuration entry. `redact_ai_settings` is
-exported for routers/settings.py's overview endpoint to reuse.
+module boundary in the route surface, not just the file layout.
+`redact_ai_settings` is exported for routers/settings.py's overview endpoint
+to reuse.
 """
 
 from fastapi import APIRouter

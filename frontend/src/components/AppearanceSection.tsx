@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { ACCENT_PRESETS, DEFAULT_ACCENT, loadStoredAccentColor, resetAccentColor, saveAccentColor } from '../lib/accentColor'
 
 // Entirely frontend-only - accent color persists to localStorage, there's no
-// backend endpoint for it at all (see CONTEXT.md's Data lifecycle entry).
+// backend endpoint for it at all.
 export function AppearanceSection() {
   const [accent, setAccent] = useState(loadStoredAccentColor())
 

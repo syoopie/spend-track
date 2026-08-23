@@ -3,7 +3,7 @@
 the DB file itself), distinct from AI provider configuration and Appearance.
 Its own top-level `/api/data-lifecycle` prefix (rather than nested under
 `/api/settings/*`) reflects the module boundary in the route surface, not
-just the file layout - see CONTEXT.md's Data lifecycle entry.
+just the file layout.
 """
 
 import shutil
@@ -27,7 +27,7 @@ def _require_delete_confirmation(body: ResetRequest) -> None:
 
 @router.post("/relocate", response_model=SettingsOut)
 def relocate_database(body: RelocateRequest):
-    """Per TECHNICAL_SPEC.md §6: checkpoint + copy data.db(-wal/-shm) to the
+    """Per docs/technical-spec.md §6: checkpoint + copy data.db(-wal/-shm) to the
     new location, remove the old files, then repoint config.json."""
     old_path = get_db_path()
     if not old_path.exists():

@@ -1,10 +1,10 @@
 """Refund/reversal pairing reconciliation.
 
-Deviation from the literal SQL in TECHNICAL_SPEC.md §4: that query joins
+Deviation from the literal SQL in docs/technical-spec.md §4: that query joins
 purely on `t1.amount = -t2.amount`, which would mass-false-positive (e.g.
 two unrelated $5 MRT trips on the same account net to nothing but aren't a
 refund pair). The spec's own prose says pairing requires "identical merchant
-string patterns", and the real UI mockup data confirms it: `Zalora` (outflow)
+string patterns", and the original mockup data confirms it: `Zalora` (outflow)
 pairs with `Zalora Refund` (inflow) - not identical strings, but one contains
 the other. So a candidate pair must additionally pass a normalized-merchant
 containment check.

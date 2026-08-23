@@ -1,8 +1,8 @@
 """Contact directory: creation and PayNow-identifier lookup for contacts
 (the `contacts`/`contact_identifiers` tables).
 
-Extracted out of repo.py's undifferentiated grab bag - see CONTEXT.md's
-Contact directory entry. Lives outside engine/ deliberately, same reasoning
+Extracted out of repo.py's undifferentiated grab bag. Lives outside engine/
+deliberately, same reasoning
 as repo.py's own docstring: engine/ is pure (no DB access), this module isn't.
 """
 

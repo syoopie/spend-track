@@ -21,8 +21,7 @@ class BatchRowOut(BaseModel):
     own `key`). A recategorize row always has is_duplicate=False - dedup
     only applies to newly-parsed staging rows. Unifying this (previously
     StagingRowOut/RecategorizeRowOut) is what lets the frontend's
-    ReviewDialog/BatchActions treat both kinds of batch identically - see
-    CONTEXT.md's BatchActions entry."""
+    ReviewDialog/BatchActions treat both kinds of batch identically."""
 
     key: int
     account_number_masked: str

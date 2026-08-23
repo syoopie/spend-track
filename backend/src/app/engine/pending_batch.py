@@ -5,7 +5,7 @@ recategorize run's pending batch (engine/recategorize_job.py) are the same
 shape - create one, look it up by id, mutate a row in place, delete it - and
 had that create/current/get/get_by_id/update_row/delete/reset bookkeeping
 implemented twice with identical logic. This module is the one place that
-logic lives now; see CONTEXT.md's PendingBatch entry.
+logic lives now.
 
 Deliberately NOT a shared singleton: each caller instantiates its own
 PendingBatchStore, so a staging batch and a recategorize batch can still be

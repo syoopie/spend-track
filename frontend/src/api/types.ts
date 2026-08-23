@@ -11,7 +11,7 @@ export interface StagingAccount {
 // matching the backend's BatchRowOut. A recategorize row's is_duplicate is
 // always false - dedup only applies to newly-parsed staging rows. Unifying
 // this is what lets components/ReviewDialog.tsx and useBatchActions() treat
-// both kinds of batch identically - see CONTEXT.md's BatchActions entry.
+// both kinds of batch identically.
 export interface BatchRow {
   key: number
   account_number_masked: string

@@ -2,8 +2,7 @@
 AI-configuration, and database-file info into a single snapshot for the
 Settings page's initial load. AI provider configuration itself lives in
 routers/ai_settings.py (`/api/ai/*`); Relocate/Reset/scoped-deletes live in
-routers/data_lifecycle.py (`/api/data-lifecycle/*`) - see CONTEXT.md's AI
-provider configuration and Data lifecycle entries. `build_settings_out` is
+routers/data_lifecycle.py (`/api/data-lifecycle/*`). `build_settings_out` is
 exported so data_lifecycle.py's relocate endpoint can return the same
 snapshot shape after moving the DB file.
 """

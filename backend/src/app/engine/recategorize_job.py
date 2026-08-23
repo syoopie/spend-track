@@ -12,8 +12,9 @@ leaves the DB completely untouched.
 
 Kept as its own singleton slot rather than merged with StagingStore's - a
 staging batch and a recategorize batch may be pending at the same time, each
-only guarding against a second batch of its own kind (CONTEXT.md's
-PendingBatch entry: "Decided: preserve this").
+only guarding against a second batch of its own kind. Deliberate: unifying
+to "one pending batch of any kind" would change user-facing behavior for no
+real benefit.
 """
 
 import uuid

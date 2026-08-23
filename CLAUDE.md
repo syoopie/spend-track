@@ -13,7 +13,7 @@ Non-obvious stuff learned while building this. Don't re-derive these the hard wa
 
 ## Sanitized sample PDFs (`backend/scripts/generate_sample_pdfs.py`)
 
-- `PDF Examples/` (real statements) is gitignored - a fresh clone has none. `PDF Examples (Sanitized)/` is synthetic and committed; `tests/test_sanitized_sample_parsers.py` runs against it unconditionally so `uv run pytest` always exercises the parsers even without real statements.
+- `PDF Examples/` is an optional, gitignored local folder for testing against your own real statements - a fresh clone has none, and the tests that use it (`test_uob_account_parser.py`/`test_uob_card_parser.py`/`test_registry_and_pdf_io.py`/`test_statements_router.py`/`test_crud_routers.py`) discover files in it by glob and skip gracefully when it's absent, rather than hardcoding a filename. `PDF Examples (Sanitized)/` is synthetic and committed; `tests/test_sanitized_sample_parsers.py` runs against it unconditionally so `uv run pytest` always exercises the parsers even without real statements.
 - The generator draws text with `reportlab.pdfgen.canvas` at the **exact same column x-positions** the parser's `Column` definitions expect (kept in sync manually - there's a comment pointing back at each parser file). That's what makes the output round-trip through the real parser correctly; it's not just a lookalike, it's parseable.
 - Coordinate systems differ: pdfplumber's `top` is distance-from-page-top (what the parser's column ranges are calibrated against), reportlab's `y` is distance-from-page-bottom, ascending. The conversion used is `y = PAGE_H - top - font_size * 0.8` (approximates baseline offset) - exact pixel alignment doesn't matter, only that words on the same logical row land within 3pt of each other (the parser's line-grouping tolerance) and each column's x falls inside the right bucket.
 - The multi-card statement fixture (`SampleCardStatement_MultiCard_Mar2024.pdf`) exercises a code path **no real sample ever covered** - two cards in one statement - and is what caught that the identity-line-vs-Summary-table backward-search fix actually works for a genuine multi-card case, not just the single-card real samples.
@@ -23,7 +23,7 @@ Non-obvious stuff learned while building this. Don't re-derive these the hard wa
 
 `rules.target_category` is `NOT NULL` in the spec's schema even though exclusion rules don't logically use it. Creating an exclusion rule without a category will hit an `IntegrityError` unless you default it (the API defaults to `"Others"` — see `routers/rules.py::create_rule`).
 
-## Design deviations from `TECHNICAL_SPEC.md` (intentional, not oversights)
+## Design deviations from `docs/technical-spec.md` (intentional, not oversights)
 
 - **Staging is in-memory** (`engine/staging_store.py`), not a DB table — the spec's schema has none, and pre-commit review is inherently transient. A batch is lost if the server restarts before commit.
 - **Refund pairing is not amount-only.** The literal SQL in the spec (`t1.amount = -t2.amount`) would mass-false-positive on any two unrelated transactions of equal-and-opposite amount. Pairing also requires merchant-name similarity after stripping suffix tokens like REFUND/REVERSAL (see `engine/refunds.py`).

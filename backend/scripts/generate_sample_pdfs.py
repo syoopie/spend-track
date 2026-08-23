@@ -1,8 +1,9 @@
 """Generate synthetic UOB-format sample statements for the public repo.
 
-The real statements in `PDF Examples/` contain a real name, home address,
-and account/card numbers, so they're gitignored. These generated PDFs use
-the exact column x-positions reverse-engineered in
+A real statement contains a real name, home address, and account/card
+numbers, so `PDF Examples/` - where you can optionally drop your own real
+statements for local testing - is gitignored and never committed. These
+generated PDFs use the exact column x-positions reverse-engineered in
 `app/parsing/uob/{account_statement,card_statement}.py` (see COLUMNS in
 each) so they are structurally faithful to the real layout and - as a
 bonus - parse cleanly with the real parser, which doubles as a fidelity

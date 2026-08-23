@@ -1,3 +1,4 @@
+import glob
 import io
 
 import pypdf
@@ -7,8 +8,20 @@ from app.parsing.base import UnparseableStatementError
 from app.parsing.pdf_io import EncryptedPdfError, IncorrectPasswordError, open_pdf
 from app.parsing.registry import detect_and_parse
 
-ACCOUNT_SAMPLE = "../PDF Examples/UOB/Account Statements/REDACTED_SAMPLE_ACCOUNT_STATEMENT.pdf"
-CARD_SAMPLE = "../PDF Examples/UOB/Card Statements/REDACTED_SAMPLE_CARD_STATEMENT.pdf"
+# PDF Examples/ is an optional, gitignored local folder for testing against
+# your own real statements (see test_uob_account_parser.py) - discovered by
+# glob rather than a hardcoded filename so no real statement's filename ever
+# ends up in tracked source, and skipped entirely when absent (a fresh clone
+# has none) rather than failing.
+_ACCOUNT_SAMPLES = sorted(glob.glob("../PDF Examples/UOB/Account Statements/*.pdf"))
+_CARD_SAMPLES = sorted(glob.glob("../PDF Examples/UOB/Card Statements/*.pdf"))
+ACCOUNT_SAMPLE = _ACCOUNT_SAMPLES[0] if _ACCOUNT_SAMPLES else None
+CARD_SAMPLE = _CARD_SAMPLES[0] if _CARD_SAMPLES else None
+
+pytestmark = pytest.mark.skipif(
+    ACCOUNT_SAMPLE is None or CARD_SAMPLE is None,
+    reason="No real UOB statements found locally (optional, gitignored PDF Examples/ folder)",
+)
 
 
 def _encrypt(data: bytes, password: str) -> bytes:

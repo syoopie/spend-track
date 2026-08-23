@@ -1,9 +1,9 @@
 """Rule catalog: creation, priority allocation, and direction derivation for
 categorization rules (the `rules` table read by engine/rules.py::categorize()).
 
-Extracted out of repo.py's undifferentiated grab bag - see CONTEXT.md's Rule
-catalog entry. Lives outside engine/ deliberately, same reasoning as
-repo.py's own docstring: engine/ is pure (no DB access), this module isn't.
+Extracted out of repo.py's undifferentiated grab bag. Lives outside engine/
+deliberately, same reasoning as repo.py's own docstring: engine/ is pure (no
+DB access), this module isn't.
 """
 
 import sqlite3
