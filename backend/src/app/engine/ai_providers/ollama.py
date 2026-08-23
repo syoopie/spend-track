@@ -8,10 +8,10 @@ from app.engine.ai_providers.base import (
     AiProviderUnavailableError,
     AiSuggestion,
     ProviderHealth,
-    build_prompt,
     cancellable_client,
     parse_suggestions,
 )
+from app.engine.ai_providers.prompts import build_prompt
 
 HEALTH_TIMEOUT = 3.0
 CATEGORIZE_TIMEOUT = 90.0
@@ -47,6 +47,11 @@ class OllamaProvider:
                         "messages": [{"role": "user", "content": prompt}],
                         "format": "json",
                         "stream": False,
+                        # Categorization is a classification task, not a creative one - the
+                        # default nonzero sampling temperature just adds run-to-run noise to
+                        # which category/label a borderline row gets, see
+                        # scripts/eval_ai_categorization.py's multi-trial variance findings.
+                        "options": {"temperature": 0},
                     },
                 )
             resp.raise_for_status()

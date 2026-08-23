@@ -18,10 +18,10 @@ from app.engine.ai_providers.base import (
     AiProviderUnavailableError,
     AiSuggestion,
     ProviderHealth,
-    build_prompt,
     cancellable_client,
     parse_suggestions,
 )
+from app.engine.ai_providers.prompts import build_prompt
 
 API_VERSION = "2023-06-01"
 HEALTH_TIMEOUT = 8.0
@@ -65,6 +65,8 @@ class AnthropicProvider:
                         "model": self.model,
                         "max_tokens": 4096,
                         "messages": [{"role": "user", "content": prompt}],
+                        # Classification, not creative writing - see ollama.py's identical comment.
+                        "temperature": 0,
                     },
                 )
             resp.raise_for_status()

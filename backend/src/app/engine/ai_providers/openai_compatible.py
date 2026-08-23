@@ -15,10 +15,10 @@ from app.engine.ai_providers.base import (
     AiProviderUnavailableError,
     AiSuggestion,
     ProviderHealth,
-    build_prompt,
     cancellable_client,
     parse_suggestions,
 )
+from app.engine.ai_providers.prompts import build_prompt
 
 HEALTH_TIMEOUT = 5.0
 CATEGORIZE_TIMEOUT = 90.0
@@ -58,6 +58,8 @@ class OpenAiCompatibleProvider:
                         "model": self.model,
                         "messages": [{"role": "user", "content": prompt}],
                         "response_format": {"type": "json_object"},
+                        # Classification, not creative writing - see ollama.py's identical comment.
+                        "temperature": 0,
                     },
                 )
             resp.raise_for_status()
