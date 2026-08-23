@@ -1,5 +1,7 @@
 # SG Expenditure Tracker
 
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 A local-only personal finance tool for Singapore bank statements. Upload a PDF, get every transaction auto-categorized, refunds automatically netted against their originals, and a post-mortem spending dashboard — without a single byte leaving your machine.
 
 ![Dashboard](docs/screenshots/dashboard.jpg)
@@ -24,10 +26,18 @@ Requires [`uv`](https://docs.astral.sh/uv/) (Python 3.12 package/env manager) an
 ```
 git clone https://github.com/syoopie/spend-track.git
 cd spend-track
-start.bat
+scripts\start.bat
 ```
 
-This installs dependencies on first run, launches the backend and frontend each in their own window, waits for both to come up, and opens your browser. Safe to re-run — it detects servers that are already up and won't start duplicates.
+### One command (macOS / Linux)
+
+```bash
+git clone https://github.com/syoopie/spend-track.git
+cd spend-track
+./scripts/start.sh
+```
+
+Either script installs dependencies on first run, launches the backend and frontend, waits for both to come up, and opens your browser. Safe to re-run — it detects servers that are already up and won't start duplicates. Ctrl+C stops whatever it started.
 
 ### Manual (any OS)
 
@@ -61,7 +71,7 @@ Open the app and upload any PDF from `PDF Examples (Sanitized)/UOB/` — six mon
 cd backend && uv run pytest
 ```
 
-168 tests: parser regression tests run against every sample PDF (both the sanitized fixtures above and, if present, real statements in the gitignored `PDF Examples/UOB/`, cross-validated against each statement's own printed totals), plus full API integration tests via FastAPI's `TestClient`. The frontend has no automated test suite yet — verified manually in-browser, with `npx tsc -b` and `npm run build` for type/build checks.
+Parser regression tests run against every committed sanitized sample PDF, plus full API integration tests via FastAPI's `TestClient` — all pass on a fresh clone with no setup beyond `uv sync`. A handful of additional tests run only if you've dropped your own real UOB statements into a local, gitignored `PDF Examples/UOB/` folder (cross-validated against each statement's own printed totals) — they're skipped, not failed, when that folder doesn't exist. The frontend has no automated test suite yet — verified manually in-browser, with `npx tsc -b` and `npm run build` for type/build checks.
 
 ## Design Decisions
 
@@ -102,9 +112,11 @@ frontend/src/
   api/           fetch client + typed React Query hooks
   pages/         one file per screen
   components/    shared UI (charts, modals, sidebar)
+docs/            original design docs + screenshots (see below)
+scripts/         start.bat / start.sh / start.ps1
 ```
 
-`TECHNICAL_SPEC.md` and `UX.md` are the original design docs; `UI mockup/` is the visual reference the frontend was built to match. `PDF Examples/UOB/` holds real sample statements the parsers are tested against (gitignored — contains real personal/financial info). `PDF Examples (Sanitized)/UOB/` are the synthetic statements mentioned above — safe to commit, and what a fresh clone actually has to test against.
+`docs/technical-spec.md` and `docs/ux-spec.md` are the original design docs written before implementation started — kept for the decisions they capture; where the app has since diverged on purpose, that's documented in `CLAUDE.md` rather than rewritten back into history. `PDF Examples (Sanitized)/UOB/` are the synthetic statements mentioned above — safe to commit, and what a fresh clone actually has to test against. `PDF Examples/UOB/` is an optional local folder (gitignored, never committed) where you can drop your own real UOB statements to test against genuine data.
 
 ## A closer look
 
