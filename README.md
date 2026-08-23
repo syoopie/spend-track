@@ -14,8 +14,9 @@ A local-only personal finance tool for Singapore bank statements. Upload a PDF, 
 - **Catch duplicates and refunds.** Re-uploading an overlapping statement is safe — duplicate transactions are detected and skipped. Refunds are paired against their original purchase automatically (merchant-name matching, not just amount-matching, to avoid false positives).
 - **Avoid double-counting.** If you upload both a credit card statement and the linked bank account's statement, the GIRO payment settling the card bill is recognized and excluded — the spending is already counted on the card's own statement.
 - **Visualize it**: cash flow, category breakdown, spend velocity (this period's pace vs. the last), top merchants, and top PayNow contacts, all filterable by date range and account.
+- **Optionally hand the leftovers to AI.** Whatever the rules engine still can't resolve after an upload or a recategorize run — no rule match, no contact match, not a PayNow marker — is sent to an LLM automatically in the background, which suggests a category, a clean display label, and a rule pattern for you to accept or reject. Opt-in and off by default; see [AI-assisted categorization](#ai-assisted-categorization) below.
 
-Everything is stored in a single SQLite file on disk. There's no account system, no server to talk to, and no telemetry — see the [design decisions](#design-decisions) below for what that trade-off actually means in the code.
+Everything is stored in a single SQLite file on disk. There's no account system, no server to talk to, and no telemetry by default — see [AI-assisted categorization](#ai-assisted-categorization) for the one opt-in feature that can change that, and [design decisions](#design-decisions) for what the rest of that trade-off actually means in the code.
 
 ## Install & Run
 
@@ -73,6 +74,18 @@ cd backend && uv run pytest
 
 Parser regression tests run against every committed sanitized sample PDF, plus full API integration tests via FastAPI's `TestClient` — all pass on a fresh clone with no setup beyond `uv sync`. A handful of additional tests run only if you've dropped your own real UOB statements into a local, gitignored `PDF Examples/UOB/` folder (cross-validated against each statement's own printed totals) — they're skipped, not failed, when that folder doesn't exist. The frontend has no automated test suite yet — verified manually in-browser, with `npx tsc -b` and `npm run build` for type/build checks.
 
+## AI-assisted categorization
+
+Off by default. Turn it on in **Settings → AI** and every future upload or recategorize run automatically sends whatever the rules engine couldn't resolve — no rule match, no contact match, and not a PayNow marker (those keep their existing manual-review path unchanged) — to an LLM in the background. It comes back with a suggested category, a clean merchant label stripped of bank-statement noise, and a candidate rule pattern; nothing is applied silently, it just shows up pre-filled in the staging review screen for you to accept, edit, or reject like any other row. Closing the review dialog doesn't cancel the job — reopen it later and the suggestions are there.
+
+**Three provider options, one shared code path** (`backend/src/app/engine/ai_providers/`):
+
+- **Local (Ollama)** — the default. Points at a model you're already running yourself (`ollama serve`); nothing leaves the device, consistent with the rest of the app.
+- **OpenAI-compatible** — one adapter for OpenAI, OpenRouter, Groq, together.ai, a self-hosted LiteLLM proxy, or anything else speaking the same chat-completions API, via a configurable base URL.
+- **Anthropic (Claude)** — its own adapter, since the Messages API shape differs enough to warrant one.
+
+Reachability is checked before every real use (app load, viewing the AI settings, and right before each categorization pass) so a down model degrades to a clear warning banner instead of a stuck upload. Choosing anything other than Ollama is a real privacy trade-off — transaction descriptions and amounts leave the device — so the Settings page gates it behind an explicit "I understand transaction data will leave this device" checkbox, and the sidebar's local-only indicator and the in-app Guide both reflect the actual current state rather than always claiming local-only. API keys are write-only through the API (only `sk-…last4` is ever echoed back) and stored in the same local `config.json` the database path already lives in.
+
 ## Design Decisions
 
 A few choices in here aren't obvious from reading the code cold, so they're written down.
@@ -93,9 +106,11 @@ A few choices in here aren't obvious from reading the code cold, so they're writ
 
 **Schema migrations are column-existence checks, not a version-gated migration runner.** `PRAGMA user_version` is bumped for humans reading the schema's history, but nothing branches on its value — every migration function checks whether its own column already exists before adding it, so re-running the full migration set on an up-to-date database is always a safe no-op. Simpler than a real migration framework, and sufficient for a schema that only ever grows additively.
 
+**AI categorization runs as a background job, never inline in the upload request.** A model call can take a while; blocking the upload response on it would mean a slow or unreachable model holds the UI hostage. Instead the upload/recategorize response returns immediately and the AI pass updates an `ai_status` field the frontend polls, so the review screen is usable (and closable) the whole time regardless of how long the model takes or whether it's reachable at all. It's also called with `temperature: 0` — categorization is a classification task, not a creative one, and a live evaluation harness against a local model (`backend/scripts/eval_ai_categorization.py`) showed the default nonzero sampling temperature was a bigger source of wrong answers than the prompt wording itself.
+
 ### Stack
 
-- **Backend**: Python 3.12, FastAPI, SQLite (stdlib `sqlite3`, no ORM), `pdfplumber` for PDF parsing, `pypdf` for encrypted-PDF handling. Managed with `uv`.
+- **Backend**: Python 3.12, FastAPI, SQLite (stdlib `sqlite3`, no ORM), `pdfplumber` for PDF parsing, `pypdf` for encrypted-PDF handling, `httpx` for the AI provider calls. Managed with `uv`.
 - **Frontend**: React + TypeScript, Vite, Tailwind CSS v4, TanStack Query, React Router. No charting library — every chart is hand-rolled SVG.
 
 ### Layout
@@ -104,6 +119,7 @@ A few choices in here aren't obvious from reading the code cold, so they're writ
 backend/src/app/
   parsing/       per-bank statement parsers (uob/, dbs/, ocbc/) behind a shared registry
   engine/        categorization rules, fingerprinting/dedup, refund pairing, in-memory staging store
+  engine/ai_providers/  pluggable AI categorization: Ollama / OpenAI-compatible / Anthropic adapters
   routers/       FastAPI routes, one file per resource
   repo.py        DB-query helpers shared across routers
   errors.py      shared API error-response construction
