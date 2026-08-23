@@ -8,7 +8,7 @@ A local-only personal finance tool for Singapore bank statements. Upload a PDF, 
 
 ## What it does
 
-- **Upload** UOB account and credit card e-statement PDFs (password-protected ones too) — one at a time or several at once, mixing months and statement types freely.
+- **Upload** UOB account and credit card e-statement PDFs (password-protected ones too) — one at a time or several at once, mixing months and statement types freely. DBS and OCBC are recognized and cleanly reported as "not yet supported" rather than a generic parse error — the per-bank parser registry (`backend/src/app/parsing/`) is built to take them (and other banks) as drop-in additions.
 - **Review before committing.** Every parsed transaction is staged first, pre-categorized, with anything ambiguous (like an unmapped PayNow transfer) flagged for a quick manual call.
 - **Categorize automatically**, via a priority-ordered rules engine: your own rules first, then a large built-in word bank of common SG merchants, then contact-based PayNow matching. Nothing you do is ever silently overridden — you can always see, and re-run, exactly why a transaction landed where it did.
 - **Catch duplicates and refunds.** Re-uploading an overlapping statement is safe — duplicate transactions are detected and skipped. Refunds are paired against their original purchase automatically (merchant-name matching, not just amount-matching, to avoid false positives).
