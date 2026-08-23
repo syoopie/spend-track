@@ -1,5 +1,7 @@
 # System Architecture & Technical Specification
 
+> Original design doc, written before implementation started — kept for the decisions it captures. Some details below (the `uvx` single-executable distribution, the literal schema) describe the original plan rather than what shipped; see the repo root [README](../README.md) and `CLAUDE.md` for how the app actually runs and where it intentionally diverged.
+
 ## 1. System Execution Topology
 
 * **Distribution & Runtime:** Single CLI executable (`uvx expenditure-tracker`) running FastAPI and Uvicorn bound locally to `127.0.0.1:8000`.

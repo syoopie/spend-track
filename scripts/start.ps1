@@ -1,11 +1,11 @@
 # Starts the SG Expenditure Tracker: backend (FastAPI) + frontend (Vite) dev
 # servers, each in its own window, then opens the app in your browser.
 #
-# Run with:  powershell -ExecutionPolicy Bypass -File start.ps1
-# (or just double-click start.bat)
+# Run with:  powershell -ExecutionPolicy Bypass -File scripts/start.ps1
+# (or just double-click scripts/start.bat)
 
 $ErrorActionPreference = "Stop"
-$root = $PSScriptRoot
+$root = Split-Path $PSScriptRoot -Parent  # this script lives in scripts/, repo root is one level up
 $backendDir = Join-Path $root "backend"
 $frontendDir = Join-Path $root "frontend"
 

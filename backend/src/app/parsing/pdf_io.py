@@ -17,7 +17,7 @@ def open_pdf(data: bytes, password: str | None = None) -> pdfplumber.PDF:
 
     The password (if any) is used only to decrypt the byte stream held in
     memory for this request - it is never written to disk or the database,
-    per TECHNICAL_SPEC.md's "In-Memory Password Decryption" requirement.
+    per docs/technical-spec.md's "In-Memory Password Decryption" requirement.
     """
     reader = pypdf.PdfReader(io.BytesIO(data))
     if reader.is_encrypted:

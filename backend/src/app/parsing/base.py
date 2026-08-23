@@ -29,7 +29,7 @@ class ParsedStatement:
 class UnparseableStatementError(Exception):
     """Raised when no registered parser recognizes the statement.
 
-    Maps to HTTP 422 UNPARSEABLE_STATEMENT_FORMAT per TECHNICAL_SPEC.md - no
+    Maps to HTTP 422 UNPARSEABLE_STATEMENT_FORMAT per docs/technical-spec.md - no
     manual column-mapping fallback is offered.
     """
 

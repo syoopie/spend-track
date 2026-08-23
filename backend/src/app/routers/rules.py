@@ -47,7 +47,7 @@ def list_rules(include_default: bool = False):
 def create_rule(body: RuleCreateRequest):
     with get_conn() as conn:
         priority = body.priority if body.priority is not None else rule_catalog.next_user_rule_priority(conn)
-        # target_category is NOT NULL per TECHNICAL_SPEC.md's schema even
+        # target_category is NOT NULL per docs/technical-spec.md's schema even
         # though exclusion rules don't use it - default to "Others" for those.
         target_category = body.target_category or "Others"
         # A category-assigning rule's direction always matches its own

@@ -1,6 +1,6 @@
 """In-memory pre-commit staging area for uploaded statements.
 
-Not a DB table: TECHNICAL_SPEC.md's schema (§5) has no staging table, and the
+Not a DB table: docs/technical-spec.md's schema (§5) has no staging table, and the
 UX's "Pre-Commit Staging Review" is inherently transient/discardable. Since
 this is a single local process, a batch lives here until committed or
 discarded. Known limitation: a batch is lost if the server restarts before

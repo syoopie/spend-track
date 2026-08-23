@@ -1,4 +1,4 @@
-"""SHA-256 transaction fingerprinting per TECHNICAL_SPEC.md §3.
+"""SHA-256 transaction fingerprinting per docs/technical-spec.md §3.
 
 Fingerprint = SHA256(account_id | date | amount | cleaned_description | daily_sequence_index)
 

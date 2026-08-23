@@ -1,4 +1,4 @@
-"""Priority-ordered categorization rules engine per TECHNICAL_SPEC.md §4.
+"""Priority-ordered categorization rules engine per docs/technical-spec.md §4.
 
 Rules are evaluated in priority ASC order (priority 1 = highest precedence,
 evaluated first); the first matching rule wins - this includes both

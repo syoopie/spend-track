@@ -1,10 +1,12 @@
 # UI/UX & User Flow Specification
 
+> Original design doc, written before implementation started — kept for the decisions it captures. Some details below (the `uvx` distribution model, the exact screen list) describe the original plan rather than what shipped; see the repo root [README](../README.md) and `CLAUDE.md` for how the app actually runs and where it intentionally diverged.
+
 ## 1. Core User Journeys
 
 ### First-Time Onboarding
 
-1. **App Launch:** User executes `uvx expenditure-tracker`. The local server launches and automatically opens `[http://127.0.0.1:8000](http://127.0.0.1:8000)` in the default browser.
+1. **App Launch:** User executes `uvx expenditure-tracker`. The local server launches and automatically opens `http://127.0.0.1:8000` in the default browser.
 2. **Zero-State Dashboard:** Displays an onboarding hero banner: *"Drag & Drop DBS, OCBC, or UOB Statements to Start"*.
 3. **Initial Upload:** User drops e-statements into the dropzone.
 4. **Auto Account Provisioning:** Account details (bank name, masked account number) are extracted from headers, creating account profiles automatically before landing on the **Staging Review** screen.

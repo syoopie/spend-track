@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS refund_pairings (
     FOREIGN KEY(refund_transaction_id) REFERENCES transactions(id) ON DELETE CASCADE
 );
 
--- Not in the original TECHNICAL_SPEC.md schema: added so the mockup's fixed
+-- Not in the original docs/technical-spec.md schema: added so the fixed
 -- category list is extensible later (add/rename) without a migration.
 CREATE TABLE IF NOT EXISTS categories (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
