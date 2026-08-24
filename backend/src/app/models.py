@@ -303,6 +303,10 @@ class RuleReorderRequest(BaseModel):
     ordered_ids: list[int]  # new top-to-bottom order; priorities are reassigned 1..N
 
 
+class MatchCountOut(BaseModel):
+    count: int
+
+
 class CategoryCreateRequest(BaseModel):
     name: str
     hue: int | None = None

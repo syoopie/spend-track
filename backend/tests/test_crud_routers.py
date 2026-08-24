@@ -418,6 +418,18 @@ def test_exclusion_rule_ignores_display_label(client):
     assert r["display_label"] is None
 
 
+def test_rule_match_count_is_case_insensitive_substring(client):
+    _upload_and_commit(client)
+    tx = client.get("/api/transactions").json()[0]
+    # A short, real substring of a real description should match at least
+    # the transaction it came from, case-insensitively (REV-5's live
+    # "matches N transactions" count backs a rule pattern this loosely).
+    token = tx["raw_description"].split()[0]
+    assert client.get("/api/rules/match-count", params={"pattern": token.lower()}).json()["count"] >= 1
+    assert client.get("/api/rules/match-count", params={"pattern": "NO_SUCH_MERCHANT_XYZ"}).json()["count"] == 0
+    assert client.get("/api/rules/match-count", params={"pattern": "  "}).json()["count"] == 0
+
+
 # --- settings ---------------------------------------------------------------
 
 

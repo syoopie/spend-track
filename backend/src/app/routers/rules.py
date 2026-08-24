@@ -3,7 +3,7 @@ from fastapi import APIRouter, HTTPException
 from app import rule_catalog
 from app.db import get_conn
 from app.errors import api_error, not_found_error
-from app.models import RuleCreateRequest, RuleOut, RuleReorderRequest, RuleUpdateRequest
+from app.models import MatchCountOut, RuleCreateRequest, RuleOut, RuleReorderRequest, RuleUpdateRequest
 
 router = APIRouter(prefix="/api/rules", tags=["rules"])
 
@@ -41,6 +41,33 @@ def list_rules(include_default: bool = False):
         query = "SELECT * FROM rules" + ("" if include_default else " WHERE is_default = 0") + " ORDER BY priority ASC"
         rows = conn.execute(query).fetchall()
         return [_row_to_out(r) for r in rows]
+
+
+@router.get("/match-count", response_model=MatchCountOut)
+def match_count(pattern: str):
+    # Backs the review dialog's "matches N transactions in history" live
+    # count (REV-5 in UI Review.dc.html) - lets a user see, before creating
+    # a rule, whether the pattern they typed is a reusable merchant keyword
+    # or something so specific (the full raw bank description, say) it'll
+    # only ever match the one transaction it was copied from. Same
+    # case-insensitive substring match as engine/rules.py::categorize's
+    # own `rule["match_pattern"].upper() in desc_upper` check, so this
+    # count is never optimistic about what a real rule would actually
+    # match going forward.
+    pattern = pattern.strip()
+    if not pattern:
+        return MatchCountOut(count=0)
+    # Escape LIKE's own wildcard characters so a pattern that happens to
+    # contain a literal % or _ (rare, but bank descriptions do sometimes
+    # include promo text like "50% OFF") is matched literally, not as a
+    # wildcard.
+    escaped = pattern.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) AS n FROM transactions WHERE UPPER(raw_description) LIKE '%' || UPPER(?) || '%' ESCAPE '\\'",
+            (escaped,),
+        ).fetchone()
+        return MatchCountOut(count=row["n"])
 
 
 @router.post("", response_model=RuleOut)
