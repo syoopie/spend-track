@@ -1,4 +1,4 @@
-import { ListPlus, Loader2, RotateCcw, Sparkles, Undo2 } from 'lucide-react'
+import { Inbox, ListPlus, Loader2, RotateCcw, Sparkles, Undo2 } from 'lucide-react'
 import { useRef, useState, type ReactNode } from 'react'
 import { useCategories } from '../api/hooks'
 import type { AiJobStatus, RuleRerunRowSnapshot } from '../api/types'
@@ -6,6 +6,7 @@ import { categoryIcon } from '../lib/categoryColor'
 import { fmtDate, fmtSigned } from '../lib/format'
 import { CategoryBadge } from './CategoryBadge'
 import { Checkbox } from './Checkbox'
+import { EmptyState } from './EmptyState'
 import { Modal } from './Modal'
 import { Select } from './Select'
 
@@ -505,7 +506,7 @@ export function ReviewDialog({
           <div>Category</div>
           <div className="text-right">Amount</div>
         </div>
-        {rows.length === 0 && <div className="p-5 text-muted text-sm">{emptyMessage}</div>}
+        {rows.length === 0 && <EmptyState icon={Inbox} title={emptyMessage} />}
         {/* Every row is reviewable/clickable regardless of AI or needs_review
             state - adding a rule or contact mapping shouldn't be gated on
             whether AI touched the row. Base ordering is most-recent-first;

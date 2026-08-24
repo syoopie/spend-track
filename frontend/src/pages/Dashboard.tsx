@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, ChevronsUpDown, FileUp, Pencil, RefreshCw } from 'lucide-react'
+import { ChevronDown, ChevronUp, ChevronsUpDown, FileUp, Pencil, Receipt, RefreshCw, SearchX } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useAccounts, useCategories, useDashboardSummary, useMonthlyTotals, useTransactions } from '../api/hooks'
@@ -13,6 +13,7 @@ import { RefundDrawer } from '../components/RefundDrawer'
 import { Button } from '../components/Button'
 import { Card } from '../components/Card'
 import { DateRangePicker } from '../components/DateRangePicker'
+import { EmptyState, ErrorState } from '../components/EmptyState'
 import { Input } from '../components/Field'
 import { TransactionEditPopover } from '../components/TransactionEditPopover'
 import { RecategorizeReviewDialog } from '../components/RecategorizeReviewDialog'
@@ -315,6 +316,31 @@ export function Dashboard() {
     if (columnHeaderRef.current) setColumnHeaderHeight(columnHeaderRef.current.offsetHeight)
   }, [])
 
+  // Checked before the loading gate below: without this, a failed first
+  // fetch has isLoading:false and no data, which used to fall straight into
+  // the "Loading dashboard…" sentence forever - "no data yet" and "the
+  // backend is down" looked identical (X-4 in UI Review.dc.html).
+  if (summaryQ.isError || accountsQ.isError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <ErrorState
+          description="Couldn't load the dashboard."
+          onRetry={() => {
+            summaryQ.refetch()
+            accountsQ.refetch()
+          }}
+        />
+      </div>
+    )
+  }
+
+  // Only true on the very first load - there's genuinely nothing to render
+  // yet. A range/account change no longer lands here: useDashboardSummary's
+  // placeholderData: keepPreviousData keeps summaryQ.data (and isLoading
+  // false) across a query-key change, so the page stays mounted and
+  // `isRefreshing` below is what signals an in-flight update instead. This
+  // used to also fire on every filter change (root cause 03 / DASH-1 in
+  // UI Review.dc.html), replacing the whole dashboard with this sentence.
   if (summaryQ.isLoading || !summaryQ.data || accountsQ.isLoading) {
     return (
       <div className="p-9">
@@ -357,9 +383,20 @@ export function Dashboard() {
     setEditingTxId((prev) => (prev === tx.id ? null : tx.id))
   }
 
+  // A background refetch (filter changed, or a stale query refetched on
+  // remount) while data from a previous fetch is still on screen - distinct
+  // from the true first-ever load below, which has nothing to show yet.
+  // keepPreviousData on useDashboardSummary/useTransactions means isLoading
+  // no longer flips true on every range/account change (root cause 03 /
+  // DASH-1), so this is the only signal left that something's updating.
+  const isRefreshing = !summaryQ.isLoading && (summaryQ.isFetching || txQ.isFetching)
+
   return (
     <div className="px-9 pb-15">
-      <div className="sticky top-0 z-20 -mx-9 px-9 bg-bg pt-7 pb-5.5">
+      <div className="sticky top-0 z-20 -mx-9 px-9 bg-bg pt-7 pb-5.5 relative">
+        <div
+          className={`absolute bottom-0 left-0 right-0 h-[2px] bg-accent transition-opacity duration-200 ${isRefreshing ? 'opacity-100' : 'opacity-0'}`}
+        />
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <div className="text-title font-bold font-display">Dashboard</div>
@@ -585,10 +622,31 @@ export function Dashboard() {
             <div />
           </div>
           {txQ.isLoading && <div className="p-5 text-muted text-sm">Loading transactions…</div>}
-          {!txQ.isLoading && filteredTransactions.length === 0 && (
-            <div className="p-5 text-muted text-sm">
-              {searchText || categoryFilter ? 'No transactions match your filters.' : 'No transactions for this range yet.'}
-            </div>
+          {txQ.isError && <ErrorState description="Couldn't load transactions for this range." onRetry={() => txQ.refetch()} />}
+          {txQ.isSuccess && filteredTransactions.length === 0 && (
+            <EmptyState
+              icon={searchText || categoryFilter ? SearchX : Receipt}
+              title={searchText || categoryFilter ? 'No transactions match your filters' : 'No transactions for this range yet'}
+              description={
+                searchText || categoryFilter
+                  ? 'Try a different search term or category.'
+                  : 'Pick a different date range, or upload a statement to get started.'
+              }
+              action={
+                searchText || categoryFilter ? (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      updateSearchText('')
+                      updateCategoryFilter('')
+                    }}
+                  >
+                    Clear filters
+                  </Button>
+                ) : undefined
+              }
+            />
           )}
           {(() => {
             let lastMonthKey: string | null = null

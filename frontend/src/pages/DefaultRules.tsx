@@ -1,8 +1,10 @@
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, SearchX } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useCategories, useRules } from '../api/hooks'
 import { categoryColor, categoryIcon } from '../lib/categoryColor'
+import { Button } from '../components/Button'
 import { Card } from '../components/Card'
+import { EmptyState, ErrorState } from '../components/EmptyState'
 import { Input } from '../components/Field'
 import { PageShell } from '../components/PageShell'
 import type { Rule } from '../api/types'
@@ -133,8 +135,18 @@ export function DefaultRules() {
       }
     >
       {rulesQ.isLoading && <div className="text-muted text-sm">Loading…</div>}
-      {!rulesQ.isLoading && groups.length === 0 && (
-        <div className="text-muted text-sm">No default rules match "{search}".</div>
+      {rulesQ.isError && <ErrorState description="Couldn't load the default rule bank." onRetry={() => rulesQ.refetch()} />}
+      {rulesQ.isSuccess && groups.length === 0 && (
+        <EmptyState
+          icon={SearchX}
+          title="No default rules match"
+          description={`Nothing in the built-in word bank matches "${search}".`}
+          action={
+            <Button variant="secondary" size="sm" onClick={() => setSearch('')}>
+              Clear search
+            </Button>
+          }
+        />
       )}
       <div className="grid grid-cols-2 gap-5 items-start">
         <DirectionSection title="Outflow Categories" groups={outflowGroups} defaultOpen={!!search} />

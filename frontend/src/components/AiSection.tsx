@@ -7,7 +7,7 @@ import { Card } from './Card'
 import { Checkbox } from './Checkbox'
 import { Input } from './Field'
 import { Tabs } from './Tabs'
-import { Toast, type ToastMessage } from './Toast'
+import { useToast } from './Toast'
 
 const PROVIDER_LABELS: Record<AiProviderKind, string> = {
   ollama: 'Local (Ollama)',
@@ -23,11 +23,10 @@ const ENABLE_TOGGLE_DEBOUNCE_MS = 600
 export function AiSection({ settings }: { settings: SettingsType | undefined }) {
   const updateAi = useUpdateAiSettings()
   const toggleAi = useUpdateAiSettings()
+  const toast = useToast()
 
   const [enabled, setEnabled] = useState(false)
-  const [toggleNotice, setToggleNotice] = useState<ToastMessage | null>(null)
   const toggleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [provider, setProvider] = useState<AiProviderKind>('ollama')
   const [ollamaUrl, setOllamaUrl] = useState('')
   const [ollamaModel, setOllamaModel] = useState('')
@@ -57,20 +56,13 @@ export function AiSection({ settings }: { settings: SettingsType | undefined }) 
     setInitialized(true)
   }, [settings, initialized])
 
-  // Cleanup pending timers on unmount so a debounced save or a fading
-  // notice doesn't fire setState after the section is gone.
+  // Cleanup the pending debounce timer on unmount so it doesn't fire a
+  // mutation after the section is gone.
   useEffect(() => {
     return () => {
       if (toggleTimer.current) clearTimeout(toggleTimer.current)
-      if (noticeTimer.current) clearTimeout(noticeTimer.current)
     }
   }, [])
-
-  function showToggleNotice(kind: 'success' | 'error', text: string) {
-    setToggleNotice({ kind, text })
-    if (noticeTimer.current) clearTimeout(noticeTimer.current)
-    noticeTimer.current = setTimeout(() => setToggleNotice(null), kind === 'success' ? 2500 : 6000)
-  }
 
   // "Enable AI" is implicitly saved on its own, debounced, the moment it's
   // toggled - unlike every other field here, which only persists via the
@@ -86,10 +78,9 @@ export function AiSection({ settings }: { settings: SettingsType | undefined }) 
       toggleAi.mutate(
         { ai_enabled: next },
         {
-          onSuccess: () => showToggleNotice('success', next ? 'AI enabled.' : 'AI disabled.'),
+          onSuccess: () => toast.success(next ? 'AI enabled.' : 'AI disabled.'),
           onError: (err) =>
-            showToggleNotice(
-              'error',
+            toast.error(
               next
                 ? `Couldn't enable AI yet: ${err instanceof Error ? err.message : 'configure a provider below, then click Save.'}`
                 : "Couldn't save that change. Please try again.",
@@ -140,7 +131,6 @@ export function AiSection({ settings }: { settings: SettingsType | undefined }) 
         <Checkbox checked={enabled} onChange={handleToggleEnabled} />
         Enable AI
       </label>
-      <Toast toast={toggleNotice} />
 
       {/* Connection details only matter once AI is actually on. */}
       {enabled && (

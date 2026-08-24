@@ -1,4 +1,4 @@
-import { Pencil } from 'lucide-react'
+import { Pencil, Users } from 'lucide-react'
 import { useRef, useState } from 'react'
 import {
   useCategories,
@@ -12,6 +12,7 @@ import { Button } from '../components/Button'
 import { Card } from '../components/Card'
 import { CategoryBadge } from '../components/CategoryBadge'
 import { categoryOptionElements } from '../components/CategoryOptions'
+import { EmptyState, ErrorState } from '../components/EmptyState'
 import { Field, Input } from '../components/Field'
 import { Modal } from '../components/Modal'
 import { PageShell } from '../components/PageShell'
@@ -95,12 +96,6 @@ export function Contacts() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   // 'new' opens the modal in Add mode; a Contact opens it pre-filled in Edit mode.
   const [formTarget, setFormTarget] = useState<Contact | 'new' | null>(null)
-  const [importResult, setImportResult] = useState<string | null>(null)
-
-  async function handleImport(file: File) {
-    const result = await importCsv.mutateAsync(file)
-    setImportResult(`Imported ${result.contacts_created} new contact(s), updated ${result.contacts_updated}.`)
-  }
 
   return (
     <PageShell
@@ -115,7 +110,7 @@ export function Contacts() {
             className="hidden"
             onChange={(e) => {
               const file = e.target.files?.[0]
-              if (file) handleImport(file)
+              if (file) importCsv.mutate(file)
               e.target.value = ''
             }}
           />
@@ -128,12 +123,6 @@ export function Contacts() {
         </>
       }
     >
-      {importResult && (
-        <div className="text-md text-muted mb-4 bg-card border border-border rounded-lg px-4 py-2.5">
-          {importResult}
-        </div>
-      )}
-
       <Card padding="" className="overflow-hidden">
         <div className="grid grid-cols-[1fr_1.6fr_160px_140px_36px] px-5 py-2.5 text-2xs text-muted-2 uppercase tracking-wide border-b border-divider">
           <div>Contact</div>
@@ -143,8 +132,20 @@ export function Contacts() {
           <div />
         </div>
         {contactsQ.isLoading && <div className="p-5 text-muted text-sm">Loading…</div>}
-        {!contactsQ.isLoading && (contactsQ.data ?? []).length === 0 && (
-          <div className="p-5 text-muted text-sm">No contacts yet.</div>
+        {contactsQ.isError && (
+          <ErrorState description="Couldn't load your contacts." onRetry={() => contactsQ.refetch()} />
+        )}
+        {contactsQ.isSuccess && (contactsQ.data ?? []).length === 0 && (
+          <EmptyState
+            icon={Users}
+            title="No contacts yet"
+            description="Map a phone number or UEN to a name so PayNow transfers categorize themselves."
+            action={
+              <Button variant="primary" size="sm" onClick={() => setFormTarget('new')}>
+                + Add Contact
+              </Button>
+            }
+          />
         )}
         {(contactsQ.data ?? []).map((c) => (
           <div

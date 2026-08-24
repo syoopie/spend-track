@@ -1,5 +1,6 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { api, ApiError } from './client'
+import { useToast } from '../components/Toast'
 import type {
   Account,
   AiSettings,
@@ -33,6 +34,15 @@ import type {
   Category,
 } from './types'
 
+// Every mutation below that fires a user-visible toast falls back to this
+// when the thrown error has no useful message of its own (e.g. a network
+// failure) - see root cause 04 / X-3 in UI Review.dc.html: before this,
+// most mutations were either fully silent or left a stale inline message
+// only one screen bothered to render.
+function errMsg(err: unknown, fallback: string): string {
+  return err instanceof Error ? err.message : fallback
+}
+
 // --- accounts -----------------------------------------------------------
 
 export function useAccounts() {
@@ -50,18 +60,25 @@ export function useTransactions(params: {
   return useQuery({
     queryKey: ['transactions', params],
     queryFn: () => api.get<Transaction[]>('/transactions', params),
+    // Keeps last range's rows on screen while a new range/account fetches,
+    // instead of the feed going blank/loading on every filter change -
+    // DASH-1 in UI Review.dc.html.
+    placeholderData: keepPreviousData,
   })
 }
 
 export function useUpdateTransaction() {
   const qc = useQueryClient()
+  const toast = useToast()
   return useMutation({
     mutationFn: ({ id, body }: { id: number; body: TransactionUpdateRequest }) =>
       api.patch<Transaction>(`/transactions/${id}`, body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['transactions'] })
       qc.invalidateQueries({ queryKey: ['dashboard-summary'] })
+      toast.success('Transaction updated.')
     },
+    onError: (err) => toast.error(errMsg(err, "Couldn't update the transaction.")),
   })
 }
 
@@ -111,6 +128,11 @@ export function useDashboardSummary(params: { date_from?: string; date_to?: stri
   return useQuery({
     queryKey: ['dashboard-summary', params],
     queryFn: () => api.get<DashboardSummary>('/dashboard/summary', params),
+    // See useTransactions above - this is the query whose key-change
+    // triggered the original "whole page blanks on every filter change"
+    // symptom (root cause 03 / DASH-1), since it gates Dashboard.tsx's
+    // entire render.
+    placeholderData: keepPreviousData,
   })
 }
 
@@ -118,6 +140,7 @@ export function useMonthlyTotals(accountId?: string) {
   return useQuery({
     queryKey: ['monthly-totals', accountId],
     queryFn: () => api.get<MonthlyTotal[]>('/dashboard/monthly-totals', { account_id: accountId }),
+    placeholderData: keepPreviousData,
   })
 }
 
@@ -210,11 +233,27 @@ function useUndoRuleFromBatch(kind: BatchKind, batchId: string) {
   })
 }
 
+// "96 committed · 8 duplicates skipped · 2 refund pairs matched" - only a
+// staging commit has duplicates/provisioning/refund-pairing to report; a
+// recategorize commit's result is just the one count.
+function commitToastText(kind: BatchKind, data: CommitResult | RecategorizeCommitResult): string {
+  if (kind === 'recategorize') {
+    const n = data.transactions_committed
+    return `${n} transaction${n === 1 ? '' : 's'} updated.`
+  }
+  const d = data as CommitResult
+  const parts = [`${d.transactions_committed} committed`]
+  if (d.duplicates_skipped > 0) parts.push(`${d.duplicates_skipped} duplicate${d.duplicates_skipped === 1 ? '' : 's'} skipped`)
+  if (d.refund_pairs_created > 0) parts.push(`${d.refund_pairs_created} refund pair${d.refund_pairs_created === 1 ? '' : 's'} matched`)
+  return parts.join(' · ')
+}
+
 function useCommitPendingBatch(kind: BatchKind) {
   const qc = useQueryClient()
+  const toast = useToast()
   return useMutation({
     mutationFn: (batchId: string) => api.post<CommitResult | RecategorizeCommitResult>(`${batchUrl(kind, batchId)}/commit`),
-    onSuccess: () => {
+    onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['transactions'] })
       qc.invalidateQueries({ queryKey: ['dashboard-summary'] })
       qc.invalidateQueries({ queryKey: ['monthly-totals'] })
@@ -222,15 +261,22 @@ function useCommitPendingBatch(kind: BatchKind) {
       // Only an upload can provision a new account - a recategorize commit
       // never touches the accounts table.
       if (kind === 'staging') qc.invalidateQueries({ queryKey: ['accounts'] })
+      toast.success(commitToastText(kind, data))
     },
+    onError: (err) => toast.error(errMsg(err, 'Commit failed. Nothing was changed.')),
   })
 }
 
 function useDiscardPendingBatch(kind: BatchKind) {
   const qc = useQueryClient()
+  const toast = useToast()
   return useMutation({
     mutationFn: (batchId: string) => api.delete(batchUrl(kind, batchId)),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [batchQueryKey(kind)] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [batchQueryKey(kind)] })
+      toast.success(kind === 'staging' ? 'Batch discarded.' : 'Recategorization discarded.')
+    },
+    onError: (err) => toast.error(errMsg(err, 'Discard failed.')),
   })
 }
 
@@ -284,34 +330,54 @@ export function useContacts() {
 
 export function useCreateContact() {
   const qc = useQueryClient()
+  const toast = useToast()
   return useMutation({
     mutationFn: (body: ContactCreateRequest) => api.post<Contact>('/contacts', body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['contacts'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['contacts'] })
+      toast.success('Contact saved.')
+    },
+    onError: (err) => toast.error(errMsg(err, "Couldn't save the contact.")),
   })
 }
 
 export function useUpdateContact() {
   const qc = useQueryClient()
+  const toast = useToast()
   return useMutation({
     mutationFn: ({ id, body }: { id: number; body: ContactUpdateRequest }) =>
       api.patch<Contact>(`/contacts/${id}`, body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['contacts'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['contacts'] })
+      toast.success('Contact updated.')
+    },
+    onError: (err) => toast.error(errMsg(err, "Couldn't update the contact.")),
   })
 }
 
 export function useDeleteContact() {
   const qc = useQueryClient()
+  const toast = useToast()
   return useMutation({
     mutationFn: (id: number) => api.delete(`/contacts/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['contacts'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['contacts'] })
+      toast.success('Contact deleted.')
+    },
+    onError: (err) => toast.error(errMsg(err, "Couldn't delete the contact.")),
   })
 }
 
 export function useImportContactsCsv() {
   const qc = useQueryClient()
+  const toast = useToast()
   return useMutation({
     mutationFn: (file: File) => api.upload<ContactImportResult>('/contacts/import', file),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['contacts'] }),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['contacts'] })
+      toast.success(`Imported ${data.contacts_created} new contact(s), updated ${data.contacts_updated}.`)
+    },
+    onError: (err) => toast.error(errMsg(err, "Couldn't import that CSV.")),
   })
 }
 
@@ -326,33 +392,53 @@ export function useRules(includeDefault = false) {
 
 export function useCreateRule() {
   const qc = useQueryClient()
+  const toast = useToast()
   return useMutation({
     mutationFn: (body: RuleCreateRequest) => api.post<Rule>('/rules', body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['rules'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['rules'] })
+      toast.success('Rule saved.')
+    },
+    onError: (err) => toast.error(errMsg(err, "Couldn't save the rule.")),
   })
 }
 
 export function useUpdateRule() {
   const qc = useQueryClient()
+  const toast = useToast()
   return useMutation({
     mutationFn: ({ id, body }: { id: number; body: RuleUpdateRequest }) => api.patch<Rule>(`/rules/${id}`, body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['rules'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['rules'] })
+      toast.success('Rule updated.')
+    },
+    onError: (err) => toast.error(errMsg(err, "Couldn't update the rule.")),
   })
 }
 
 export function useDeleteRule() {
   const qc = useQueryClient()
+  const toast = useToast()
   return useMutation({
     mutationFn: (id: number) => api.delete(`/rules/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['rules'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['rules'] })
+      toast.success('Rule deleted.')
+    },
+    onError: (err) => toast.error(errMsg(err, "Couldn't delete the rule.")),
   })
 }
 
 export function useReorderRules() {
   const qc = useQueryClient()
+  const toast = useToast()
   return useMutation({
     mutationFn: (orderedIds: number[]) => api.post<Rule[]>('/rules/reorder', { ordered_ids: orderedIds }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['rules'] }),
+    onError: (err) => {
+      qc.invalidateQueries({ queryKey: ['rules'] })
+      toast.error(errMsg(err, "Couldn't save the new rule order - it's been reset."))
+    },
   })
 }
 

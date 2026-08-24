@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useBatchActions, useCurrentRecategorizeBatch, useRecategorizeTransactions } from '../api/hooks'
 import { fmtMonthRangeLabel } from '../lib/format'
 import { Button } from './Button'
+import { ErrorState } from './EmptyState'
 import { Modal } from './Modal'
 import { ReviewDialog, type ReviewRow, type ReviewStatCard } from './ReviewDialog'
 
@@ -41,6 +42,14 @@ export function RecategorizeReviewDialog({
     return (
       <Modal onClose={onClose} width={460}>
         <div className="text-muted text-sm">Loading…</div>
+      </Modal>
+    )
+  }
+
+  if (batchQ.isError) {
+    return (
+      <Modal onClose={onClose} width={420}>
+        <ErrorState description="Couldn't check for a pending recategorization." onRetry={() => batchQ.refetch()} />
       </Modal>
     )
   }

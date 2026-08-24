@@ -1,4 +1,4 @@
-import { Pencil } from 'lucide-react'
+import { ListChecks, Pencil } from 'lucide-react'
 import { useState } from 'react'
 import { useCategories, useCreateRule, useDeleteRule, useReorderRules, useRules, useUpdateRule } from '../api/hooks'
 import { Button } from '../components/Button'
@@ -6,6 +6,7 @@ import { Card } from '../components/Card'
 import { CategoryBadge } from '../components/CategoryBadge'
 import { categoryOptionElements } from '../components/CategoryOptions'
 import { Checkbox } from '../components/Checkbox'
+import { EmptyState, ErrorState } from '../components/EmptyState'
 import { Field, Input } from '../components/Field'
 import { Modal } from '../components/Modal'
 import { PageShell } from '../components/PageShell'
@@ -192,8 +193,18 @@ export function Rules() {
     >
       <Card padding="" className="overflow-hidden">
         {rulesQ.isLoading && <div className="p-5 text-muted text-sm">Loading…</div>}
-        {!rulesQ.isLoading && rules.length === 0 && (
-          <div className="p-5 text-muted text-sm">No rules yet — transactions fall back to contact matching, then "Others".</div>
+        {rulesQ.isError && <ErrorState description="Couldn't load your rules." onRetry={() => rulesQ.refetch()} />}
+        {rulesQ.isSuccess && rules.length === 0 && (
+          <EmptyState
+            icon={ListChecks}
+            title="No rules yet"
+            description='Transactions fall back to contact matching, then the built-in default rules, then "Others".'
+            action={
+              <Button variant="primary" size="sm" onClick={() => setFormTarget('new')}>
+                + New Rule
+              </Button>
+            }
+          />
         )}
         {rules.map((r) => {
           return (
