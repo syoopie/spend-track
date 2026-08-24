@@ -231,6 +231,10 @@ export interface Rule {
   display_label: string | null
 }
 
+export interface MatchCount {
+  count: number
+}
+
 export interface RuleCreateRequest {
   priority?: number | null
   match_pattern: string

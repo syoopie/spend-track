@@ -6,6 +6,7 @@ import type {
   AiSettings,
   AiSettingsUpdateRequest,
   AiStatus,
+  BatchRow,
   BatchRowUpdateRequest,
   BatchRuleUndoRequest,
   CommitResult,
@@ -15,6 +16,7 @@ import type {
   ContactUpdateRequest,
   DashboardSummary,
   DeleteScopeResult,
+  MatchCount,
   MonthlyTotal,
   RecategorizeBatch,
   RecategorizeCommitResult,
@@ -197,12 +199,49 @@ function batchQueryKey(kind: BatchKind): string {
   return kind === 'staging' ? 'staging-batch' : 'recategorize-batch'
 }
 
+// Predicts engine/batch_review.py::apply_row_update's own field assignment
+// for the plain (non restore_default) case, so the row list can update the
+// instant a field is applied instead of waiting a full round trip (REV-2 in
+// UI Review.dc.html). restore_default is deliberately NOT predicted here -
+// its actual target depends on ai_category/original_category, which this
+// generic hook has no visibility into - so that one action alone still
+// waits for the real response; every other edit (category, label, the
+// PayNow contact checkbox) is optimistic.
+function optimisticRowPatch(row: BatchRow, body: BatchRowUpdateRequest): BatchRow {
+  if (body.restore_default) return { ...row, needs_review: false }
+  return {
+    ...row,
+    category: body.category,
+    matched_label: body.matched_label ?? null,
+    subcategory: body.subcategory ?? null,
+    needs_review: false,
+  }
+}
+
 function useUpdateBatchRow(kind: BatchKind, batchId: string) {
   const qc = useQueryClient()
+  const queryKey = [batchQueryKey(kind), 'current']
   return useMutation({
     mutationFn: ({ key, body }: { key: number; body: BatchRowUpdateRequest }) =>
       api.patch<StagingBatch | RecategorizeBatch>(`${batchUrl(kind, batchId)}/rows/${key}`, body),
-    onSuccess: (data) => qc.setQueryData([batchQueryKey(kind), 'current'], data),
+    onMutate: async ({ key, body }) => {
+      await qc.cancelQueries({ queryKey })
+      const previous = qc.getQueryData<StagingBatch | RecategorizeBatch>(queryKey)
+      if (previous) {
+        qc.setQueryData(queryKey, {
+          ...previous,
+          rows: previous.rows.map((r) => (r.key === key ? optimisticRowPatch(r, body) : r)),
+        })
+      }
+      return { previous }
+    },
+    // Roll back to the exact pre-mutation snapshot on failure, not just an
+    // invalidate/refetch - the row's field(s) should visibly snap back to
+    // what they were, which is what tells the user the edit didn't stick.
+    onError: (_err, _vars, context) => {
+      if (context?.previous) qc.setQueryData(queryKey, context.previous)
+    },
+    onSuccess: (data) => qc.setQueryData(queryKey, data),
   })
 }
 
@@ -281,8 +320,11 @@ function useDiscardPendingBatch(kind: BatchKind) {
 }
 
 export interface BatchActions {
+  // No applyPending here - editing a row is optimistic now (REV-2 in
+  // UI Review.dc.html), and each ReviewRowPopover field tracks its own
+  // save status locally instead of the whole panel disabling on any one
+  // row's in-flight request.
   applyRow: (key: number, body: BatchRowUpdateRequest) => Promise<void>
-  applyPending: boolean
   createRule: (
     matchPattern: string,
     targetCategory: string,
@@ -309,7 +351,6 @@ export function useBatchActions(kind: BatchKind, batchId: string): BatchActions 
 
   return {
     applyRow: (key, body) => updateRow.mutateAsync({ key, body }).then(() => {}),
-    applyPending: updateRow.isPending,
     createRule: (matchPattern, targetCategory, displayLabel) =>
       createRule.mutateAsync({ match_pattern: matchPattern, target_category: targetCategory, display_label: displayLabel }),
     createRulePending: createRule.isPending,
@@ -387,6 +428,18 @@ export function useRules(includeDefault = false) {
   return useQuery({
     queryKey: ['rules', includeDefault],
     queryFn: () => api.get<Rule[]>('/rules', { include_default: includeDefault }),
+  })
+}
+
+// Backs the review dialog's "matches N transactions in history" live count
+// (REV-5 in UI Review.dc.html) - the caller is expected to debounce
+// `pattern` itself (see ReviewDialog.tsx), not on every keystroke.
+export function useRuleMatchCount(pattern: string) {
+  return useQuery({
+    queryKey: ['rule-match-count', pattern],
+    queryFn: () => api.get<MatchCount>('/rules/match-count', { pattern }),
+    enabled: pattern.trim().length > 0,
+    staleTime: 10_000,
   })
 }
 

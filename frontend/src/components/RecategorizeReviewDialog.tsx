@@ -127,7 +127,6 @@ export function RecategorizeReviewDialog({
       aiModel={batch.ai_model}
       rows={rows}
       onApplyRow={(row, body) => actions.applyRow(row.key, body)}
-      applyPending={actions.applyPending}
       onCreateRule={(_row, matchPattern, targetCategory, displayLabel) =>
         actions.createRule(matchPattern, targetCategory, displayLabel)
       }
@@ -143,6 +142,16 @@ export function RecategorizeReviewDialog({
               later.
             </div>
           )}
+          {/* Labeled from batch.rows.length - the same array the row list
+              renders, and what commit_recategorize_batch actually writes
+              (every scanned row, not just the batch.changed subset) - not
+              batch.changed, which used to understate what Commit does
+              (REV-4 in UI Review.dc.html). */}
+          {batch.ai_status !== 'running' && batch.rows.length > batch.changed && (
+            <div className="text-2xs text-muted-2 mr-auto">
+              {batch.rows.length - batch.changed} unchanged
+            </div>
+          )}
           <Button variant="danger-outline" onClick={handleDiscard} disabled={actions.discardPending}>
             Discard
           </Button>
@@ -152,7 +161,7 @@ export function RecategorizeReviewDialog({
             disabled={actions.commitPending || batch.rows.length === 0 || batch.ai_status === 'running'}
             title={batch.ai_status === 'running' ? 'Wait for AI categorization to finish, or close this dialog' : undefined}
           >
-            Commit {batch.changed} Change{batch.changed === 1 ? '' : 's'}
+            Commit {batch.rows.length} Transaction{batch.rows.length === 1 ? '' : 's'}
           </Button>
         </>
       }

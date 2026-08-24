@@ -132,7 +132,6 @@ export function StagingReviewDialog({ onClose }: { onClose: () => void }) {
       aiModel={batch.ai_model}
       rows={rows}
       onApplyRow={(row, body) => actions.applyRow(row.key, body)}
-      applyPending={actions.applyPending}
       onCreateRule={(_row, matchPattern, targetCategory, displayLabel) =>
         actions.createRule(matchPattern, targetCategory, displayLabel)
       }
@@ -148,6 +147,17 @@ export function StagingReviewDialog({ onClose }: { onClose: () => void }) {
               later.
             </div>
           )}
+          {/* Labeled from visibleRows - the exact same array the row list
+              above renders - rather than batch.new_extracted, which could
+              disagree with what's actually on screen (REV-4 in
+              UI Review.dc.html). The commit endpoint itself also only ever
+              writes non-duplicate rows, so this count is what actually
+              lands too. */}
+          {batch.ai_status !== 'running' && batch.duplicates_skipped > 0 && (
+            <div className="text-2xs text-muted-2 mr-auto">
+              {batch.duplicates_skipped} duplicate{batch.duplicates_skipped === 1 ? '' : 's'} will be skipped
+            </div>
+          )}
           <Button variant="danger-outline" onClick={handleDiscard} disabled={actions.discardPending}>
             Discard Batch
           </Button>
@@ -157,7 +167,7 @@ export function StagingReviewDialog({ onClose }: { onClose: () => void }) {
             disabled={actions.commitPending || visibleRows.length === 0 || batch.ai_status === 'running'}
             title={batch.ai_status === 'running' ? 'Wait for AI categorization to finish, or close this dialog' : undefined}
           >
-            Commit {batch.new_extracted} Transaction{batch.new_extracted === 1 ? '' : 's'}
+            Commit {visibleRows.length} Transaction{visibleRows.length === 1 ? '' : 's'}
           </Button>
         </>
       }
