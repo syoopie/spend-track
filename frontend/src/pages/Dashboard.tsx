@@ -1,4 +1,4 @@
-import { FileUp, Pencil, Receipt, RefreshCw, SearchX } from 'lucide-react'
+import { ArrowDown, ArrowUp, FileUp, Pencil, Receipt, RefreshCw, SearchX } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useAccounts, useCategories, useDashboardSummary, useMonthlyTotals, useTransactions } from '../api/hooks'
@@ -29,23 +29,67 @@ const PAGE_SIZE = 100
 type SortField = 'date' | 'amount' | 'category'
 type SortDir = 'asc' | 'desc'
 
+// DASH-2 in UI Review.dc.html: "Top Category" used to render a category
+// name through the same 24px mono numeric slot as the other three cards -
+// it read like a broken number and would overflow on a long category name.
+// `variant="text"` gives non-numeric values their own smaller, wrapping
+// sans-serif treatment instead. Deliberately NOT switched to font-display:
+// FEED-4 pinned font-mono + tabular-nums specifically so digit columns
+// align across cards/charts, and Space Grotesk doesn't carry that guarantee
+// - X-8's "extend font-display to metric values" is applied to labels and
+// titles instead, not the numeric value itself, to avoid undoing FEED-4.
 function MetricCard({
   label,
   value,
   valueClassName = '',
   hint,
+  variant = 'number',
+  delta,
 }: {
   label: string
   value: string
   valueClassName?: string
   hint?: string
+  variant?: 'number' | 'text'
+  delta?: ReactNode
 }) {
   return (
     <Card padding="p-4.5">
       <div className="text-xs text-muted mb-2">{label}</div>
-      <div className={`text-2xl font-bold font-mono ${valueClassName}`}>{value}</div>
+      <div
+        className={
+          variant === 'text'
+            ? `text-md font-semibold leading-snug line-clamp-2 ${valueClassName}`
+            : `text-2xl font-bold font-mono ${valueClassName}`
+        }
+      >
+        {value}
+      </div>
+      {delta}
       {hint && <div className="text-xs text-muted-2 mt-1">{hint}</div>}
     </Card>
+  )
+}
+
+// The same same-day-of-period comparison VelocityChart already computes
+// (spend_velocity's last point) reused for a metric-card delta (DASH-2) -
+// no second backend computation needed. Outflow only, since that's the one
+// figure the backend tracks a previous-period cumulative for; a rise in
+// outflow is coloured as the "worse" direction (danger), a fall as
+// "better" (success) - the opposite of how a rising number reads
+// everywhere else in the app, but correct for spending.
+function OutflowDelta({ current, previous, prevLabel }: { current: number; previous: number; prevLabel: string }) {
+  if (previous <= 0) return null
+  const pct = Math.round(((current - previous) / previous) * 100)
+  if (pct === 0) return <div className="text-xs text-muted-2 mt-1">Flat vs {prevLabel}</div>
+  const up = pct > 0
+  const Icon = up ? ArrowUp : ArrowDown
+  return (
+    <div className={`flex items-center gap-1 text-xs mt-1 ${up ? 'text-danger-text' : 'text-success'}`}>
+      <Icon size={11} />
+      {up ? '+' : ''}
+      {pct}% vs {prevLabel}
+    </div>
   )
 }
 
@@ -258,6 +302,14 @@ export function Dashboard() {
     () => (txQ.data ?? []).filter((t) => excludedVisible || !t.is_excluded),
     [txQ.data, excludedVisible],
   )
+  // DASH-7: the outflow metric card always excludes (it comes straight from
+  // the server, which never counts excluded rows), while "Show excluded"
+  // only changes what the feed list below renders - so turning the toggle
+  // on used to add rows to the list with nothing reconciling that against
+  // the card total above it. Computed from txQ.data (fetched with
+  // include_excluded: true) rather than a second request.
+  const excludedInRange = useMemo(() => (txQ.data ?? []).filter((t) => t.is_excluded), [txQ.data])
+  const excludedTotal = useMemo(() => excludedInRange.reduce((sum, t) => sum + Math.abs(t.amount), 0), [excludedInRange])
   const filteredTransactions = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase()
     return visibleTransactions.filter((t) => {
@@ -313,7 +365,6 @@ export function Dashboard() {
     () => filteredTransactions.reduce((m, t) => Math.max(m, Math.abs(t.amount)), 0),
     [filteredTransactions],
   )
-  const distinctAccounts = new Set((txQ.data ?? []).map((t) => t.account_id)).size
 
   // The column header for a divider row needs its own height to stick
   // *below* the divider, not under it - measured once (it's a static
@@ -391,6 +442,7 @@ export function Dashboard() {
   const topCategory = s.category_breakdown[0]
   const prevRangeFrom = shiftMonth(s.date_from, -rangeMonthCount)
   const prevRangeTo = shiftMonth(s.date_to, -rangeMonthCount)
+  const lastVelocity = s.spend_velocity[s.spend_velocity.length - 1]
   const effectiveRange = resolvedRange ?? { from: s.date_from, to: s.date_to }
   const spansMultipleYears = effectiveRange.from.slice(0, 4) !== effectiveRange.to.slice(0, 4)
 
@@ -464,7 +516,20 @@ export function Dashboard() {
           label="Total Outflow"
           value={fmtPlain(s.metrics.total_outflow)}
           valueClassName="text-danger-text"
-          hint={`across ${distinctAccounts} account${distinctAccounts === 1 ? '' : 's'}`}
+          delta={
+            lastVelocity ? (
+              <OutflowDelta
+                current={lastVelocity.current_period_cumulative}
+                previous={lastVelocity.previous_period_cumulative}
+                prevLabel={fmtMonthRangeLabel(prevRangeFrom, prevRangeTo)}
+              />
+            ) : undefined
+          }
+          hint={
+            excludedInRange.length > 0
+              ? `${fmtPlain(excludedTotal)} excluded · ${excludedInRange.length} transaction${excludedInRange.length === 1 ? '' : 's'} not counted`
+              : undefined
+          }
         />
         <MetricCard
           label="Net Expenditure"
@@ -473,8 +538,10 @@ export function Dashboard() {
         />
         <MetricCard
           label="Top Category"
+          variant="text"
           value={topCategory ? topCategory.category : '—'}
-          hint={topCategory ? `${fmtPlain(topCategory.amount)} · ${topCategory.pct}% of outflow` : 'No spending yet'}
+          delta={topCategory ? <div className="text-xs text-accent mt-1">{topCategory.pct}% of outflow</div> : undefined}
+          hint={topCategory ? fmtPlain(topCategory.amount) : 'No spending yet'}
         />
       </div>
 
@@ -546,7 +613,7 @@ export function Dashboard() {
       {/* Transaction feed */}
       <Card ref={feedRef} padding="" className="overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border gap-3 flex-wrap">
-          <div className="text-md font-semibold shrink-0">
+          <div className="text-md font-semibold font-display shrink-0">
             Transaction Feed
             <span className="text-muted-2 font-normal ml-1.5">
               · Showing {pagedTransactions.length} of {filteredTransactions.length}

@@ -116,7 +116,7 @@ export function AiSection({ settings }: { settings: SettingsType | undefined }) 
 
   return (
     <Card className="mb-4">
-      <div className="text-md font-semibold mb-1">AI</div>
+      <div className="text-md font-semibold font-display mb-1">AI</div>
       <div className="text-xs text-muted mb-3.5">
         Lets the app call out to a language model to help with things the built-in rule engine can't handle on its
         own. <strong className="text-text-2">Categorization is currently the only AI-powered feature</strong>:
@@ -253,7 +253,7 @@ export function AiSection({ settings }: { settings: SettingsType | undefined }) 
                   {'{\n  "description": "NETS QR PAYMENT KOPITIAM BLK 123",\n  "amount": -4.50\n}'}
                 </div>
                 <div className="text-2xs mt-1.5" style={{ color: 'var(--color-warning-text)' }}>
-                  One request per uncategorized transaction - just its description and amount, nothing else (no
+                  One request per uncategorized transaction — just its description and amount, nothing else (no
                   account numbers, no other transactions).
                 </div>
               </details>

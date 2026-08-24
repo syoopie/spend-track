@@ -26,7 +26,7 @@ export function AppearanceSection() {
 
   return (
     <Card className="mb-4">
-      <div className="text-md font-semibold mb-1">Appearance</div>
+      <div className="text-md font-semibold font-display mb-1">Appearance</div>
       <div className="text-xs text-muted mb-3.5">Choose the accent color used for buttons, links, and highlights.</div>
       <div className="flex items-center gap-2.5 flex-wrap">
         {ACCENT_PRESETS.map((p) => (

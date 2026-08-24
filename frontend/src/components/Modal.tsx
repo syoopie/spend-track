@@ -107,12 +107,20 @@ export function Modal({
         aria-labelledby={title ? titleId : undefined}
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
-        className="bg-card border border-border rounded-2xl p-6.5 outline-none"
-        style={{ width }}
+        className="bg-card border border-border rounded-2xl p-6.5 outline-none flex flex-col"
+        // REV-8 in UI Review.dc.html: a fixed pixel width with no height
+        // budget meant a dialog with enough content (five stat cards, an AI
+        // banner, a rule banner, a footer) could exceed a shorter window
+        // entirely, with no way to reach what didn't fit - only the row
+        // list some callers scroll internally was ever reachable. Capping
+        // both dimensions against the viewport and making the body (title
+        // stays outside it, so it's always visible) the scroll region means
+        // the dialog itself can never grow past the window.
+        style={{ width, maxWidth: 'calc(100vw - 48px)', maxHeight: 'calc(100vh - 48px)' }}
       >
         {title && (
-          <div className="flex items-center justify-between gap-4 mb-4">
-            <div id={titleId} className="text-base font-bold">
+          <div className="flex items-center justify-between gap-4 mb-4 shrink-0">
+            <div id={titleId} className="text-base font-bold font-display">
               {title}
             </div>
             <button
@@ -124,7 +132,9 @@ export function Modal({
             </button>
           </div>
         )}
-        <div ref={bodyRef}>{children}</div>
+        <div ref={bodyRef} className="overflow-y-auto min-h-0">
+          {children}
+        </div>
       </div>
     </div>
   )

@@ -60,6 +60,7 @@ def _batch_to_response(batch: StagingBatch) -> StagingBatchOut:
     ]
     return StagingBatchOut(
         batch_id=batch.batch_id,
+        created_at=batch.created_at,
         source_filenames=batch.source_filenames,
         bank_name=batch.bank_name,
         accounts=[

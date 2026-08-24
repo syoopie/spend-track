@@ -258,7 +258,7 @@ export function Settings() {
       <AiSection settings={settingsQ.data} />
 
       <Card className="mb-4">
-        <div className="text-md font-semibold mb-1">Region</div>
+        <div className="text-md font-semibold font-display mb-1">Region</div>
         <div className="text-xs text-muted mb-3.5">
           Statement parsing, currency formatting, and the default rule bank are all specific to this region.
         </div>
@@ -285,7 +285,7 @@ export function Settings() {
       </Card>
 
       <Card className="mb-4">
-        <div className="text-md font-semibold mb-3.5">Database</div>
+        <div className="text-md font-semibold font-display mb-3.5">Database</div>
         <div className="text-xs text-muted mb-0.5">Path</div>
         <div className="text-md font-mono mb-3 break-all">{settingsQ.data?.db_path ?? '—'}</div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
@@ -304,7 +304,7 @@ export function Settings() {
       </Card>
 
       <Card style={{ border: '1px solid var(--color-danger-surface-border)' }}>
-        <div className="text-md font-semibold mb-1.5 text-danger-text">Danger Zone</div>
+        <div className="text-md font-semibold font-display mb-1.5 text-danger-text">Danger Zone</div>
         <div className="text-md text-muted mb-3.5 leading-relaxed">
           Selectively clear one part of the local database, or permanently delete everything. None of this can be
           undone.

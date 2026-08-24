@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel
@@ -50,6 +51,7 @@ class BatchRowOut(BaseModel):
 
 class StagingBatchOut(BaseModel):
     batch_id: str
+    created_at: datetime
     source_filenames: list[str]
     bank_name: str
     accounts: list[StagingAccountOut]

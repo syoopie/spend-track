@@ -56,6 +56,22 @@ export function fmtCompact(n: number): string {
   return `${sign}${CURRENCY_SYMBOL}${abs.toFixed(0)}`
 }
 
+// "3 minutes ago" / "2 hours ago" / "5 days ago" - PendingReviewBanner
+// (DASH-6 in UI Review.dc.html) needs to say how stale the pending batch is,
+// not just that one exists. Coarse on purpose (minute/hour/day buckets only)
+// since a pending statement is meant to be reviewed promptly, not tracked to
+// the second.
+export function fmtRelativeTime(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime()
+  const minutes = Math.floor(diffMs / 60_000)
+  if (minutes < 1) return 'just now'
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`
+  const days = Math.floor(hours / 24)
+  return `${days} day${days === 1 ? '' : 's'} ago`
+}
+
 export function fmtBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   const units = ['KB', 'MB', 'GB']

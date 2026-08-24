@@ -39,6 +39,7 @@ export type AiJobStatus = 'disabled' | 'running' | 'done' | 'failed'
 
 export interface StagingBatch {
   batch_id: string
+  created_at: string
   source_filenames: string[]
   bank_name: string
   accounts: StagingAccount[]

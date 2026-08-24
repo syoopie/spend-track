@@ -20,6 +20,7 @@ engine/recategorize_job.py for the other specialization.
 
 import uuid
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 
 from app.engine.pending_batch import PendingBatchStore
 
@@ -96,6 +97,10 @@ class StagingBatch:
     accounts: list[StagingAccount]
     rows: list[StagingRow]
     batch_id: str = field(default_factory=lambda: uuid.uuid4().hex)
+    # When this batch was staged - surfaced by PendingReviewBanner (DASH-6 in
+    # UI Review.dc.html) so the banner can say how long ago the upload
+    # happened, not just that one is pending.
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     # "disabled" (AI off), "running" (background categorization in flight),
     # "done", "failed" (unreachable/errored - see ai_warning). Set once right
     # after the batch is created in upload_statement() and mutated in place
