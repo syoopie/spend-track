@@ -34,10 +34,6 @@ class InvalidRulePatternError(Exception):
     pass
 
 
-class NoAiSuggestionError(Exception):
-    pass
-
-
 def _get_batch(store: PendingBatchStore, batch_id: str) -> Any:
     try:
         return store.get(batch_id)
@@ -53,36 +49,35 @@ def _find_row(store: PendingBatchStore, batch: Any, key: Any) -> Any:
 
 
 def apply_row_update(store: PendingBatchStore, batch_id: str, key: Any, body: BatchRowUpdateRequest) -> Any:
-    """Applies one row's edit within a pending batch: accepts/rejects/
-    restores an AI suggestion (or just applies body.category/subcategory),
+    """Applies one row's edit within a pending batch: either a plain
+    category/matched_label edit, or the single "Restore Default" action -
     then optionally saves the edit as a persistent rule and/or contact
     mapping. Returns the batch (unchanged identity, mutated in place) so the
     caller can build its own response type from it.
 
-    ai_suggested/ai_category/ai_label/ai_rule_pattern are never cleared here
-    - they're a permanent record of what the AI proposed, so a rejected
-    suggestion can always be restored later. reject_ai clears matched_label
-    back to null (the user trusts none of what the AI proposed, not just its
-    category); restore_ai re-applies the row's recorded ai_category/ai_label,
-    ignoring whatever `category` the request otherwise carries.
-    manually_edited locks this row out of the background AI job's apply step
-    (see apply_ai_suggestions below) - once the user has explicitly acted on
-    a row, an AI suggestion that was still in flight when they did can't
-    silently overwrite that decision."""
+    ai_suggested/ai_category/ai_label/ai_rule_pattern and
+    original_category/original_label are never cleared here - they're
+    permanent records (of what the AI proposed, and of the rules engine's
+    original answer) that a manual edit can always be reverted back to via
+    restore_default: prefers the AI suggestion when one exists, else falls
+    back to the original. manually_edited locks this row out of the
+    background AI job's apply step (see apply_ai_suggestions below) - once
+    the user has explicitly acted on a row, an AI suggestion that was still
+    in flight when they did can't silently overwrite that decision."""
     batch = _get_batch(store, batch_id)
     row = _find_row(store, batch, key)
 
     fields: dict = {"subcategory": body.subcategory, "needs_review": False, "manually_edited": True}
-    if body.restore_ai:
-        if row.ai_category is None:
-            raise NoAiSuggestionError()
-        fields["category"] = row.ai_category
-        fields["matched_label"] = row.ai_label
-    elif body.reject_ai:
-        fields["category"] = body.category
-        fields["matched_label"] = None
+    if body.restore_default:
+        if row.ai_category is not None:
+            fields["category"] = row.ai_category
+            fields["matched_label"] = row.ai_label
+        else:
+            fields["category"] = row.original_category
+            fields["matched_label"] = row.original_label
     else:
         fields["category"] = body.category
+        fields["matched_label"] = body.matched_label
     store.update_row(batch_id, key, **fields)
 
     with get_conn() as conn:
@@ -124,6 +119,7 @@ def create_rule_and_rerun(store: PendingBatchStore, batch_id: str, body: RuleQui
             target_category=body.target_category,
             target_subcategory=body.target_subcategory,
             direction=rule_catalog.category_direction(conn, body.target_category),
+            display_label=body.display_label,
         )
         rules = rule_catalog.fetch_active_rules(conn)
         contact_identifiers = contact_directory.fetch_contact_identifiers(conn)

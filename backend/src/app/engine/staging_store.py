@@ -50,6 +50,12 @@ class StagingRow:
     contact_id: int | None
     needs_review: bool
     is_duplicate: bool
+    # The rules/contact/PayNow engine's answer at row creation, before any AI
+    # suggestion or manual edit - permanent, never touched by the update
+    # endpoint. This is what "Restore Default" (see ReviewDialog.tsx) resets
+    # a row to when there's no ai_category to prefer instead.
+    original_category: str
+    original_label: str | None
     # Set once at row creation from the raw description's PayNow markers
     # (engine/paynow.py::is_paynow_transfer) and never touched again by the
     # update endpoint - unlike needs_review, which gets cleared to False on
@@ -65,12 +71,11 @@ class StagingRow:
     is_card_account: bool = False
     # ai_suggested/ai_category/ai_label/ai_rule_pattern are a permanent record
     # of what the AI proposed for this row - set once by the background AI
-    # job and never cleared afterward, even when the user rejects or
-    # overrides the suggestion. That's what lets a rejected suggestion be
-    # restored later (see routers/statements.py's restore_ai handling):
-    # "currently showing the AI's suggestion" is derived by comparing
-    # category/matched_label against ai_category/ai_label, not tracked as
-    # separate mutable state that could drift out of sync.
+    # job and never cleared afterward, even when the user edits over it.
+    # That's what lets "Restore Default" (see engine/batch_review.py) bring
+    # it back later: "currently showing the AI's suggestion" is derived by
+    # comparing category/matched_label against ai_category/ai_label, not
+    # tracked as separate mutable state that could drift out of sync.
     ai_suggested: bool = False
     ai_category: str | None = None
     ai_label: str | None = None

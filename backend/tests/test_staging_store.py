@@ -32,6 +32,8 @@ def make_batch():
                 contact_id=None,
                 needs_review=False,
                 is_duplicate=False,
+                original_category="Transport",
+                original_label="Grab",
             )
         ],
     )

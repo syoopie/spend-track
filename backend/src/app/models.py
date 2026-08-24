@@ -37,6 +37,11 @@ class BatchRowOut(BaseModel):
     needs_review: bool
     is_duplicate: bool
     is_paynow: bool
+    # The rules/contact/PayNow engine's answer before any AI or manual edit -
+    # what "Restore Default" falls back to when there's no ai_category to
+    # prefer instead. See ReviewDialog.tsx.
+    original_category: str
+    original_label: str | None
     ai_suggested: bool
     ai_category: str | None
     ai_label: str | None
@@ -65,6 +70,10 @@ class BatchRowUpdateRequest(BaseModel):
     RecategorizeRowUpdateRequest, identical fields under different names)."""
 
     category: str
+    # The row's display name, editable directly like category - None means
+    # "no custom label, show the raw bank description". Ignored (along with
+    # category) when restore_default is set below.
+    matched_label: str | None = None
     subcategory: str | None = None
     save_as_rule: bool = False
     rule_pattern: str | None = None
@@ -72,12 +81,13 @@ class BatchRowUpdateRequest(BaseModel):
     save_as_contact: bool = False
     contact_name: str | None = None
     contact_identifier: str | None = None
-    # True only for the "Reject Suggestion" action - also clears
-    # matched_label back to null, not just the category. See ReviewDialog.tsx.
-    reject_ai: bool = False
-    # True only for the "Restore Suggestion" action - re-applies the row's
-    # permanently-recorded ai_category/ai_label, ignoring `category` above.
-    restore_ai: bool = False
+    # True only for the single "Restore Default" action (see
+    # ReviewDialog.tsx) - ignores category/matched_label above and instead
+    # re-applies the row's permanently-recorded ai_category/ai_label if an
+    # AI suggestion exists, else its permanently-recorded
+    # original_category/original_label (the rules engine's answer before any
+    # AI or manual edit).
+    restore_default: bool = False
 
 
 class RuleQuickCreateRequest(BaseModel):
@@ -90,6 +100,10 @@ class RuleQuickCreateRequest(BaseModel):
     match_pattern: str
     target_category: str
     target_subcategory: str | None = None
+    # The label the row was showing when this rule was created (see
+    # ReviewDialog.tsx's "Create a rule" section) - carried over so future
+    # matches get the same clean display name, not just this one row's.
+    display_label: str | None = None
 
 
 class RuleRerunRowSnapshot(BaseModel):
@@ -249,6 +263,11 @@ class RuleCreateRequest(BaseModel):
     # exclusion rule, which has no real category to infer from, actually
     # needs this supplied explicitly.
     direction: Literal["inflow", "outflow"] | None = None
+    # The display label a matching transaction gets, replacing the raw bank
+    # description in the UI - same field a rule already carries in the DB
+    # (engine/rules.py falls back to match_pattern.title() when this is
+    # None). Meaningless for an exclusion rule, which never sets a label.
+    display_label: str | None = None
 
 
 class RuleUpdateRequest(BaseModel):
@@ -259,6 +278,12 @@ class RuleUpdateRequest(BaseModel):
     is_exclusion_rule: bool | None = None
     exclusion_reason: str | None = None
     direction: Literal["inflow", "outflow"] | None = None
+    # None here means "leave the stored value alone" (same convention as
+    # every other optional field on this request) - clearing a label back to
+    # "use match_pattern.title()" isn't wired up as a distinct action since
+    # there's no ambiguity to resolve: retyping the pattern's own title-cased
+    # text into this field does the same thing explicitly.
+    display_label: str | None = None
 
 
 class RuleOut(BaseModel):

@@ -155,7 +155,7 @@ def test_patch_staging_row_accepts_rule_pattern(client, monkeypatch):
     assert any(r["match_pattern"] == "AI RULE" for r in rules)
 
 
-def test_staging_reject_then_restore_ai_suggestion(client, monkeypatch):
+def test_staging_manual_edit_then_restore_default_prefers_ai_suggestion(client, monkeypatch):
     _enable_ai(client)
     fake = _FakeProvider(reachable=True)
     monkeypatch.setattr("app.engine.ai_providers.build_provider", lambda settings: fake)
@@ -164,36 +164,45 @@ def test_staging_reject_then_restore_ai_suggestion(client, monkeypatch):
     suggested = next(r for r in final["rows"] if r["ai_suggested"])
     fallback = "Other Income" if suggested["amount"] > 0 else "Others"
 
-    rejected = client.patch(
+    edited = client.patch(
         f"/api/statements/staging/{final['batch_id']}/rows/{suggested['key']}",
-        json={"category": fallback, "reject_ai": True},
+        json={"category": fallback, "matched_label": None},
     ).json()
-    rejected_row = next(r for r in rejected["rows"] if r["key"] == suggested["key"])
-    assert rejected_row["category"] == fallback
-    assert rejected_row["matched_label"] is None
-    # rejecting doesn't erase the AI's proposal - it stays available to restore
-    assert rejected_row["ai_suggested"] is True
-    assert rejected_row["ai_category"] == "Shopping"
+    edited_row = next(r for r in edited["rows"] if r["key"] == suggested["key"])
+    assert edited_row["category"] == fallback
+    assert edited_row["matched_label"] is None
+    # a manual edit doesn't erase the AI's proposal - it stays available to restore
+    assert edited_row["ai_suggested"] is True
+    assert edited_row["ai_category"] == "Shopping"
 
     restored = client.patch(
         f"/api/statements/staging/{final['batch_id']}/rows/{suggested['key']}",
-        json={"category": fallback, "restore_ai": True},
+        json={"category": fallback, "restore_default": True},
     ).json()
     restored_row = next(r for r in restored["rows"] if r["key"] == suggested["key"])
     assert restored_row["category"] == "Shopping"
     assert restored_row["matched_label"] == "AI Label"
 
 
-def test_staging_restore_ai_without_suggestion_404s(client):
+def test_staging_restore_default_without_ai_suggestion_falls_back_to_original(client):
     _upload(client)
     final = _staging_current(client)
     row = final["rows"][0]
+    original_category = row["category"]
+    original_label = row["matched_label"]
 
+    client.patch(
+        f"/api/statements/staging/{final['batch_id']}/rows/{row['key']}",
+        json={"category": "Shopping", "matched_label": "Edited Label"},
+    )
     resp = client.patch(
         f"/api/statements/staging/{final['batch_id']}/rows/{row['key']}",
-        json={"category": row["category"], "restore_ai": True},
+        json={"category": "Shopping", "restore_default": True},
     )
-    assert resp.status_code == 400
+    assert resp.status_code == 200
+    restored_row = next(r for r in resp.json()["rows"] if r["key"] == row["key"])
+    assert restored_row["category"] == original_category
+    assert restored_row["matched_label"] == original_label
 
 
 # --- recategorize --------------------------------------------------------------
@@ -273,7 +282,7 @@ def test_recategorize_row_edit_syncs_into_current_batch(client, monkeypatch):
     assert any(r["match_pattern"] == "MANUAL PATTERN" for r in rules)
 
 
-def test_recategorize_reject_ai_suggestion_clears_label_and_flags(client, monkeypatch):
+def test_recategorize_manual_edit_over_ai_suggestion_keeps_ai_record(client, monkeypatch):
     _upload_and_commit(client)
     _enable_ai(client)
     fake = _FakeProvider(reachable=True, target_category="Shopping")
@@ -286,20 +295,20 @@ def test_recategorize_reject_ai_suggestion_clears_label_and_flags(client, monkey
 
     resp = client.patch(
         f"/api/transactions/recategorize/{batch['batch_id']}/rows/{suggested_row['key']}",
-        json={"category": fallback, "reject_ai": True},
+        json={"category": fallback, "matched_label": None},
     )
     assert resp.status_code == 200
     updated_row = next(r for r in resp.json()["rows"] if r["key"] == suggested_row["key"])
     assert updated_row["category"] == fallback
     assert updated_row["matched_label"] is None
-    # rejecting is not an unrecoverable delete - the suggestion is retained
-    # so it can be restored (see the restore test below)
+    # a manual edit is not an unrecoverable delete - the suggestion is
+    # retained so it can be restored (see the restore test below)
     assert updated_row["ai_suggested"] is True
     assert updated_row["ai_category"] == "Shopping"
     assert updated_row["ai_label"] == "AI Label"
 
 
-def test_recategorize_restore_ai_suggestion_after_reject(client, monkeypatch):
+def test_recategorize_restore_default_after_manual_edit_prefers_ai_suggestion(client, monkeypatch):
     _upload_and_commit(client)
     _enable_ai(client)
     fake = _FakeProvider(reachable=True, target_category="Shopping")
@@ -312,11 +321,11 @@ def test_recategorize_restore_ai_suggestion_after_reject(client, monkeypatch):
 
     client.patch(
         f"/api/transactions/recategorize/{batch['batch_id']}/rows/{suggested_row['key']}",
-        json={"category": fallback, "reject_ai": True},
+        json={"category": fallback, "matched_label": None},
     )
     resp = client.patch(
         f"/api/transactions/recategorize/{batch['batch_id']}/rows/{suggested_row['key']}",
-        json={"category": fallback, "restore_ai": True},
+        json={"category": fallback, "restore_default": True},
     )
     assert resp.status_code == 200
     updated_row = next(r for r in resp.json()["rows"] if r["key"] == suggested_row["key"])
@@ -325,16 +334,25 @@ def test_recategorize_restore_ai_suggestion_after_reject(client, monkeypatch):
     assert updated_row["ai_suggested"] is True
 
 
-def test_recategorize_restore_ai_without_suggestion_404s(client):
+def test_recategorize_restore_default_without_ai_suggestion_falls_back_to_original(client):
     _upload_and_commit(client)
     batch = client.post("/api/transactions/recategorize", json={"date_from": "2024-01", "date_to": "2024-12"}).json()
     row = batch["rows"][0]
+    original_category = row["category"]
+    original_label = row["matched_label"]
 
+    client.patch(
+        f"/api/transactions/recategorize/{batch['batch_id']}/rows/{row['key']}",
+        json={"category": "Shopping", "matched_label": "Edited Label"},
+    )
     resp = client.patch(
         f"/api/transactions/recategorize/{batch['batch_id']}/rows/{row['key']}",
-        json={"category": row["category"], "restore_ai": True},
+        json={"category": "Shopping", "restore_default": True},
     )
-    assert resp.status_code == 400
+    assert resp.status_code == 200
+    updated_row = next(r for r in resp.json()["rows"] if r["key"] == row["key"])
+    assert updated_row["category"] == original_category
+    assert updated_row["matched_label"] == original_label
 
 
 def test_recategorize_discard_calls_ai_cancellation(client, monkeypatch):
@@ -383,12 +401,14 @@ def test_staging_apply_ai_suggestions_skips_manually_edited_rows():
     edited_row = StagingRow(
         index=0, account_number="acc", transaction_date="2024-01-01", raw_description="X", matched_label=None,
         amount=-5.0, fingerprint="fp0", category="Others", subcategory=None, is_excluded=False,
-        exclusion_reason=None, contact_id=None, needs_review=False, is_duplicate=False, manually_edited=True,
+        exclusion_reason=None, contact_id=None, needs_review=False, is_duplicate=False,
+        original_category="Others", original_label=None, manually_edited=True,
     )
     untouched_row = StagingRow(
         index=1, account_number="acc", transaction_date="2024-01-01", raw_description="Y", matched_label=None,
         amount=-5.0, fingerprint="fp1", category="Others", subcategory=None, is_excluded=False,
         exclusion_reason=None, contact_id=None, needs_review=False, is_duplicate=False,
+        original_category="Others", original_label=None,
     )
     batch = StagingBatch(source_filenames=["f.pdf"], bank_name="UOB", accounts=[], rows=[edited_row, untouched_row])
     suggestions = [
@@ -413,12 +433,14 @@ def test_recategorize_apply_ai_suggestions_skips_manually_edited_rows():
     edited_row = RecategorizeRow(
         transaction_id=1, account_number_masked="***1234", transaction_date="2024-01-01", raw_description="X",
         matched_label=None, amount=-5.0, category="Others", subcategory=None, contact_id=None, is_excluded=False,
-        exclusion_reason=None, needs_review=False, manually_edited=True,
+        exclusion_reason=None, needs_review=False,
+        original_category="Others", original_label=None, manually_edited=True,
     )
     untouched_row = RecategorizeRow(
         transaction_id=2, account_number_masked="***1234", transaction_date="2024-01-01", raw_description="Y",
         matched_label=None, amount=-5.0, category="Others", subcategory=None, contact_id=None, is_excluded=False,
         exclusion_reason=None, needs_review=False,
+        original_category="Others", original_label=None,
     )
     batch = RecategorizeBatch(
         date_from="2024-01", date_to="2024-01", account_id=None, scanned=2, changed=0,

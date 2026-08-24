@@ -41,10 +41,20 @@ def insert_rule(
     is_exclusion_rule: bool = False,
     exclusion_reason: str | None = None,
     direction: str,
+    display_label: str | None = None,
 ) -> int:
     cur = conn.execute(
         "INSERT INTO rules (priority, match_pattern, target_category, target_subcategory, "
-        "is_exclusion_rule, exclusion_reason, direction) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (priority, match_pattern, target_category, target_subcategory, is_exclusion_rule, exclusion_reason, direction),
+        "is_exclusion_rule, exclusion_reason, direction, display_label) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            priority,
+            match_pattern,
+            target_category,
+            target_subcategory,
+            is_exclusion_rule,
+            exclusion_reason,
+            direction,
+            display_label,
+        ),
     )
     return cur.lastrowid

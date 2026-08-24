@@ -55,6 +55,18 @@ def rerun_rules_on_batch(
     untouched - same "don't override a decision already made" contract the
     AI job itself follows.
 
+    A row the AI already resolved (ai_suggested=True) but the user hasn't
+    manually touched is a subtler case: it's fair game for a *genuinely
+    matching* new rule to supersede (rules outrank AI everywhere else in
+    this app), but it must not regress back to the bare unresolved fallback
+    just because *some other* rule was created elsewhere in the same batch
+    and this row doesn't happen to match it - that would silently wipe out
+    an unrelated AI suggestion the user hasn't even reviewed yet. So such a
+    row is only overwritten when the fresh result is an actual resolution,
+    not another trip through the same "no rule/contact/PayNow match" fallback
+    that sent it to AI in the first place (mirrors routers/statements.py's
+    own _ai_candidates test).
+
     Returns one dict per changed row: {"key": ..., **previous_field_values} -
     everything the caller needs to offer an undo (see BatchRuleUndoRequest
     in models.py)."""
@@ -76,6 +88,12 @@ def rerun_rules_on_batch(
             ),
             ruleset,
         )
+        if (
+            getattr(row, "ai_suggested", False)
+            and result.category in ("Others", "Other Income")
+            and result.matched_label is None
+        ):
+            continue
         after = {
             "category": result.category,
             "subcategory": result.subcategory,

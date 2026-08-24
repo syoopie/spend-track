@@ -385,6 +385,39 @@ def test_updating_rule_category_recomputes_direction(client):
     assert updated["direction"] == "inflow"
 
 
+def test_rule_display_label_create_and_update(client):
+    r = client.post(
+        "/api/rules",
+        json={"match_pattern": "SP GROUP", "target_category": "Bills & Fees", "display_label": "SP Group Utilities"},
+    ).json()
+    assert r["display_label"] == "SP Group Utilities"
+
+    updated = client.patch(f"/api/rules/{r['id']}", json={"display_label": "Utilities Bill"}).json()
+    assert updated["display_label"] == "Utilities Bill"
+
+    # omitting display_label on an otherwise-unrelated update leaves it alone
+    untouched = client.patch(f"/api/rules/{r['id']}", json={"priority": 50}).json()
+    assert untouched["display_label"] == "Utilities Bill"
+
+
+def test_rule_without_display_label_falls_back_to_titled_pattern(client):
+    r = client.post("/api/rules", json={"match_pattern": "SP GROUP", "target_category": "Bills & Fees"}).json()
+    assert r["display_label"] is None
+
+
+def test_exclusion_rule_ignores_display_label(client):
+    r = client.post(
+        "/api/rules",
+        json={
+            "match_pattern": "INTERNAL TRANSFER",
+            "is_exclusion_rule": True,
+            "exclusion_reason": "Self-transfer",
+            "display_label": "Should be ignored",
+        },
+    ).json()
+    assert r["display_label"] is None
+
+
 # --- settings ---------------------------------------------------------------
 
 

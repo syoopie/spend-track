@@ -65,6 +65,7 @@ def create_rule(body: RuleCreateRequest):
             is_exclusion_rule=body.is_exclusion_rule,
             exclusion_reason=body.exclusion_reason,
             direction=direction,
+            display_label=None if body.is_exclusion_rule else body.display_label,
         )
         row = conn.execute("SELECT * FROM rules WHERE id = ?", (rule_id,)).fetchone()
         return _row_to_out(row)
@@ -107,9 +108,16 @@ def update_rule(rule_id: int, body: RuleUpdateRequest):
             )
         else:
             merged["direction"] = existing["direction"]
+        # Added last so dict insertion order matches the UPDATE's column
+        # order below (this function binds params via *merged.values()).
+        merged["display_label"] = (
+            body.display_label if body.display_label is not None else existing["display_label"]
+        )
+        if merged["is_exclusion_rule"]:
+            merged["display_label"] = None  # meaningless for an exclusion rule - see create_rule's same rule
         conn.execute(
             "UPDATE rules SET priority=?, match_pattern=?, target_category=?, target_subcategory=?, "
-            "is_exclusion_rule=?, exclusion_reason=?, direction=? WHERE id=?",
+            "is_exclusion_rule=?, exclusion_reason=?, direction=?, display_label=? WHERE id=?",
             (*merged.values(), rule_id),
         )
         row = conn.execute("SELECT * FROM rules WHERE id = ?", (rule_id,)).fetchone()

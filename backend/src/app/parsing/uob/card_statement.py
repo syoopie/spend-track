@@ -100,6 +100,12 @@ def parse(pages) -> ParsedStatement:
             if not post_text and not trans_text and not desc_text:
                 continue  # footer noise outside all column ranges
 
+            if "(continued)" in line.text():
+                # Repeated "<card number><holder> (continued)" identity line real
+                # UOB card statements print at the top of continuation pages - see
+                # the same guard/rationale in account_statement.py.
+                continue
+
             if post_text == "Date" and trans_text == "Date":
                 continue  # header row 2 ("Date Date SGD")
             if desc_text.startswith("PREVIOUS BALANCE"):

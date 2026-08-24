@@ -8,7 +8,7 @@ from app.db import get_conn
 from app.engine import batch_review, recategorize_job
 from app.engine.ai_providers import AiCandidate, active_model_name
 from app.engine.ai_providers import cancellation as ai_cancellation
-from app.engine.batch_review import BatchNotFoundError, InvalidRulePatternError, NoAiSuggestionError, RowNotFoundError
+from app.engine.batch_review import BatchNotFoundError, InvalidRulePatternError, RowNotFoundError
 from app.engine.rules import CategorizationRequest, CategorizationRuleset, categorize
 from app.errors import api_error
 from app.models import (
@@ -57,6 +57,8 @@ def _batch_to_out(batch: recategorize_job.RecategorizeBatch) -> RecategorizeBatc
                 # StagingRow.is_duplicate).
                 is_duplicate=False,
                 is_paynow=r.is_paynow,
+                original_category=r.original_category,
+                original_label=r.original_label,
                 ai_suggested=r.ai_suggested,
                 ai_category=r.ai_category,
                 ai_label=r.ai_label,
@@ -226,6 +228,8 @@ def recategorize_transactions(body: RecategorizeRequest, background_tasks: Backg
                     is_excluded=result.is_excluded,
                     exclusion_reason=result.exclusion_reason,
                     needs_review=result.needs_review,
+                    original_category=result.category,
+                    original_label=result.matched_label,
                     is_paynow=result.is_paynow,
                     is_card_account=bool(row["account_is_card"]),
                 )
@@ -299,8 +303,6 @@ def update_recategorize_row(batch_id: str, transaction_id: int, body: BatchRowUp
         raise api_error(404, "RECATEGORIZE_BATCH_NOT_FOUND", "No recategorize batch with that id.")
     except RowNotFoundError:
         raise api_error(404, "RECATEGORIZE_ROW_NOT_FOUND", "No recategorize row for that transaction.")
-    except NoAiSuggestionError:
-        raise api_error(400, "NO_AI_SUGGESTION", "This row has no AI suggestion to restore.")
     return _batch_to_out(batch)
 
 

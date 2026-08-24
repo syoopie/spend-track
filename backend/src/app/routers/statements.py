@@ -6,7 +6,7 @@ from app.db import get_conn
 from app.engine import batch_review
 from app.engine.ai_providers import AiCandidate, active_model_name
 from app.engine.ai_providers import cancellation as ai_cancellation
-from app.engine.batch_review import BatchNotFoundError, InvalidRulePatternError, NoAiSuggestionError, RowNotFoundError
+from app.engine.batch_review import BatchNotFoundError, InvalidRulePatternError, RowNotFoundError
 from app.engine.fingerprint import clean_description, compute_daily_sequence_indices, compute_fingerprint
 from app.engine.identity import derive_account_id
 from app.engine.refunds import find_refund_pairs
@@ -49,6 +49,8 @@ def _batch_to_response(batch: StagingBatch) -> StagingBatchOut:
             needs_review=r.needs_review,
             is_duplicate=r.is_duplicate,
             is_paynow=r.is_paynow,
+            original_category=r.original_category,
+            original_label=r.original_label,
             ai_suggested=r.ai_suggested,
             ai_category=r.ai_category,
             ai_label=r.ai_label,
@@ -209,6 +211,8 @@ async def upload_statement(
                             contact_id=cat.contact_id,
                             needs_review=cat.needs_review,
                             is_duplicate=is_duplicate,
+                            original_category=cat.category,
+                            original_label=cat.matched_label,
                             is_paynow=cat.is_paynow,
                             is_card_account=parsed_account.is_card,
                         )
@@ -279,8 +283,6 @@ def update_staging_row(batch_id: str, index: int, body: BatchRowUpdateRequest):
         raise api_error(404, "STAGING_BATCH_NOT_FOUND", "No staging batch with that id.")
     except RowNotFoundError:
         raise api_error(404, "STAGING_ROW_NOT_FOUND", "No staging row at that index.")
-    except NoAiSuggestionError:
-        raise api_error(400, "NO_AI_SUGGESTION", "This row has no AI suggestion to restore.")
     return _batch_to_response(batch)
 
 

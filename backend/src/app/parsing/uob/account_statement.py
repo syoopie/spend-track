@@ -100,6 +100,14 @@ def parse(pages) -> ParsedStatement:
             if not date_text and not desc_text:
                 continue  # SGD sub-header row, footer boilerplate, etc.
 
+            if "(continued)" in text:
+                # Repeated "<account type> <account number> (continued)" identity
+                # line real UOB statements print at the top of continuation pages.
+                # It has no date, so without this it gets mistaken for a
+                # description-continuation line and appended onto whatever
+                # transaction was last open across the page break (see CLAUDE.md).
+                continue
+
             if "BALANCE B/F" in text or text.strip().startswith("Total"):
                 if current is not None:
                     transactions.append(current)

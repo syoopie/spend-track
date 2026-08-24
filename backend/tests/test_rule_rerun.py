@@ -94,6 +94,77 @@ def test_create_rule_skips_manually_edited_rows(client):
     assert target_rows[1].index not in updated_keys
 
 
+def test_create_rule_does_not_regress_unrelated_ai_suggested_rows(client):
+    """Reproduces the reported bug: creating a rule that an AI-suggested row
+    doesn't even match must not wipe that row's already-applied AI answer -
+    see rule_rerun.py's ai_suggested-aware skip."""
+    from app.engine.staging_store import get_store
+
+    batch_id = _upload(client).json()["batch_id"]
+    batch = get_store().current()
+    _force_two_matching_rows(batch)
+
+    # Simulate the background AI job having already resolved a third,
+    # unrelated row - same shape apply_ai_suggestions leaves behind:
+    # ai_suggested set, category/matched_label overwritten, manually_edited
+    # still False (nobody's reviewed it yet).
+    ai_row = batch.rows[2]
+    ai_row.raw_description = "SOME RANDOM MERCHANT XYZ"
+    ai_row.category = "Dining"
+    ai_row.matched_label = "Random Merchant"
+    ai_row.ai_suggested = True
+    ai_row.ai_category = "Dining"
+    ai_row.ai_label = "Random Merchant"
+    ai_row.manually_edited = False
+
+    resp = client.post(
+        f"/api/statements/staging/{batch_id}/rules",
+        json={"match_pattern": "MEGAMART", "target_category": "Groceries"},
+    )
+    assert resp.status_code == 200
+    result = resp.json()
+
+    updated_keys = {r["key"] for r in result["updated_rows"]}
+    assert ai_row.index not in updated_keys  # untouched by the unrelated rule
+
+    rows_by_index = {r["key"]: r for r in result["batch"]["rows"]}
+    assert rows_by_index[ai_row.index]["category"] == "Dining"
+    assert rows_by_index[ai_row.index]["matched_label"] == "Random Merchant"
+    assert rows_by_index[ai_row.index]["ai_suggested"] is True
+
+
+def test_create_rule_supersedes_ai_suggested_row_when_new_rule_actually_matches(client):
+    """The opposite case: a genuinely matching new rule still outranks an
+    unreviewed AI guess, same priority order the rest of the app follows."""
+    from app.engine.staging_store import get_store
+
+    batch_id = _upload(client).json()["batch_id"]
+    batch = get_store().current()
+    ai_row = batch.rows[0]
+    ai_row.raw_description = "POS PURCHASE MEGAMART SG 0"
+    ai_row.amount = -12.5
+    ai_row.category = "Dining"  # AI's (wrong) guess
+    ai_row.subcategory = None
+    ai_row.matched_label = "Some AI Label"
+    ai_row.ai_suggested = True
+    ai_row.ai_category = "Dining"
+    ai_row.ai_label = "Some AI Label"
+    ai_row.manually_edited = False
+    ai_row.is_duplicate = False
+
+    resp = client.post(
+        f"/api/statements/staging/{batch_id}/rules",
+        json={"match_pattern": "MEGAMART", "target_category": "Groceries"},
+    )
+    assert resp.status_code == 200
+    result = resp.json()
+    updated_keys = {r["key"] for r in result["updated_rows"]}
+    assert ai_row.index in updated_keys  # a genuinely matching new rule still wins
+
+    rows_by_index = {r["key"]: r for r in result["batch"]["rows"]}
+    assert rows_by_index[ai_row.index]["category"] == "Groceries"
+
+
 def test_create_rule_rejects_blank_pattern(client):
     batch_id = _upload(client).json()["batch_id"]
     resp = client.post(

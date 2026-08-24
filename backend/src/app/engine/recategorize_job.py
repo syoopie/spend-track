@@ -37,6 +37,11 @@ class RecategorizeRow:
     is_excluded: bool
     exclusion_reason: str | None
     needs_review: bool
+    # See staging_store.py::StagingRow's identical fields - the rules
+    # engine's freshly-recomputed answer at row creation, permanent, never
+    # touched by the update endpoint.
+    original_category: str
+    original_label: str | None
     # See staging_store.py::StagingRow's identical field - permanent, set
     # once at row creation, never touched by the update endpoint.
     is_paynow: bool = False

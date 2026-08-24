@@ -16,7 +16,6 @@ from app.engine import batch_review, recategorize_job
 from app.engine.batch_review import (
     BatchNotFoundError,
     InvalidRulePatternError,
-    NoAiSuggestionError,
     RowNotFoundError,
 )
 from app.engine.pending_batch import PendingBatchStore
@@ -49,6 +48,8 @@ def make_staging_row(index: int, raw_description: str = "GRAB RIDE", amount: flo
         contact_id=None,
         needs_review=False,
         is_duplicate=False,
+        original_category="Others" if amount < 0 else "Other Income",
+        original_label=None,
     )
     fields.update(overrides)
     return StagingRow(**fields)
@@ -78,12 +79,25 @@ def test_apply_row_update_applies_category_and_clears_needs_review(db):
     assert row.manually_edited is True
 
 
-def test_apply_row_update_reject_ai_clears_label_but_keeps_ai_record(db):
+def test_apply_row_update_can_edit_label_alongside_category(db):
+    store = get_store()
+    row = make_staging_row(0)
+    batch_id = store.create(make_staging_batch([row]))
+
+    batch_review.apply_row_update(
+        store, batch_id, 0, BatchRowUpdateRequest(category="Shopping", matched_label="My Label")
+    )
+
+    assert row.category == "Shopping"
+    assert row.matched_label == "My Label"
+
+
+def test_apply_row_update_manual_edit_over_ai_suggestion_keeps_ai_record(db):
     store = get_store()
     row = make_staging_row(0, ai_suggested=True, ai_category="Shopping", ai_label="AI Label")
     batch_id = store.create(make_staging_batch([row]))
 
-    batch_review.apply_row_update(store, batch_id, 0, BatchRowUpdateRequest(category="Others", reject_ai=True))
+    batch_review.apply_row_update(store, batch_id, 0, BatchRowUpdateRequest(category="Others", matched_label=None))
 
     assert row.category == "Others"
     assert row.matched_label is None
@@ -91,13 +105,30 @@ def test_apply_row_update_reject_ai_clears_label_but_keeps_ai_record(db):
     assert row.ai_category == "Shopping"
 
 
-def test_apply_row_update_restore_ai_without_suggestion_raises(db):
+def test_apply_row_update_restore_default_prefers_ai_suggestion(db):
     store = get_store()
-    row = make_staging_row(0)
+    row = make_staging_row(0, ai_suggested=True, ai_category="Shopping", ai_label="AI Label")
     batch_id = store.create(make_staging_batch([row]))
+    # Manually diverge from the AI suggestion first.
+    batch_review.apply_row_update(store, batch_id, 0, BatchRowUpdateRequest(category="Others", matched_label=None))
 
-    with pytest.raises(NoAiSuggestionError):
-        batch_review.apply_row_update(store, batch_id, 0, BatchRowUpdateRequest(category="Others", restore_ai=True))
+    batch_review.apply_row_update(store, batch_id, 0, BatchRowUpdateRequest(category="Others", restore_default=True))
+
+    assert row.category == "Shopping"
+    assert row.matched_label == "AI Label"
+
+
+def test_apply_row_update_restore_default_falls_back_to_original_without_ai(db):
+    store = get_store()
+    row = make_staging_row(0, original_category="Groceries", original_label="Original Label")
+    batch_id = store.create(make_staging_batch([row]))
+    # Manually diverge from the original first.
+    batch_review.apply_row_update(store, batch_id, 0, BatchRowUpdateRequest(category="Shopping", matched_label="Edited"))
+
+    batch_review.apply_row_update(store, batch_id, 0, BatchRowUpdateRequest(category="Shopping", restore_default=True))
+
+    assert row.category == "Groceries"
+    assert row.matched_label == "Original Label"
 
 
 def test_apply_row_update_missing_batch_raises(db):
@@ -156,6 +187,21 @@ def test_create_rule_and_rerun_reruns_other_open_rows(db):
     assert {c["key"] for c in changes} == {1}  # only the still-open row changed
     assert resolved_row.category != "Dining"  # already resolved, left alone
     assert batch is store.get(batch_id)
+
+
+def test_create_rule_and_rerun_carries_display_label_into_rule(db):
+    store = get_store()
+    prompting_row = make_staging_row(0, raw_description="STARBUCKS SG", category="Dining", manually_edited=True)
+    other_open_row = make_staging_row(1, raw_description="STARBUCKS ORCHARD")
+    batch_id = store.create(make_staging_batch([prompting_row, other_open_row]))
+
+    batch_review.create_rule_and_rerun(
+        store,
+        batch_id,
+        RuleQuickCreateRequest(match_pattern="STARBUCKS", target_category="Dining", display_label="Starbucks"),
+    )
+
+    assert other_open_row.matched_label == "Starbucks"
 
 
 def test_create_rule_and_rerun_rejects_blank_pattern(db):
