@@ -2,7 +2,10 @@ import { CheckCircle2, Loader2, XCircle } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useAiStatus, useUpdateAiSettings } from '../api/hooks'
 import type { AiProviderKind, Settings as SettingsType } from '../api/types'
+import { Button } from './Button'
+import { Card } from './Card'
 import { Checkbox } from './Checkbox'
+import { Input } from './Field'
 import { Tabs } from './Tabs'
 import { Toast, type ToastMessage } from './Toast'
 
@@ -124,8 +127,8 @@ export function AiSection({ settings }: { settings: SettingsType | undefined }) 
   }
 
   return (
-    <div className="bg-card border border-border rounded-xl p-5 mb-4">
-      <div className="text-[13px] font-semibold mb-1">AI</div>
+    <Card className="mb-4">
+      <div className="text-md font-semibold mb-1">AI</div>
       <div className="text-xs text-muted mb-3.5">
         Lets the app call out to a language model to help with things the built-in rule engine can't handle on its
         own. <strong className="text-text-2">Categorization is currently the only AI-powered feature</strong>:
@@ -133,7 +136,7 @@ export function AiSection({ settings }: { settings: SettingsType | undefined }) 
         automatically on every upload and Recategorize run, always shown for review before it's relied on.
       </div>
 
-      <label className="flex items-center gap-2 text-[13px] text-text cursor-pointer w-fit">
+      <label className="flex items-center gap-2 text-md text-text cursor-pointer w-fit">
         <Checkbox checked={enabled} onChange={handleToggleEnabled} />
         Enable AI
       </label>
@@ -152,23 +155,13 @@ export function AiSection({ settings }: { settings: SettingsType | undefined }) 
             <div className="flex flex-col gap-3 mb-1">
               <div>
                 <div className="text-xs text-muted mb-1">Ollama URL</div>
-                <input
-                  value={ollamaUrl}
-                  onChange={(e) => setOllamaUrl(e.target.value)}
-                  placeholder="http://localhost:11434"
-                  className="w-full box-border px-3 py-2 rounded-lg border border-border bg-input text-text text-[13px] font-mono"
-                />
+                <Input mono value={ollamaUrl} onChange={(e) => setOllamaUrl(e.target.value)} placeholder="http://localhost:11434" />
               </div>
               <div>
                 <div className="text-xs text-muted mb-1">Model</div>
-                <input
-                  value={ollamaModel}
-                  onChange={(e) => setOllamaModel(e.target.value)}
-                  placeholder="llama3.1"
-                  className="w-full box-border px-3 py-2 rounded-lg border border-border bg-input text-text text-[13px] font-mono"
-                />
+                <Input mono value={ollamaModel} onChange={(e) => setOllamaModel(e.target.value)} placeholder="llama3.1" />
                 {detectedModels.length > 0 && (
-                  <div className="text-[11px] text-muted mt-1.5 flex flex-wrap gap-1.5">
+                  <div className="text-2xs text-muted mt-1.5 flex flex-wrap gap-1.5">
                     Detected:
                     {detectedModels.map((m) => (
                       <button
@@ -190,13 +183,8 @@ export function AiSection({ settings }: { settings: SettingsType | undefined }) 
             <div className="flex flex-col gap-3 mb-1">
               <div>
                 <div className="text-xs text-muted mb-1">Base URL</div>
-                <input
-                  value={openaiBaseUrl}
-                  onChange={(e) => setOpenaiBaseUrl(e.target.value)}
-                  placeholder="https://api.openai.com/v1"
-                  className="w-full box-border px-3 py-2 rounded-lg border border-border bg-input text-text text-[13px] font-mono"
-                />
-                <div className="text-[11px] text-muted mt-1">
+                <Input mono value={openaiBaseUrl} onChange={(e) => setOpenaiBaseUrl(e.target.value)} placeholder="https://api.openai.com/v1" />
+                <div className="text-2xs text-muted mt-1">
                   Also works with OpenRouter, Groq, together.ai, a self-hosted LiteLLM proxy, or anything else
                   exposing the OpenAI chat-completions API - including Codex-family models, just point this at
                   OpenAI.
@@ -204,24 +192,19 @@ export function AiSection({ settings }: { settings: SettingsType | undefined }) 
               </div>
               <div>
                 <div className="text-xs text-muted mb-1">API key</div>
-                <input
+                <Input
+                  mono
                   type="password"
                   value={openaiKey}
                   onChange={(e) => setOpenaiKey(e.target.value)}
                   placeholder={openaiKeySet ? `Set · sk-…${settings?.openai_api_key_last4}` : 'sk-...'}
-                  className="w-full box-border px-3 py-2 rounded-lg border border-border bg-input text-text text-[13px] font-mono"
                 />
               </div>
               <div>
                 <div className="text-xs text-muted mb-1">Model</div>
-                <input
-                  value={openaiModel}
-                  onChange={(e) => setOpenaiModel(e.target.value)}
-                  placeholder="gpt-4o-mini"
-                  className="w-full box-border px-3 py-2 rounded-lg border border-border bg-input text-text text-[13px] font-mono"
-                />
+                <Input mono value={openaiModel} onChange={(e) => setOpenaiModel(e.target.value)} placeholder="gpt-4o-mini" />
                 {detectedModels.length > 0 && (
-                  <div className="text-[11px] text-muted mt-1.5 flex flex-wrap gap-1.5 max-w-full overflow-hidden">
+                  <div className="text-2xs text-muted mt-1.5 flex flex-wrap gap-1.5 max-w-full overflow-hidden">
                     Detected:
                     {detectedModels.slice(0, 8).map((m) => (
                       <button
@@ -243,22 +226,17 @@ export function AiSection({ settings }: { settings: SettingsType | undefined }) 
             <div className="flex flex-col gap-3 mb-1">
               <div>
                 <div className="text-xs text-muted mb-1">API key</div>
-                <input
+                <Input
+                  mono
                   type="password"
                   value={anthropicKey}
                   onChange={(e) => setAnthropicKey(e.target.value)}
                   placeholder={anthropicKeySet ? `Set · sk-ant-…${settings?.anthropic_api_key_last4}` : 'sk-ant-...'}
-                  className="w-full box-border px-3 py-2 rounded-lg border border-border bg-input text-text text-[13px] font-mono"
                 />
               </div>
               <div>
                 <div className="text-xs text-muted mb-1">Model</div>
-                <input
-                  value={anthropicModel}
-                  onChange={(e) => setAnthropicModel(e.target.value)}
-                  placeholder="claude-sonnet-5"
-                  className="w-full box-border px-3 py-2 rounded-lg border border-border bg-input text-text text-[13px] font-mono"
-                />
+                <Input mono value={anthropicModel} onChange={(e) => setAnthropicModel(e.target.value)} placeholder="claude-sonnet-5" />
               </div>
             </div>
           )}
@@ -266,15 +244,15 @@ export function AiSection({ settings }: { settings: SettingsType | undefined }) 
           {isCloudProvider && (
             <div
               className="rounded-lg px-3.5 py-3 mt-3.5"
-              style={{ background: 'oklch(24% 0.05 70)', border: '1px solid oklch(40% 0.08 70)' }}
+              style={{ background: 'var(--color-warning-surface)', border: '1px solid var(--color-warning-surface-border)' }}
             >
-              <div className="text-[12px] mb-2" style={{ color: 'oklch(85% 0.1 70)' }}>
+              <div className="text-xs mb-2" style={{ color: 'var(--color-warning-text)' }}>
                 Transaction descriptions and amounts will be sent to {PROVIDER_LABELS[provider]}'s servers when
                 categorizing. This app is local-first by design — only continue if you're comfortable with that.
               </div>
               <label
-                className="flex items-center gap-2 text-[12px] cursor-pointer w-fit"
-                style={{ color: 'oklch(85% 0.1 70)' }}
+                className="flex items-center gap-2 text-xs cursor-pointer w-fit"
+                style={{ color: 'var(--color-warning-text)' }}
               >
                 <Checkbox checked={privacyAck} onChange={setPrivacyAck} />
                 I understand transaction data will leave this device
@@ -283,44 +261,36 @@ export function AiSection({ settings }: { settings: SettingsType | undefined }) 
           )}
 
           <div className="flex items-center gap-3 mt-4">
-            <button
-              onClick={handleSave}
-              disabled={updateAi.isPending || !canSave}
-              className="text-[13px] font-semibold px-4 py-2.5 rounded-lg border-none bg-accent text-accent-fg cursor-pointer disabled:opacity-60"
-            >
+            <Button variant="primary" onClick={handleSave} disabled={updateAi.isPending || !canSave}>
               Save
-            </button>
-            <button
-              onClick={() => statusQ.refetch()}
-              disabled={statusQ.isFetching || !statusAppliesToThisTab}
-              className="text-[12px] px-3 py-2 rounded-lg border border-border bg-input text-text cursor-pointer disabled:opacity-60"
-            >
+            </Button>
+            <Button size="sm" onClick={() => statusQ.refetch()} disabled={statusQ.isFetching || !statusAppliesToThisTab}>
               Recheck connection
-            </button>
+            </Button>
             {!statusAppliesToThisTab ? (
-              <span className="text-[12px] text-muted">Save to test this provider's connection.</span>
+              <span className="text-xs text-muted">Save to test this provider's connection.</span>
             ) : statusQ.isFetching ? (
-              <span className="text-[12px] text-muted flex items-center gap-1.5">
+              <span className="text-xs text-muted flex items-center gap-1.5">
                 <Loader2 size={13} className="animate-spin" /> Checking…
               </span>
             ) : statusQ.data?.reachable ? (
-              <span className="text-[12px] text-success flex items-center gap-1.5">
+              <span className="text-xs text-success flex items-center gap-1.5">
                 <CheckCircle2 size={13} /> Connected
                 {statusQ.data.models.length > 0 && ` · ${statusQ.data.models.length} model(s) available`}
               </span>
             ) : statusQ.data ? (
-              <span className="text-[12px] flex items-center gap-1.5" style={{ color: 'oklch(70% 0.18 25)' }}>
+              <span className="text-xs flex items-center gap-1.5" style={{ color: 'var(--color-danger-text)' }}>
                 <XCircle size={13} /> Unreachable{statusQ.data.error ? ` · ${statusQ.data.error}` : ''}
               </span>
             ) : null}
           </div>
           {updateAi.isError && (
-            <div className="text-[12px] text-danger-text mt-2.5">
+            <div className="text-xs text-danger-text mt-2.5">
               {updateAi.error instanceof Error ? updateAi.error.message : 'Could not save AI settings.'}
             </div>
           )}
         </div>
       )}
-    </div>
+    </Card>
   )
 }

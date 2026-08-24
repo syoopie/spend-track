@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet">
+<style>
+  doc-page:not(:defined) { visibility: hidden; }
+  body { margin: 0; }
+  a { color: #7a2f6c; }
+  a:hover { color: #a33f90; }
+</style>
+<script src="./doc-page.js"></script>
+</helmet>
+
+<doc-page margin="0.8in">
+
+<div style="font-family:'Space Grotesk',Helvetica,Arial,sans-serif; color:#16161a; font-size:11pt; line-height:1.55">
+
+  <div style="display:flex; align-items:baseline; justify-content:space-between; gap:24px; border-bottom:2px solid #16161a; padding-bottom:10px; margin-bottom:26px">
+    <div style="font-size:23pt; font-weight:700; letter-spacing:-0.02em">Expenditure Tracker — UI Review</div>
+    <div style="font-size:9pt; color:#6b6b76; white-space:nowrap">24 Aug 2026 · frontend/src</div>
+  </div>
+
+  <p style="font-family:Newsreader,Georgia,serif; font-size:13pt; line-height:1.5; margin:0 0 22px">Every feature you need is already here. What is missing is a <em>system</em>: shared primitives, one loading model, one save model, one way to say “this worked”. Nearly all of the jankiness traces back to five systemic gaps, and fixing those removes most of the individual symptoms below at once.</p>
+
+  <div style="background:#f4f2ef; border:1px solid #ddd8d2; border-radius:8px; padding:16px 18px; margin-bottom:26px; break-inside:avoid">
+    <div style="font-size:9pt; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#6b6b76; margin-bottom:8px">How this was tested</div>
+    <div style="font-size:10pt; line-height:1.5; color:#3a3a42">Every UI file under <code style="font-family:ui-monospace,Menlo,monospace; font-size:9.5pt">frontend/src</code> was read. The Dashboard was then rebuilt pixel-for-pixel from source and loaded with a synthetic dataset at your stated scale — 2 accounts, 12 months, ~100 transactions/month (1,180 rows), 3-month range selected — so density problems show up rather than being guessed at. Your dev server could not be reached from here, so category names, hues and default rules are inferred from the icon map and type definitions; anything depending on the real seed data is marked <em>verify</em>.</div>
+  </div>
+
+  <div style="font-size:15pt; font-weight:700; margin:0 0 4px">Five root causes</div>
+  <div style="font-size:10pt; color:#6b6b76; margin-bottom:16px">Fix these and roughly two-thirds of the findings below disappear on their own.</div>
+
+  <sc-for list="{{ roots }}" as="r" hint-placeholder-count="5">
+    <div style="display:grid; grid-template-columns:26px 1fr; gap:14px; margin-bottom:16px; break-inside:avoid">
+      <div style="font-family:ui-monospace,Menlo,monospace; font-size:15pt; font-weight:700; color:#c9c4bd; line-height:1.1">{{ r.n }}</div>
+      <div>
+        <div style="font-size:11.5pt; font-weight:600; margin-bottom:3px">{{ r.title }}</div>
+        <div style="font-size:10pt; line-height:1.5; color:#3a3a42">{{ r.body }}</div>
+      </div>
+    </div>
+  </sc-for>
+
+  <div style="height:1px; background:#ddd8d2; margin:28px 0"></div>
+
+  <div style="font-size:15pt; font-weight:700; margin:0 0 4px">Findings</div>
+  <div style="font-size:10pt; color:#6b6b76; margin-bottom:20px">P0 = actively hurts the daily loop · P1 = visible unpolish or a real gap · P2 = worth doing once the rest is settled. Each fix is written to be handed straight to an implementing agent.</div>
+
+  <sc-for list="{{ sections }}" as="sec" hint-placeholder-count="6">
+    <div style="margin-bottom:26px">
+      <div style="font-size:12pt; font-weight:700; background:#16161a; color:#fff; display:inline-block; padding:3px 10px; border-radius:4px; margin-bottom:14px">{{ sec.title }}</div>
+      <sc-for list="{{ sec.items }}" as="it" hint-placeholder-count="5">
+        <div style="border-left:3px solid {{ it.color }}; padding:0 0 0 14px; margin-bottom:16px; break-inside:avoid">
+          <div style="display:flex; align-items:baseline; gap:8px; margin-bottom:4px">
+            <span style="font-family:ui-monospace,Menlo,monospace; font-size:8.5pt; font-weight:700; color:#fff; background:{{ it.color }}; padding:1px 6px; border-radius:3px">{{ it.sev }}</span>
+            <span style="font-family:ui-monospace,Menlo,monospace; font-size:8.5pt; color:#9a958e">{{ it.id }}</span>
+            <span style="font-size:11pt; font-weight:600">{{ it.title }}</span>
+          </div>
+          <div style="font-size:10pt; line-height:1.5; color:#3a3a42; margin-bottom:5px">{{ it.what }}</div>
+          <div style="font-size:10pt; line-height:1.5; color:#16161a"><span style="font-weight:700">Fix.</span> {{ it.fix }}</div>
+          <div style="font-family:ui-monospace,Menlo,monospace; font-size:8.5pt; color:#9a958e; margin-top:4px">{{ it.files }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </sc-for>
+
+  <div style="height:1px; background:#ddd8d2; margin:28px 0"></div>
+
+  <div style="font-size:15pt; font-weight:700; margin:0 0 14px">Suggested order of work</div>
+  <sc-for list="{{ batches }}" as="b" hint-placeholder-count="5">
+    <div style="display:grid; grid-template-columns:112px 1fr; gap:16px; padding:11px 0; border-bottom:1px solid #e6e2dc; break-inside:avoid">
+      <div>
+        <div style="font-size:10.5pt; font-weight:700">{{ b.label }}</div>
+        <div style="font-size:9pt; color:#9a958e">{{ b.effort }}</div>
+      </div>
+      <div style="font-size:10pt; line-height:1.5; color:#3a3a42">{{ b.body }}</div>
+    </div>
+  </sc-for>
+
+  <p style="font-family:Newsreader,Georgia,serif; font-size:11.5pt; line-height:1.5; color:#3a3a42; margin:24px 0 0">Batch 1 and 2 together are what will make the app stop feeling janky. They touch almost no product logic — they replace repeated inline styling with primitives and give every async action a predictable loading, success and error state.</p>
+
+</div>
+
+</doc-page>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const P0 = '#a8332a', P1 = '#b5762a', P2 = '#5a6470'
+
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      roots: [
+        {
+          n: '01',
+          title: 'No shared primitives — every button and input is restyled by hand',
+          body: 'Buttons are re-declared inline at ~40 call sites in at least five near-identical variants (px-4 py-2.5, px-5 py-2.5, px-4.5 py-2.5, px-3.5 py-2, px-3 py-2), and the input string "w-full box-border px-3 py-2.5 rounded-lg border border-border bg-input text-text text-[13px]" is copy-pasted about fifteen times. Nothing is wrong in isolation; collectively the small inconsistencies read as unpolish. There is no Button, Input, Field, Card, EmptyState or PageHeader component.',
+        },
+        {
+          n: '02',
+          title: 'Tokens exist but are routinely bypassed',
+          body: 'index.css defines a proper @theme palette, then components hard-code oklch() literals for every warning, AI, success and danger surface — ReviewDialog has six local constants, PendingReviewBanner, Rules, Settings, AiSection and Toast each re-derive their own. Sizes are equally ad-hoc: text-[10.5px], text-[11px], text-[12px], text-[13px], text-[15px], text-[22px] plus p-4.5, p-6.5, w-6.5, w-13, and radii at 5, 6, 8, 10, 12 and 16px.',
+        },
+        {
+          n: '03',
+          title: 'Loading blanks whole screens instead of holding layout',
+          body: 'The Dashboard gates its entire render on summaryQ.isLoading, and the query key contains the params object — so every range or account change produces a brand-new key, isLoading flips true, and the whole page is replaced by the words "Loading dashboard…" before snapping back. Changing a filter should never make the page disappear. Every other screen loads with the same bare grey sentence.',
+        },
+        {
+          n: '04',
+          title: 'Success and failure are mostly silent',
+          body: 'Toast exists but is rendered in exactly one place (the AI enable checkbox). Saving a rule, saving a contact, reordering rules, deleting a rule, importing a CSV, editing a transaction and committing a batch all either say nothing or leave an inline box that never dismisses. Several mutations have no error path at all, so a failed save looks identical to a successful one.',
+        },
+        {
+          n: '05',
+          title: 'Half the interactive surface is not a control',
+          body: 'Transaction rows, review rows, donut slices, legend entries and rule rows are div elements with onClick — not reachable by keyboard, invisible to screen readers, and with no hover or focus affordance to say they are clickable. Tables are CSS grids of divs with no table semantics, and Modal has no role, no focus trap, no Escape handler and no scroll lock.',
+        },
+      ],
+
+      sections: [
+        {
+          title: 'Dashboard — transaction feed',
+          items: [
+            {
+              sev: 'P0', id: 'FEED-1', color: P0,
+              title: 'Category badges wrap to two lines, so row heights are uneven',
+              what: 'The category column is a fixed 140px while badges are full-length text with an icon. At real data "Bills & Utilities", "Transfers Out", "Food & Dining" and "Entertainment" all wrap, and every wrapped row is taller than its neighbours. Scanning 300 rows down a column that jitters is the single most visible source of jankiness in the app.',
+              fix: 'Widen the category column to 168px, add white-space: nowrap to CategoryBadge, and truncate with an ellipsis plus title attribute past that. Reallocate width by capping the description column: grid-cols-[76px_minmax(0,1fr)_168px_120px_120px_28px_28px].',
+              files: 'pages/Dashboard.tsx · components/CategoryBadge.tsx',
+            },
+            {
+              sev: 'P0', id: 'FEED-2', color: P0,
+              title: 'Amounts drop their sign and encode direction in colour alone',
+              what: 'The feed prints fmtPlain(Math.abs(tx.amount)) and expresses inflow versus outflow only through amountIntensityColor. The log-intensity scale drops chroma as low as 0.048, so small amounts render as near-grey on the card and a $10.13 debit and a $10.13 credit are almost indistinguishable. Colour is the only channel carrying the most important fact in the row.',
+              fix: 'Render the sign: fmtSigned for inflow, plain for outflow (or a leading minus), exactly as ReviewDialog already does. Keep two fixed colours — success for inflow, text for outflow — and express magnitude with font weight or a thin right-aligned bar rather than chroma. Retire amountIntensityColor or reserve it for the bar.',
+              files: 'pages/Dashboard.tsx · lib/format.ts',
+            },
+            {
+              sev: 'P0', id: 'FEED-3', color: P0,
+              title: 'Column header is not sticky and 1,000+ rows render unpaginated',
+              what: 'The page header sticks at top:0 but the feed\'s own column header does not, so after a few screens of scrolling the columns are unlabelled. An all-time range renders every transaction — about 1,200 nodes at your scale, each with an icon SVG — into one list with no pagination, no windowing and no row count anywhere.',
+              fix: 'Make the column header sticky beneath the page header (sticky top-[Npx] with the header height as a CSS variable). Add "Showing X of Y transactions" beside the feed title, and either page at 100 rows with a "Load more" footer or virtualise with @tanstack/react-virtual.',
+              files: 'pages/Dashboard.tsx',
+            },
+            {
+              sev: 'P1', id: 'FEED-4', color: P1,
+              title: 'Numbers are not tabular, so amount columns do not align',
+              what: 'font-mono resolves to ui-monospace / SFMono / Menlo / Consolas, which differs per platform, and font-variant-numeric: tabular-nums is set nowhere in the codebase. Digit columns in the feed, metric cards and charts drift.',
+              fix: 'Add font-variant-numeric: tabular-nums to the mono utility in index.css (or a .num class applied to every currency figure) and pin one webfont with true tabular figures if you want cross-platform identity.',
+              files: 'index.css',
+            },
+            {
+              sev: 'P1', id: 'FEED-5', color: P1,
+              title: 'Dates have no year and no grouping across a 12-month range',
+              what: 'fmtDate returns "Aug 28". Over a multi-month or all-time range identical labels repeat across different years with nothing separating months.',
+              fix: 'Insert a sticky month divider row ("August 2026 · 104 transactions · $4,182 out") whenever the month changes, and include the year in fmtDate when the selected range spans more than one year.',
+              files: 'pages/Dashboard.tsx · lib/format.ts',
+            },
+            {
+              sev: 'P1', id: 'FEED-6', color: P1,
+              title: 'Filter state is half-persisted and invisible once set',
+              what: 'range, accountId and showFullName persist to localStorage; searchText, categoryFilter and excludedVisible do not. Clicking a donut slice sets a category filter that lives in a select several hundred pixels below the fold, so the feed silently shrinks with no indication why.',
+              fix: 'Show active filters as dismissible chips in the feed header ("Category: Groceries ×", "Search: kopitiam ×") with a "Clear all". Persist all six filter values through dashboardFilters, and mirror them in the URL query string so a filtered view is linkable and survives reload.',
+              files: 'pages/Dashboard.tsx · lib/dashboardFilters.ts',
+            },
+            {
+              sev: 'P2', id: 'FEED-7', color: P2,
+              title: 'No sorting, no totals, no keyboard access to a row',
+              what: 'Order is fixed to date-descending, there is no footer total for the filtered set, and the edit affordance is a hover-only pencil on a non-focusable row.',
+              fix: 'Make column headers clickable to sort by date, amount and category. Add a footer row with the filtered count and net total. Make each row a button or add tabIndex plus Enter to open the editor, and keep the pencil visible at 40% opacity so the affordance exists before hover.',
+              files: 'pages/Dashboard.tsx',
+            },
+            {
+              sev: 'P2', id: 'FEED-8', color: P2,
+              title: 'Search is unbounded and narrow',
+              what: 'Every keystroke re-filters the full array with no debounce, and only matched_label and raw_description are searched — not amount, category or account.',
+              fix: 'Debounce input by 150ms, extend the haystack to category, account and formatted amount, and highlight the matched substring in the description cell.',
+              files: 'pages/Dashboard.tsx',
+            },
+          ],
+        },
+        {
+          title: 'Dashboard — header, metrics, charts',
+          items: [
+            {
+              sev: 'P0', id: 'DASH-1', color: P0,
+              title: 'Changing the date range blanks the whole page',
+              what: 'See root cause 03. useDashboardSummary keys on the params object, so every range or account change is a cold load and the page is replaced by "Loading dashboard…". With a sticky header and four cards above the fold, that flash on every interaction is what makes the app feel unfinished.',
+              fix: 'Add placeholderData: keepPreviousData to useDashboardSummary, useTransactions and useMonthlyTotals, and drop the early-return loading gate. Keep the layout mounted and show a subtle busy state (a 2px accent progress line under the header, or 60% opacity on the affected cards). Set a global staleTime and refetchOnWindowFocus: false on the QueryClient.',
+              files: 'api/hooks.ts · pages/Dashboard.tsx · main.tsx',
+            },
+            {
+              sev: 'P1', id: 'DASH-2', color: P1,
+              title: 'Metric cards mix a text value into a numeric layout, and carry no comparison',
+              what: '"Top Category" renders a category name at 24px in the mono numeric slot — it looks like a broken number and will overflow the card with a longer name. The hints are three different kinds of statement ("25 inflow transactions", "across 2 accounts", "over 3 months"), and none of the four cards shows a change versus the previous period even though the velocity chart already computes exactly that.',
+              fix: 'Give MetricCard an explicit variant for text values (16px, sans, two-line clamp) and a delta slot rendering "+12% vs Mar–May" with an arrow. Move the top-category share into the delta slot. Replace "across 2 accounts" with something about outflow, or drop it — a hint that does not describe its own metric is noise.',
+              files: 'pages/Dashboard.tsx',
+            },
+            {
+              sev: 'P1', id: 'DASH-3', color: P1,
+              title: 'Every chart card states its title twice',
+              what: 'The tab reads "Cash Flow" and the panel heading immediately below reads "Cash Flow — Recent Trend"; the same duplication occurs for "Category Breakdown". Two stacked headings in a 20px-padded card eat the space the chart needs.',
+              fix: 'Pass bare={true} charts a subtitle instead of a title, and render the qualifier ("recent trend", "most recent 12 months") as 11px muted text on the tab row\'s right edge. Delete the inner h-titles from CashFlowChart, VelocityChart and CategoryDonut when bare.',
+              files: 'components/CashFlowChart.tsx · VelocityChart.tsx · CategoryDonut.tsx',
+            },
+            {
+              sev: 'P1', id: 'DASH-4', color: P1,
+              title: 'The two tabs of one card behave like different products',
+              what: 'Spend Velocity has a crosshair, a hover tooltip and axis labels. Cash Flow, in the same card, has no axis, no gridlines and no hover at all — instead it stamps a 10px value label above all 24 bars, which at 12 months is a wall of grey micro-text over 8px-wide bars. The right-hand card is worse: the Merchants and PayNow tabs are plain text lists with no bars and no fixed height, so the card jumps size when you switch tab.',
+              fix: 'Give CashFlowChart the same hover tooltip as VelocityChart and drop the per-bar labels (keep only the hovered month\'s figures). Add a shared min-height to the breakdown card so tabs do not resize it, and render Merchants/PayNow as ranked rows with a proportional bar behind each amount.',
+              files: 'components/CashFlowChart.tsx · pages/Dashboard.tsx',
+            },
+            {
+              sev: 'P1', id: 'DASH-5', color: P1,
+              title: 'The donut is a filter control that never says so',
+              what: 'Clicking a slice or a legend row toggles the feed\'s category filter, which is real and useful and completely undiscoverable — no cursor hint at rest, no tooltip, no selected state on the slice afterwards. With ten-plus categories the legend is a 12px list where amounts appear only on hover.',
+              fix: 'Add a one-line affordance under the donut ("Click a category to filter the feed"), keep the selected slice at full chroma with the others at 40%, show the filter chip from FEED-6, and scroll the feed into view on click. Show amount and percentage on every legend row rather than on hover only, and collapse the tail into "Other (4) · $312".',
+              files: 'components/CategoryDonut.tsx · pages/Dashboard.tsx',
+            },
+            {
+              sev: 'P1', id: 'DASH-6', color: P1,
+              title: 'The pending-review banner is covered by the sticky header',
+              what: 'PendingReviewBanner renders above Outlet with mx-9 mt-5, while the Dashboard\'s own header is sticky at top:0 — so as soon as you scroll, the header slides over the banner and the blocking state disappears from view. It is also the one full-width-margin element on a page that otherwise owns its own padding.',
+              fix: 'Move the banner inside the sticky header stack (or make the layout a grid where the banner is a non-scrolling row above the scroll pane) so it stays visible while a batch is pending. Have it state what is pending: filename, transaction count, and how long ago it was uploaded.',
+              files: 'App.tsx · components/PendingReviewBanner.tsx',
+            },
+            {
+              sev: 'P2', id: 'DASH-7', color: P2,
+              title: 'Show excluded changes the list but not the metrics',
+              what: 'The toggle filters client-side while metric cards come from the server and always exclude, so turning it on adds rows that are not in any total, with only a 50% opacity to explain it.',
+              fix: 'Add an "Excluded" line to the outflow card ("$482 excluded · 14 transactions") and, when the toggle is on, label the metric cards "excluding 14 excluded transactions" so the two halves of the screen agree.',
+              files: 'pages/Dashboard.tsx',
+            },
+            {
+              sev: 'P2', id: 'DASH-8', color: P2,
+              title: 'Date range picker only ever offers the last 12 months',
+              what: 'MonthRangeCalendar builds its grid from the current month backwards regardless of how much history exists, so month 13 is unreachable except through the "All time" shortcut. The trigger button is also narrow enough that "Jun – Aug 2026" wraps to two lines, changing the header row height.',
+              fix: 'Page the calendar by year with arrows, disable months that have no data (monthlyTotals already provides this), add whitespace-nowrap and a min-width to the trigger, and add "Last 3 months" and "Year to date" beside the two existing shortcuts.',
+              files: 'components/MonthRangeCalendar.tsx · DateRangePicker.tsx',
+            },
+          ],
+        },
+        {
+          title: 'Upload → staging review (and recategorize)',
+          items: [
+            {
+              sev: 'P0', id: 'REV-1', color: P0,
+              title: 'No way to review 100 rows other than one at a time',
+              what: 'This is the screen you spend the most time in, and it has no filter, no selection and no bulk action. A month\'s upload puts ~100 rows in a 45vh scroller; resolving them means clicking each row, waiting for its popover, and clicking the next. There is no "needs review only" view, no "accept all AI suggestions", no multi-select to set one category on twelve rows, and no count of how many rows are still unresolved.',
+              fix: 'Add a filter bar above the row list: All / Needs review (n) / AI suggested (n) / Uncategorised (n), plus a search box. Add checkboxes with shift-click ranges and a bulk action bar ("14 selected — set category, exclude, accept AI suggestion"). Add "Accept all n AI suggestions" beside the AI status pill. Show "12 of 104 still need review" in the footer next to Commit.',
+              files: 'components/ReviewDialog.tsx',
+            },
+            {
+              sev: 'P0', id: 'REV-2', color: P0,
+              title: 'The row popover uses three different save models and disables itself on every change',
+              what: 'Category applies on change, the display name applies on blur, the contact checkbox applies on change, and Restore Default fires its own request — while applyPending disables every field in the panel. So editing a label then picking a category makes the whole panel go dead for a beat, twice, with no per-field confirmation that anything saved. Nothing ever says "saved".',
+              fix: 'Keep auto-save but make it optimistic: update the row in the query cache immediately, do not disable the panel, and show a small per-field state (spinner, then a check that fades) on the field that saved. On failure, revert that field and show an inline error under it. If you prefer explicit saving, use one Save button for the whole popover — do not mix.',
+              files: 'components/ReviewDialog.tsx · api/hooks.ts',
+            },
+            {
+              sev: 'P1', id: 'REV-3', color: P1,
+              title: 'Rows are clickable with no affordance, and only one can be open',
+              what: 'Row expansion is a div onClick with cursor-pointer and nothing else — no chevron, no hover background, no focus state, not keyboard reachable. Opening a row pushes everything below it down by ~180px inside a 45vh scroller, so the row you wanted next has moved.',
+              fix: 'Add a chevron in a leading 24px column that rotates when open, a hover background, and keyboard support (row as button, Enter to toggle, arrow keys to move between rows). Scroll the opened row to the top of the scroller so the panel opens into empty space rather than shoving the list.',
+              files: 'components/ReviewDialog.tsx',
+            },
+            {
+              sev: 'P1', id: 'REV-4', color: P1,
+              title: 'The Commit count can disagree with what is on screen',
+              what: 'The footer button reads Commit {batch.new_extracted} while the list renders rows filtered to !is_duplicate. Any duplicate in the batch makes the button promise more transactions than are visible. The recategorize dialog has the same shape with batch.changed against batch.rows.',
+              fix: 'Label the button from the same array that renders the list ("Commit 96 transactions"), and put duplicates_skipped in a muted line beside it ("8 duplicates will be skipped").',
+              files: 'components/StagingReviewDialog.tsx · RecategorizeReviewDialog.tsx',
+            },
+            {
+              sev: 'P1', id: 'REV-5', color: P1,
+              title: 'Create Rule is pre-filled with a pattern that will never match again',
+              what: 'The rule-pattern input placeholder — and the AI suggestion path — offers the entire raw bank description, e.g. "NETS QR PAYMENT KOPITIAM BLK 123 TOA PAYOH SG". A rule built from that string matches one transaction forever. Nothing tells the user how many rows the pattern they typed would actually match.',
+              fix: 'Pre-fill a tokenised suggestion (longest alphabetic token run, uppercased) rather than the full string, and render a live count under the field: "matches 14 transactions in this batch, 96 in history". Disable Create Rule when the count is 1 and explain why.',
+              files: 'components/ReviewDialog.tsx',
+            },
+            {
+              sev: 'P1', id: 'REV-6', color: P1,
+              title: 'Four tinted row states with no legend',
+              what: 'Rows can be amber (needs review), violet (AI suggested and current), violet-at-75%-opacity (AI still working), or untinted, with a sparkle icon that means two different things depending on colour. The dialog never explains any of it.',
+              fix: 'Add a one-row legend under the stat cards mapping each tint to a word, and make the filter chips from REV-1 double as that legend. Replace opacity-based "pending" with a skeleton shimmer on the category cell only, so pending never reads as disabled.',
+              files: 'components/ReviewDialog.tsx',
+            },
+            {
+              sev: 'P1', id: 'REV-7', color: P1,
+              title: 'The loading state renders a hollow copy of the whole dialog',
+              what: 'StagingReviewDialog\'s loading branch mounts a full ReviewDialog with no-op callbacks, empty stat cards and "Loading staged transactions…" as the subtitle — an empty shell with a functioning close button and nothing else.',
+              fix: 'Render a skeleton: three stat-card placeholders and eight shimmer rows at the real row height, so the dialog does not resize when data arrives.',
+              files: 'components/StagingReviewDialog.tsx',
+            },
+            {
+              sev: 'P2', id: 'REV-8', color: P2,
+              title: 'The dialog is a fixed 860px with no height budget',
+              what: 'Modal takes a pixel width and applies no max-height. With five stat cards, an AI banner, a rule banner and the footer, the dialog exceeds a 900px-tall window and its own content is unreachable because only the inner row list scrolls.',
+              fix: 'Give Modal width: min(860px, calc(100vw - 48px)) and max-height: calc(100vh - 48px) with the body as the flex scroll region, so header, stat cards and footer stay pinned and everything between scrolls.',
+              files: 'components/Modal.tsx',
+            },
+            {
+              sev: 'P2', id: 'REV-9', color: P2,
+              title: 'Recategorize confirmation is a fifth button size',
+              what: 'The confirm step uses 12px buttons at px-3.5 py-2 where every other modal uses 13px at px-4 py-2.5, and the dialog title is 15px where other modal titles are 16px.',
+              fix: 'Covered by the Button and Modal primitives in root causes 01 and 02 — this modal is the clearest single example of the drift.',
+              files: 'components/RecategorizeReviewDialog.tsx',
+            },
+          ],
+        },
+        {
+          title: 'Settings',
+          items: [
+            {
+              sev: 'P0', id: 'SET-1', color: P0,
+              title: 'Enable AI auto-saves, fails, and leaves the UI asserting something untrue',
+              what: 'The checkbox is debounced-saved on its own while every other field on the card waits for Save. If nothing is configured the auto-save 400s, an error toast appears — and the checkbox deliberately stays checked. The card now shows AI as enabled when the server says it is not, and the sidebar\'s privacy footer reads from the server, so the two disagree on screen at the same time.',
+              fix: 'Stop auto-saving. Have the checkbox only reveal the provider fields and let the single Save button persist everything, disabled until the selected provider is configured. If a request fails, roll the checkbox back to the server value and put the error inline under the checkbox rather than in a corner toast.',
+              files: 'components/AiSection.tsx',
+            },
+            {
+              sev: 'P1', id: 'SET-2', color: P1,
+              title: 'Settings is the only page with a max-width, and its content is cramped by it',
+              what: 'The page is max-w-2xl (672px) while every other page runs full width. Inside that width the Region card lays four labelled values in a flex-wrap row that breaks into a ragged two-and-two, and the database path wraps mid-token with break-all.',
+              fix: 'Either widen to max-w-4xl and lay Region and Database out as two-column definition lists, or keep 672px and stack them. Pick one page-shell width rule for the app and apply it via a shared PageShell component with title, subtitle and actions slots.',
+              files: 'pages/Settings.tsx',
+            },
+            {
+              sev: 'P1', id: 'SET-3', color: P1,
+              title: 'Four destructive actions with no sense of blast radius',
+              what: 'Delete All Rules / Contacts / Transactions and Nuclear Reset all present the same type-DELETE modal, none of them says how much will be destroyed, and the DeleteScopeResult count that comes back is discarded — so nothing confirms afterwards either.',
+              fix: 'Interpolate live counts into each description ("This deletes 23 rules") from the existing queries, and surface the returned count in a toast ("23 rules deleted"). Reserve the type-DELETE step for Nuclear Reset and Delete All Transactions; a single confirm button is proportionate for rules and contacts.',
+              files: 'pages/Settings.tsx',
+            },
+            {
+              sev: 'P1', id: 'SET-4', color: P1,
+              title: 'The AI card asks for trust without showing what it will do',
+              what: 'The privacy acknowledgement is well judged, but the card never shows what leaves the device. There is also no way to test a provider before saving it — "Save to test this provider\'s connection" means the only way to check a key is to persist it.',
+              fix: 'Add a disclosure showing an example redacted payload (one description and amount, exactly as sent). Add a "Test connection" button that posts the draft configuration without saving it, and show the model list from that response.',
+              files: 'components/AiSection.tsx',
+            },
+            {
+              sev: 'P2', id: 'SET-5', color: P2,
+              title: 'Appearance offers a native colour picker into a hand-styled dark UI',
+              what: 'The custom swatch opens the OS colour picker, and any hex is accepted — including values with no contrast against the accent foreground token, which is a fixed dark ink. A near-black accent makes primary buttons unreadable.',
+              fix: 'Keep the presets, and for custom colours accept the hex but derive accent-fg from its computed luminance instead of using a fixed value. Reject or warn on anything under 4.5:1 against both derived foregrounds.',
+              files: 'components/AppearanceSection.tsx · lib/accentColor.ts',
+            },
+            {
+              sev: 'P2', id: 'SET-6', color: P2,
+              title: 'Database relocation is a bare text field',
+              what: 'The user is asked to type an absolute filesystem path from memory, with one line of red text if it is wrong.',
+              fix: 'Validate on blur against a backend "path is writable" check and show the resolved directory plus free space before enabling Migrate. Pre-fill the current directory.',
+              files: 'pages/Settings.tsx',
+            },
+          ],
+        },
+        {
+          title: 'Cross-cutting: shell, primitives, accessibility',
+          items: [
+            {
+              sev: 'P0', id: 'X-1', color: P0,
+              title: 'Modal is missing every dialog behaviour users expect',
+              what: 'No Escape to close, no focus trap, no initial focus, no return focus, no role="dialog" or aria-modal, no background scroll lock, and no close button on the Contacts, Rules, Relocate, Delete or Reset modals — only the backdrop click, which is also the accidental-dismiss path for a half-filled form.',
+              fix: 'Rewrite Modal over the native <dialog> element or add: Escape handler, focus trap, autofocus on the first field, focus restore on close, aria-labelledby wired to the title, body overflow lock, and a standard × in a header slot. Confirm before dismissing a dirty form rather than discarding on backdrop click.',
+              files: 'components/Modal.tsx (all callers)',
+            },
+            {
+              sev: 'P0', id: 'X-2', color: P0,
+              title: 'Rule deletion is instant and unrecoverable',
+              what: 'The Delete link on a rule row calls the mutation directly — no confirmation, no undo, and the row is a hover-revealed text button sitting next to the drag handle and edit pencil. Reordering has the same problem in reverse: the drop triggers a full invalidate with no optimistic update, so the list visibly re-jumps, there is no drop indicator, and drag is the only way to reorder.',
+              fix: 'Replace deletion with an optimistic remove plus a 6-second "Rule deleted — Undo" toast. Make reorder optimistic with a 2px accent drop indicator between rows, and add keyboard reordering (focus the row, Alt+↑/↓) as well as an explicit priority field.',
+              files: 'pages/Rules.tsx · api/hooks.ts',
+            },
+            {
+              sev: 'P1', id: 'X-3', color: P1,
+              title: 'No global feedback layer, so most mutations are silent',
+              what: 'Root cause 04. Toast is local to AiSection. The Contacts CSV import writes a sentence into a card that never disappears; rule and contact saves close their modal with no confirmation; transaction edits close the popover silently; a commit refreshes the dashboard with no statement of what happened, even though CommitResult returns committed, skipped, provisioned and refund-pair counts.',
+              fix: 'Promote Toast to a provider mounted in App with a queue and a useToast() hook. Fire success and error toasts from every mutation\'s onSuccess/onError in api/hooks.ts so no call site can forget. After a commit, show "96 committed · 8 duplicates skipped · 2 refund pairs matched".',
+              files: 'components/Toast.tsx · App.tsx · api/hooks.ts',
+            },
+            {
+              sev: 'P1', id: 'X-4', color: P1,
+              title: 'Empty and error states are grey sentences in a card',
+              what: 'Only the no-accounts Dashboard has a designed empty state. Rules, Contacts, Default Rules, the feed and both review dialogs render one muted line inside an otherwise empty bordered box. There is no global error boundary and no per-query error UI at all — a failed fetch renders the empty state, so "no data" and "the backend is down" look identical.',
+              fix: 'Build one EmptyState component (icon in a tinted square, headline, one line of explanation, optional primary action) and use it in all six places. Add a matching ErrorState with a Retry that calls refetch, and render it whenever isError. Wrap the router in an error boundary.',
+              files: 'new components/EmptyState.tsx, ErrorState.tsx (all list screens)',
+            },
+            {
+              sev: 'P1', id: 'X-5', color: P1,
+              title: 'The sidebar hides its own labels and covers the page when it opens',
+              what: 'At rest the rail is icons only, and the nav items carry no title attributes — only the Upload button does — so the six destinations are a guessing game. On hover the panel expands to 240px at z-30 over the content, so it covers the first metric card, and it opens on any incidental pointer pass near the left edge. There is no pinned state and no persistence.',
+              fix: 'Add a pin toggle that persists to localStorage and, when pinned, reserves 240px in the layout instead of overlaying. Add title attributes (or a proper tooltip) to every collapsed nav item, a 200ms hover-intent delay before expanding, and a stronger active indicator — a 3px accent bar on the rail edge — that survives collapse.',
+              files: 'components/Sidebar.tsx',
+            },
+            {
+              sev: 'P1', id: 'X-6', color: P1,
+              title: 'Tables are div grids with no semantics, and grid definitions are duplicated',
+              what: 'The feed repeats its seven-column grid-cols string in two places (header and row) that must be kept in sync by hand; Contacts and the review dialogs do the same. None of it is a table, so screen readers get an undifferentiated stream and there is no column association.',
+              fix: 'Extract one DataTable component taking a column definition array (key, header, width, align, render) and driving both header and rows from it, with role="grid" and role="columnheader"/"gridcell" (or real table markup with table-layout: fixed). Migrate the feed, Contacts, and both review dialogs to it.',
+              files: 'new components/DataTable.tsx · pages/Dashboard.tsx, Contacts.tsx · components/ReviewDialog.tsx',
+            },
+            {
+              sev: 'P1', id: 'X-7', color: P1,
+              title: 'Focus is invisible almost everywhere',
+              what: 'Select and Checkbox have proper focus-visible outlines. Nothing else does — every button in the app relies on the browser default, which is nearly invisible on this palette, and clickable divs cannot be focused at all. Keyboard-only operation of the feed, the review rows, the donut and the rule list is not possible.',
+              fix: 'Add a global focus-visible rule in index.css (2px accent outline, 2px offset) covering button, a, input, select, [tabindex]. Convert every clickable div to a button with an appropriate label, or give it tabIndex={0} with Enter/Space handlers.',
+              files: 'index.css (all interactive components)',
+            },
+            {
+              sev: 'P2', id: 'X-8', color: P2,
+              title: 'The display typeface is barely used, and copy tone drifts',
+              what: 'Space Grotesk appears only on page titles and the logo — every other surface is Helvetica, so the typographic identity does not register. Copy mixes registers too: "Post-mortem view of where the money went" and "Nuclear Reset" against plain labels elsewhere, and hyphens stand in for em dashes in several strings ("unlock it - processing happens locally").',
+              fix: 'Extend font-display to card titles, metric values and modal titles so the pairing reads as intentional. Do one copy pass for punctuation consistency (proper em dashes, one ellipsis style) and decide whether the app is dry or wry — both work, mixing them does not.',
+              files: 'index.css · all screens',
+            },
+            {
+              sev: 'P2', id: 'X-9', color: P2,
+              title: 'Nothing below ~1280px works, and there is no narrow-window fallback',
+              what: 'The feed grid, the four-across metric row and the 860px dialogs all assume a wide window. Below about 1100px columns collide before any wrapping helps, and there is not a single breakpoint in the codebase.',
+              fix: 'Decide the minimum supported width and state it. If it is 1280px, add a below-minimum notice instead of letting the layout break silently. If narrower matters, add md: breakpoints: metrics 4→2 across, charts stacked, and the feed collapsing to a two-line row (description plus badge above, date, account and amount below).',
+              files: 'pages/Dashboard.tsx · components/Modal.tsx',
+            },
+          ],
+        },
+      ],
+
+      batches: [
+        { label: 'Batch 1', effort: '~1 day', body: 'Primitives and tokens: Button, Input/Field, Card, EmptyState, ErrorState, PageShell, plus semantic tokens for warning/AI/success/danger surfaces and a fixed type, spacing and radius scale. Replace every inline oklch literal and hand-rolled button. Root causes 01 and 02.' },
+        { label: 'Batch 2', effort: '~1 day', body: 'Async behaviour: keepPreviousData everywhere, remove the whole-page loading gates, skeletons at real row heights, a global Toast provider fired from api/hooks.ts, error states with Retry, and an error boundary. Root causes 03 and 04, X-3, X-4, DASH-1, REV-7.' },
+        { label: 'Batch 3', effort: '~1 day', body: 'The feed: column widths and non-wrapping badges, signed amounts with tabular figures, sticky column header, month dividers, filter chips, row count, sorting, and pagination or virtualisation. FEED-1 through FEED-8.' },
+        { label: 'Batch 4', effort: '~1.5 days', body: 'The review dialog: filters, multi-select and bulk actions, accept-all-AI, optimistic per-field saving, row affordances and keyboard navigation, honest commit counts, tokenised rule patterns with live match counts. REV-1 through REV-6.' },
+        { label: 'Batch 5', effort: '~1 day', body: 'Shell and safety: the Modal rewrite, undo for destructive actions, optimistic reorder with a drop indicator, the pinnable sidebar, global focus-visible, and the DataTable extraction. X-1, X-2, X-5, X-6, X-7.' },
+        { label: 'Batch 6', effort: '~0.5 day', body: 'Settings and charts: the AI save model, live counts in the danger zone, test-before-save, chart title de-duplication, cash-flow tooltip, ranked bars for merchants and PayNow. SET-1 to SET-6, DASH-3 to DASH-5.' },
+      ],
+    }
+  }
+}
+
+</script>
+</body>
+</html>

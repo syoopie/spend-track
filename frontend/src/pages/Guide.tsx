@@ -27,15 +27,15 @@ function Section({ id, title, icon: Icon, children }: { id: string; title: strin
         <div className="w-6 h-6 rounded-md bg-accent/12 flex items-center justify-center shrink-0">
           <Icon size={13} className="text-accent" />
         </div>
-        <h2 className="text-[16px] font-bold font-display">{title}</h2>
+        <h2 className="text-base font-bold font-display">{title}</h2>
       </div>
-      <div className="text-[13px] text-muted leading-relaxed flex flex-col gap-2.5">{children}</div>
+      <div className="text-md text-muted leading-relaxed flex flex-col gap-2.5">{children}</div>
     </section>
   )
 }
 
 function Kbd({ children }: { children: ReactNode }) {
-  return <code className="font-mono text-[12px] bg-input px-1.5 py-0.5 rounded text-text-2">{children}</code>
+  return <code className="font-mono text-xs bg-input px-1.5 py-0.5 rounded text-text-2">{children}</code>
 }
 
 // The overview's 3-step loop, as numbered badges matching the priority
@@ -45,7 +45,7 @@ function Steps({ items }: { items: string[] }) {
     <div className="flex flex-col gap-2 mt-0.5">
       {items.map((step, i) => (
         <div key={i} className="flex items-start gap-2.5">
-          <div className="w-5 h-5 rounded-md bg-input text-accent text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+          <div className="w-5 h-5 rounded-md bg-input text-accent text-2xs font-bold flex items-center justify-center shrink-0 mt-0.5">
             {i + 1}
           </div>
           <div className="pt-0.5">{step}</div>
@@ -64,8 +64,8 @@ export function Guide() {
             <BookOpen size={18} className="text-accent" />
           </div>
           <div>
-            <div className="text-[22px] font-bold font-display">User Guide</div>
-            <div className="text-[13px] text-muted mt-0.5">
+            <div className="text-title font-bold font-display">User Guide</div>
+            <div className="text-md text-muted mt-0.5">
               How the pieces fit together — upload, categorize, review, repeat.
             </div>
           </div>
@@ -74,12 +74,12 @@ export function Guide() {
         {/* A plain table of contents, not a nav bar - this is a document to
             read top to bottom, not a set of screens to switch between. */}
         <nav className="mb-8 pb-6 border-b border-border">
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-2 mb-2.5">Contents</div>
-          <ol className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-[13px]">
+          <div className="text-2xs font-semibold uppercase tracking-wide text-muted-2 mb-2.5">Contents</div>
+          <ol className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-md">
             {SECTIONS.map((s, i) => (
               <li key={s.id}>
                 <a href={`#${s.id}`} className="group flex items-center gap-2 text-muted hover:text-text">
-                  <span className="font-mono text-[11px] text-muted-2 group-hover:text-accent">
+                  <span className="font-mono text-2xs text-muted-2 group-hover:text-accent">
                     {String(i + 1).padStart(2, '0')}
                   </span>
                   <span className="group-hover:underline">{s.label}</span>
@@ -148,8 +148,8 @@ export function Guide() {
             <p>
               If nothing matches, a PayNow-shaped transaction is flagged{' '}
               <span
-                className="text-[11px] font-semibold px-1.5 py-0.5 rounded"
-                style={{ background: 'oklch(30% 0.07 70)', color: 'oklch(82% 0.13 70)' }}
+                className="text-2xs font-semibold px-1.5 py-0.5 rounded"
+                style={{ background: 'var(--color-warning-badge-bg)', color: 'var(--color-warning-text)' }}
               >
                 needs review
               </span>{' '}

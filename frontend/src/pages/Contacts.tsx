@@ -8,9 +8,13 @@ import {
   useUpdateContact,
 } from '../api/hooks'
 import type { Contact } from '../api/types'
+import { Button } from '../components/Button'
+import { Card } from '../components/Card'
 import { CategoryBadge } from '../components/CategoryBadge'
 import { categoryOptionElements } from '../components/CategoryOptions'
+import { Field, Input } from '../components/Field'
 import { Modal } from '../components/Modal'
+import { PageShell } from '../components/PageShell'
 import { Select } from '../components/Select'
 import { fmtPlain } from '../lib/format'
 import { CONTACT_IDENTIFIER_HINT } from '../lib/localization'
@@ -51,13 +55,9 @@ function ContactFormModal({ contact, onClose }: { contact?: Contact; onClose: ()
     <Modal onClose={onClose}>
       <div className="text-base font-bold mb-4">{isEditing ? 'Edit Contact' : 'Add Contact'}</div>
 
-      <div className="text-xs text-muted mb-1">Name</div>
-      <input
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder="e.g. Auntie Mei"
-        className="w-full box-border px-3 py-2.5 rounded-lg border border-border bg-input text-text text-[13px] mb-3.5"
-      />
+      <Field label="Name" className="mb-3.5">
+        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Auntie Mei" />
+      </Field>
 
       <div className="text-xs text-muted mb-1">Default Category</div>
       <Select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full mb-3.5">
@@ -68,12 +68,7 @@ function ContactFormModal({ contact, onClose }: { contact?: Contact; onClose: ()
       <div className="text-xs text-muted mb-1.5">Linked Identifiers</div>
       {identifiers.map((identifier, i) => (
         <div key={i} className="flex gap-2 mb-2">
-          <input
-            value={identifier}
-            onChange={(e) => updateIdentifier(i, e.target.value)}
-            placeholder={CONTACT_IDENTIFIER_HINT}
-            className="flex-1 box-border px-3 py-2.5 rounded-lg border border-border bg-input text-text text-[13px]"
-          />
+          <Input value={identifier} onChange={(e) => updateIdentifier(i, e.target.value)} placeholder={CONTACT_IDENTIFIER_HINT} />
         </div>
       ))}
       <button
@@ -84,19 +79,10 @@ function ContactFormModal({ contact, onClose }: { contact?: Contact; onClose: ()
       </button>
 
       <div className="flex justify-end gap-2.5">
-        <button
-          onClick={onClose}
-          className="text-[13px] px-4 py-2.5 rounded-lg border border-border bg-input text-text cursor-pointer"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={handleSave}
-          disabled={saving || !name.trim()}
-          className="text-[13px] font-semibold px-4 py-2.5 rounded-lg border-none bg-accent text-accent-fg cursor-pointer disabled:opacity-60"
-        >
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="primary" onClick={handleSave} disabled={saving || !name.trim()}>
           {isEditing ? 'Save Changes' : 'Save Contact'}
-        </button>
+        </Button>
       </div>
     </Modal>
   )
@@ -117,15 +103,11 @@ export function Contacts() {
   }
 
   return (
-    <div className="px-9 pt-7 pb-15">
-      <div className="flex items-start justify-between mb-5 gap-4 flex-wrap">
-        <div>
-          <div className="text-[22px] font-bold font-display">Contacts &amp; PayNow Directory</div>
-          <div className="text-[13px] text-muted mt-0.5">
-            Map phone numbers and UENs to people, so transfers categorize themselves
-          </div>
-        </div>
-        <div className="flex gap-2.5">
+    <PageShell
+      title="Contacts & PayNow Directory"
+      subtitle="Map phone numbers and UENs to people, so transfers categorize themselves"
+      actions={
+        <>
           <input
             ref={fileInputRef}
             type="file"
@@ -137,29 +119,23 @@ export function Contacts() {
               e.target.value = ''
             }}
           />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="text-[13px] font-semibold px-4 py-2.5 rounded-lg border border-border bg-card text-text cursor-pointer"
-          >
+          <Button variant="secondary" className="font-semibold" onClick={() => fileInputRef.current?.click()}>
             Import CSV
-          </button>
-          <button
-            onClick={() => setFormTarget('new')}
-            className="text-[13px] font-semibold px-4 py-2.5 rounded-lg border-none bg-accent text-accent-fg cursor-pointer"
-          >
+          </Button>
+          <Button variant="primary" onClick={() => setFormTarget('new')}>
             + Add Contact
-          </button>
-        </div>
-      </div>
-
+          </Button>
+        </>
+      }
+    >
       {importResult && (
-        <div className="text-[13px] text-muted mb-4 bg-card border border-border rounded-lg px-4 py-2.5">
+        <div className="text-md text-muted mb-4 bg-card border border-border rounded-lg px-4 py-2.5">
           {importResult}
         </div>
       )}
 
-      <div className="bg-card border border-border rounded-xl overflow-hidden">
-        <div className="grid grid-cols-[1fr_1.6fr_160px_140px_36px] px-5 py-2.5 text-[11px] text-muted-2 uppercase tracking-wide border-b border-divider">
+      <Card padding="" className="overflow-hidden">
+        <div className="grid grid-cols-[1fr_1.6fr_160px_140px_36px] px-5 py-2.5 text-2xs text-muted-2 uppercase tracking-wide border-b border-divider">
           <div>Contact</div>
           <div>Linked Identifiers</div>
           <div>Default Category</div>
@@ -173,14 +149,14 @@ export function Contacts() {
         {(contactsQ.data ?? []).map((c) => (
           <div
             key={c.id}
-            className="grid grid-cols-[1fr_1.6fr_160px_140px_36px] items-center px-5 py-3.5 text-[13px] border-b border-divider"
+            className="grid grid-cols-[1fr_1.6fr_160px_140px_36px] items-center px-5 py-3.5 text-md border-b border-divider"
           >
             <div className="font-semibold">{c.name}</div>
             <div className="flex gap-1.5 flex-wrap">
               {c.identifiers.map((id) => (
                 <span
                   key={id}
-                  className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-input text-text-2"
+                  className="text-2xs font-mono px-2 py-0.5 rounded-md bg-input text-text-2"
                 >
                   {id}
                 </span>
@@ -201,11 +177,11 @@ export function Contacts() {
             </div>
           </div>
         ))}
-      </div>
+      </Card>
 
       {formTarget && (
         <ContactFormModal contact={formTarget === 'new' ? undefined : formTarget} onClose={() => setFormTarget(null)} />
       )}
-    </div>
+    </PageShell>
   )
 }

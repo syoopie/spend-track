@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import type { VelocityPoint } from '../api/types'
+import { Card } from './Card'
 import { fmtCompact, fmtDate, fmtPlain } from '../lib/format'
 
 const LEFT_PAD = 42
@@ -61,7 +62,7 @@ export function VelocityChart({
 
   const content = (
     <>
-      <div className="text-[13px] font-semibold mb-3.5">Spend Velocity — Cumulative Pace</div>
+      <div className="text-md font-semibold mb-3.5">Spend Velocity — Cumulative Pace</div>
       <div className="relative">
         <svg
           ref={svgRef}
@@ -113,7 +114,7 @@ export function VelocityChart({
         </svg>
         {hovered && (
           <div
-            className="absolute top-0 -translate-y-full pointer-events-none bg-card border border-border rounded-lg shadow-xl px-2.5 py-2 text-[11px] whitespace-nowrap z-10"
+            className="absolute top-0 -translate-y-full pointer-events-none bg-card border border-border rounded-lg shadow-xl px-2.5 py-2 text-2xs whitespace-nowrap z-10"
             style={{ left: `clamp(0px, ${tooltipLeftPct}%, calc(100% - 130px))` }}
           >
             <div className="font-semibold text-text mb-1">{fmtDate(hovered.date)}</div>
@@ -129,7 +130,7 @@ export function VelocityChart({
         )}
       </div>
       <div className="flex items-center justify-between gap-3 flex-wrap mt-1.5">
-        <div className="flex gap-4 text-[11px] text-muted">
+        <div className="flex gap-4 text-2xs text-muted">
           <span>
             <span className="text-accent">━</span> {periodLabel} (current)
           </span>
@@ -137,7 +138,7 @@ export function VelocityChart({
             <span className="text-dim">━</span> {prevPeriodLabel}
           </span>
         </div>
-        <div className="text-[11px] font-mono">
+        <div className="text-2xs font-mono">
           <span className="text-muted-2">{fmtPlain(finalCurrent)}</span>
           <span className="text-muted-2"> vs {fmtPlain(finalPrev)} </span>
           {deltaPct !== null && (
@@ -152,5 +153,5 @@ export function VelocityChart({
   )
 
   if (bare) return content
-  return <div className="bg-card border border-border rounded-xl p-5">{content}</div>
+  return <Card>{content}</Card>
 }

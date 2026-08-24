@@ -237,7 +237,11 @@ function useDiscardPendingBatch(kind: BatchKind) {
 export interface BatchActions {
   applyRow: (key: number, body: BatchRowUpdateRequest) => Promise<void>
   applyPending: boolean
-  createRule: (matchPattern: string, targetCategory: string) => Promise<{ rule_id: number; updated_rows: RuleRerunRowSnapshot[] }>
+  createRule: (
+    matchPattern: string,
+    targetCategory: string,
+    displayLabel: string | null,
+  ) => Promise<{ rule_id: number; updated_rows: RuleRerunRowSnapshot[] }>
   createRulePending: boolean
   undoRule: (payload: BatchRuleUndoRequest) => Promise<void>
   undoRulePending: boolean
@@ -260,8 +264,8 @@ export function useBatchActions(kind: BatchKind, batchId: string): BatchActions 
   return {
     applyRow: (key, body) => updateRow.mutateAsync({ key, body }).then(() => {}),
     applyPending: updateRow.isPending,
-    createRule: (matchPattern, targetCategory) =>
-      createRule.mutateAsync({ match_pattern: matchPattern, target_category: targetCategory }),
+    createRule: (matchPattern, targetCategory, displayLabel) =>
+      createRule.mutateAsync({ match_pattern: matchPattern, target_category: targetCategory, display_label: displayLabel }),
     createRulePending: createRule.isPending,
     undoRule: (payload) => undoRule.mutateAsync(payload).then(() => {}),
     undoRulePending: undoRule.isPending,

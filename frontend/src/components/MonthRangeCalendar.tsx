@@ -68,20 +68,20 @@ export function MonthRangeCalendar({
                 selected ? 'border-accent bg-accent/15' : 'border-border bg-input hover:border-muted-2'
               }`}
             >
-              <div className={`text-[15px] font-semibold ${selected ? 'text-text' : 'text-muted'}`}>
+              <div className={`text-title-sm font-semibold ${selected ? 'text-text' : 'text-muted'}`}>
                 {label} <span className="text-muted-2 font-normal">'{y.slice(2)}</span>
               </div>
-              <div className="text-[12px] font-mono text-success leading-tight mt-0.5">
+              <div className="text-xs font-mono text-success leading-tight mt-0.5">
                 {totals && totals.inflow > 0 ? fmtCompact(totals.inflow) : ' '}
               </div>
-              <div className="text-[12px] font-mono text-danger-text leading-tight">
+              <div className="text-xs font-mono text-danger-text leading-tight">
                 {totals && totals.outflow > 0 ? fmtCompact(totals.outflow) : ' '}
               </div>
             </button>
           )
         })}
       </div>
-      <div className="text-[12px] text-muted-2 mt-3 pt-2.5 border-t border-border">
+      <div className="text-xs text-muted-2 mt-3 pt-2.5 border-t border-border">
         Click a month, or click and drag across months to select a range.
       </div>
     </div>

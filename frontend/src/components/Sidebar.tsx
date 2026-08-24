@@ -114,7 +114,7 @@ export function Sidebar() {
         ))}
 
         <div className="flex-1" />
-        <div className="flex items-start text-[11px] text-muted-2 pt-2.5 border-t border-border">
+        <div className="flex items-start text-2xs text-muted-2 pt-2.5 border-t border-border">
           <div className="w-9 h-4 flex items-center justify-center shrink-0">
             <span className={`w-1.5 h-1.5 rounded-full ${usingCloudAi ? 'bg-accent' : 'bg-success'}`} />
           </div>

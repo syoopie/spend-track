@@ -1,21 +1,32 @@
-import { FileUp, Pencil, RefreshCw } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { ChevronDown, ChevronUp, ChevronsUpDown, FileUp, Pencil, RefreshCw } from 'lucide-react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAccounts, useCategories, useDashboardSummary, useMonthlyTotals, useTransactions } from '../api/hooks'
-import { amountIntensityColor, fmtDate, fmtMonthRangeLabel, fmtPlain, shiftMonth } from '../lib/format'
-import { loadDashboardFilters, saveDashboardFilters } from '../lib/dashboardFilters'
+import { fmtDate, fmtMonthRangeLabel, fmtMonthYearLabel, fmtPlain, fmtSigned, shiftMonth } from '../lib/format'
+import { loadDashboardFilters, saveDashboardFilters, type DashboardFilters } from '../lib/dashboardFilters'
 import { CashFlowChart } from '../components/CashFlowChart'
 import { CategoryBadge } from '../components/CategoryBadge'
 import { categoryOptionElements } from '../components/CategoryOptions'
 import { CategoryDonut } from '../components/CategoryDonut'
 import { VelocityChart } from '../components/VelocityChart'
 import { RefundDrawer } from '../components/RefundDrawer'
+import { Button } from '../components/Button'
+import { Card } from '../components/Card'
 import { DateRangePicker } from '../components/DateRangePicker'
+import { Input } from '../components/Field'
 import { TransactionEditPopover } from '../components/TransactionEditPopover'
 import { RecategorizeReviewDialog } from '../components/RecategorizeReviewDialog'
 import { Checkbox } from '../components/Checkbox'
 import { Select } from '../components/Select'
 import { Tabs } from '../components/Tabs'
 import { useUploadDialog } from '../components/UploadProvider'
+import type { Transaction } from '../api/types'
+
+const PAGE_SIZE = 100
+const FEED_COLS = 'grid-cols-[76px_minmax(0,1fr)_168px_120px_120px_28px_28px]'
+
+type SortField = 'date' | 'amount' | 'category'
+type SortDir = 'asc' | 'desc'
 
 function MetricCard({
   label,
@@ -29,34 +40,177 @@ function MetricCard({
   hint?: string
 }) {
   return (
-    <div className="bg-card border border-border rounded-xl p-4.5">
+    <Card padding="p-4.5">
       <div className="text-xs text-muted mb-2">{label}</div>
       <div className={`text-2xl font-bold font-mono ${valueClassName}`}>{value}</div>
       {hint && <div className="text-xs text-muted-2 mt-1">{hint}</div>}
-    </div>
+    </Card>
+  )
+}
+
+// Column headers for date/amount/category double as sort triggers - the
+// other two (description, account) have no meaningful sort so stay plain
+// text in the caller.
+function SortableHeader({
+  field,
+  label,
+  align = 'left',
+  sort,
+  onSort,
+}: {
+  field: SortField
+  label: string
+  align?: 'left' | 'right'
+  sort: { field: SortField; dir: SortDir }
+  onSort: (field: SortField) => void
+}) {
+  const active = sort.field === field
+  const Icon = active ? (sort.dir === 'asc' ? ChevronUp : ChevronDown) : ChevronsUpDown
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(field)}
+      className={`inline-flex items-center gap-1 bg-transparent border-none cursor-pointer p-0 text-2xs uppercase tracking-wide hover:text-text ${
+        active ? 'text-text' : 'text-muted-2'
+      } ${align === 'right' ? 'justify-end w-full' : ''}`}
+    >
+      {label}
+      <Icon size={11} className="shrink-0" />
+    </button>
+  )
+}
+
+// Wraps the first case-insensitive occurrence of `query` in `text` with a
+// highlight span - only ever called with the debounced query, and silently
+// no-ops (returns the plain text) when the query doesn't appear in this
+// particular field, e.g. it matched via raw_description while the label is
+// what's actually being displayed.
+function highlightMatch(text: string, query: string): ReactNode {
+  if (!query.trim()) return text
+  const idx = text.toLowerCase().indexOf(query.trim().toLowerCase())
+  if (idx === -1) return text
+  const end = idx + query.trim().length
+  return (
+    <>
+      {text.slice(0, idx)}
+      <mark className="bg-accent/30 text-inherit rounded-[2px]">{text.slice(idx, end)}</mark>
+      {text.slice(end)}
+    </>
   )
 }
 
 export function Dashboard() {
   const { openDialog, hasPendingBatch } = useUploadDialog()
+  const [searchParams, setSearchParams] = useSearchParams()
   // Loaded once per mount (not on every render) so a stored selection wins,
-  // but doesn't keep re-overriding state after the user changes it.
+  // but doesn't keep re-overriding state after the user changes it. URL
+  // query params (present when a filtered view was shared/bookmarked) win
+  // over localStorage, which wins over the bare default.
   const [storedFilters] = useState(loadDashboardFilters)
-  const [range, setRange] = useState<{ from: string; to: string } | undefined>(storedFilters.range)
-  const [accountId, setAccountId] = useState<string | undefined>(storedFilters.accountId)
-  const [excludedVisible, setExcludedVisible] = useState(true)
-  const [searchText, setSearchText] = useState('')
-  const [categoryFilter, setCategoryFilter] = useState('')
+
+  const [range, setRange] = useState<{ from: string; to: string } | undefined>(() => {
+    const from = searchParams.get('from')
+    const to = searchParams.get('to')
+    return from && to ? { from, to } : storedFilters.range
+  })
+  const [accountId, setAccountId] = useState<string | undefined>(
+    () => searchParams.get('account') ?? storedFilters.accountId ?? undefined,
+  )
+  const [excludedVisible, setExcludedVisible] = useState<boolean>(() => {
+    const v = searchParams.get('excluded')
+    return v != null ? v !== '0' : (storedFilters.excludedVisible ?? true)
+  })
+  const [showFullName, setShowFullName] = useState<boolean>(() => {
+    const v = searchParams.get('full')
+    return v != null ? v === '1' : (storedFilters.showFullName ?? false)
+  })
+  const [searchText, setSearchText] = useState(() => searchParams.get('q') ?? storedFilters.searchText ?? '')
+  const [categoryFilter, setCategoryFilter] = useState(
+    () => searchParams.get('category') ?? storedFilters.categoryFilter ?? '',
+  )
   const [refundTxId, setRefundTxId] = useState<number | null>(null)
   const [editingTxId, setEditingTxId] = useState<number | null>(null)
   const [recategorizeOpen, setRecategorizeOpen] = useState(false)
   const [chartsTab, setChartsTab] = useState<'cashflow' | 'velocity'>('cashflow')
   const [breakdownTab, setBreakdownTab] = useState<'category' | 'merchants' | 'paynow'>('category')
+  const [sort, setSort] = useState<{ field: SortField; dir: SortDir }>({ field: 'date', dir: 'desc' })
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+
+  // Debounced 150ms behind searchText - typing feels instant (the input is
+  // still bound to searchText directly) while the (potentially large)
+  // re-filter only runs once typing pauses.
+  const [debouncedSearch, setDebouncedSearch] = useState(searchText)
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchText), 150)
+    return () => clearTimeout(t)
+  }, [searchText])
+
+  // One place that keeps localStorage and the URL query string in sync with
+  // whichever filter just changed - each update* function below passes only
+  // the field it owns, and every other current value is read fresh from
+  // this render's closure.
+  function persist(overrides: Partial<DashboardFilters>) {
+    const next: DashboardFilters = {
+      range,
+      accountId,
+      showFullName,
+      searchText,
+      categoryFilter,
+      excludedVisible,
+      ...overrides,
+    }
+    saveDashboardFilters(next)
+    const params = new URLSearchParams()
+    if (next.range) {
+      params.set('from', next.range.from)
+      params.set('to', next.range.to)
+    }
+    if (next.accountId) params.set('account', next.accountId)
+    if (next.categoryFilter) params.set('category', next.categoryFilter)
+    if (next.searchText) params.set('q', next.searchText)
+    if (next.excludedVisible === false) params.set('excluded', '0')
+    if (next.showFullName) params.set('full', '1')
+    setSearchParams(params, { replace: true })
+  }
+
+  function updateRange(next: { from: string; to: string }) {
+    setRange(next)
+    persist({ range: next })
+  }
+
+  function updateAccountId(next: string | undefined) {
+    setAccountId(next)
+    persist({ accountId: next })
+  }
+
+  function updateShowFullName(next: boolean) {
+    setShowFullName(next)
+    persist({ showFullName: next })
+  }
+
+  function updateSearchText(next: string) {
+    setSearchText(next)
+    persist({ searchText: next })
+  }
+
+  function updateCategoryFilter(next: string) {
+    setCategoryFilter(next)
+    persist({ categoryFilter: next })
+  }
+
+  function updateExcludedVisible(next: boolean) {
+    setExcludedVisible(next)
+    persist({ excludedVisible: next })
+  }
+
+  function toggleSort(field: SortField) {
+    setSort((prev) => (prev.field === field ? { field, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { field, dir: 'desc' }))
+  }
 
   // Clicking the same category again clears the filter instead of being a
   // no-op re-select - lets the donut/legend double as a toggle.
   function selectCategoryFilter(category: string) {
-    setCategoryFilter((prev) => (prev === category ? '' : category))
+    updateCategoryFilter(categoryFilter === category ? '' : category)
   }
 
   const accountsQ = useAccounts()
@@ -79,16 +233,6 @@ export function Dashboard() {
     setRange({ from: shiftMonth(latest, -2), to: latest })
   }, [monthlyTotalsQ.data, range, storedFilters.range])
 
-  function updateRange(next: { from: string; to: string }) {
-    setRange(next)
-    saveDashboardFilters({ range: next, accountId })
-  }
-
-  function updateAccountId(next: string | undefined) {
-    setAccountId(next)
-    saveDashboardFilters({ range, accountId: next })
-  }
-
   const summaryQ = useDashboardSummary({ date_from: range?.from, date_to: range?.to, account_id: accountId })
   const resolvedRange = range ?? (summaryQ.data ? { from: summaryQ.data.date_from, to: summaryQ.data.date_to } : undefined)
   const txQ = useTransactions({
@@ -103,22 +247,73 @@ export function Dashboard() {
     [txQ.data, excludedVisible],
   )
   const filteredTransactions = useMemo(() => {
-    const q = searchText.trim().toLowerCase()
+    const q = debouncedSearch.trim().toLowerCase()
     return visibleTransactions.filter((t) => {
       if (categoryFilter && t.category !== categoryFilter) return false
       if (q) {
-        const haystack = `${t.matched_label ?? ''} ${t.raw_description}`.toLowerCase()
+        const haystack = `${t.matched_label ?? ''} ${t.raw_description} ${t.category} ${t.bank_name} ${
+          t.account_number_masked
+        } ${fmtPlain(Math.abs(t.amount))}`.toLowerCase()
         if (!haystack.includes(q)) return false
       }
       return true
     })
-  }, [visibleTransactions, searchText, categoryFilter])
+  }, [visibleTransactions, debouncedSearch, categoryFilter])
+
+  const sortedTransactions = useMemo(() => {
+    const list = [...filteredTransactions]
+    const dir = sort.dir === 'asc' ? 1 : -1
+    list.sort((a, b) => {
+      if (sort.field === 'amount') return dir * (a.amount - b.amount)
+      if (sort.field === 'category') return dir * a.category.localeCompare(b.category)
+      return dir * a.transaction_date.localeCompare(b.transaction_date)
+    })
+    return list
+  }, [filteredTransactions, sort])
+
+  // Reset pagination whenever the filtered/sorted set changes underneath it
+  // - otherwise "visibleCount" from a previous, larger result set would
+  // silently show more rows than a "Load more" click ever asked for.
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE)
+  }, [debouncedSearch, categoryFilter, excludedVisible, range, accountId, sort])
+
+  const pagedTransactions = sortedTransactions.slice(0, visibleCount)
+
+  // Per-month count/outflow, for the sticky month-divider rows below - only
+  // meaningful (and only rendered) while sorted by date, since any other
+  // sort scatters a month's rows across the list.
+  const monthAggregates = useMemo(() => {
+    const map = new Map<string, { count: number; outflow: number }>()
+    for (const t of filteredTransactions) {
+      const key = t.transaction_date.slice(0, 7)
+      const agg = map.get(key) ?? { count: 0, outflow: 0 }
+      agg.count += 1
+      if (t.amount < 0) agg.outflow += -t.amount
+      map.set(key, agg)
+    }
+    return map
+  }, [filteredTransactions])
+
+  const netTotal = useMemo(() => filteredTransactions.reduce((sum, t) => sum + t.amount, 0), [filteredTransactions])
   const inflowCount = (txQ.data ?? []).filter((t) => t.amount > 0).length
   const maxAbsAmount = useMemo(
     () => filteredTransactions.reduce((m, t) => Math.max(m, Math.abs(t.amount)), 0),
     [filteredTransactions],
   )
   const distinctAccounts = new Set((txQ.data ?? []).map((t) => t.account_id)).size
+
+  // The column header for a divider row needs its own height to stick
+  // *below* the divider, not under it - measured once (it's a static
+  // single-line row, no resize listener needed).
+  const columnHeaderRef = useRef<HTMLDivElement>(null)
+  const [columnHeaderHeight, setColumnHeaderHeight] = useState(0)
+  // Layout effect, not a plain effect - runs before the browser paints, so
+  // the very first divider (if one's visible without scrolling) never
+  // flashes at top:0 overlapping the column header for a frame.
+  useLayoutEffect(() => {
+    if (columnHeaderRef.current) setColumnHeaderHeight(columnHeaderRef.current.offsetHeight)
+  }, [])
 
   if (summaryQ.isLoading || !summaryQ.data || accountsQ.isLoading) {
     return (
@@ -137,16 +332,12 @@ export function Dashboard() {
               <FileUp size={22} className="text-accent" />
             </div>
             <div className="text-xl font-semibold text-text mb-2.5">No statements yet</div>
-            <div className="text-[13px] text-muted mb-5.5">
+            <div className="text-md text-muted mb-5.5">
               Upload a DBS, OCBC, or UOB e-statement PDF to see your spending here — or drag one in anywhere.
             </div>
-            <button
-              onClick={openDialog}
-              disabled={hasPendingBatch}
-              className="text-[13px] font-semibold px-5 py-2.5 rounded-lg border-none bg-accent text-accent-fg cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            >
+            <Button variant="primary" onClick={openDialog} disabled={hasPendingBatch}>
               + Upload Bank Statement
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -159,18 +350,24 @@ export function Dashboard() {
   const topCategory = s.category_breakdown[0]
   const prevRangeFrom = shiftMonth(s.date_from, -rangeMonthCount)
   const prevRangeTo = shiftMonth(s.date_to, -rangeMonthCount)
+  const effectiveRange = resolvedRange ?? { from: s.date_from, to: s.date_to }
+  const spansMultipleYears = effectiveRange.from.slice(0, 4) !== effectiveRange.to.slice(0, 4)
+
+  function openEditor(tx: Transaction) {
+    setEditingTxId((prev) => (prev === tx.id ? null : tx.id))
+  }
 
   return (
     <div className="px-9 pb-15">
       <div className="sticky top-0 z-20 -mx-9 px-9 bg-bg pt-7 pb-5.5">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <div className="text-[22px] font-bold font-display">Dashboard</div>
-            <div className="text-[13px] text-muted mt-0.5">Post-mortem view of where the money went</div>
+            <div className="text-title font-bold font-display">Dashboard</div>
+            <div className="text-md text-muted mt-0.5">Post-mortem view of where the money went</div>
           </div>
           <div className="flex gap-2.5 items-center">
             <DateRangePicker
-              value={resolvedRange ?? { from: s.date_from, to: s.date_to }}
+              value={effectiveRange}
               onChange={updateRange}
               monthlyTotals={monthlyTotalsQ.data ?? []}
             />
@@ -182,14 +379,15 @@ export function Dashboard() {
                 </option>
               ))}
             </Select>
-            <button
+            <Button
+              size="sm"
               onClick={() => setRecategorizeOpen(true)}
               title="Re-run categorization rules over the selected range"
-              className="flex items-center gap-1.5 text-[13px] px-3 py-2 rounded-lg border border-border bg-input text-text cursor-pointer"
+              className="flex items-center gap-1.5"
             >
               <RefreshCw size={14} />
               Recategorize
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -230,7 +428,7 @@ export function Dashboard() {
 
       {/* Charts row */}
       <div className="grid grid-cols-2 gap-3.5 mb-5">
-        <div className="bg-card border border-border rounded-xl p-5">
+        <Card>
           <Tabs
             tabs={[
               { key: 'cashflow', label: 'Cash Flow' },
@@ -249,9 +447,9 @@ export function Dashboard() {
               bare
             />
           )}
-        </div>
+        </Card>
 
-        <div className="bg-card border border-border rounded-xl p-5">
+        <Card>
           <Tabs
             tabs={[
               { key: 'category', label: 'Category Breakdown' },
@@ -273,7 +471,7 @@ export function Dashboard() {
             <>
               {s.top_merchants.length === 0 && <div className="text-xs text-muted-2 py-1">No spending yet</div>}
               {s.top_merchants.map((m) => (
-                <div key={m.name} className="flex justify-between text-[13px] py-1.5 border-b border-divider">
+                <div key={m.name} className="flex justify-between text-md py-1.5 border-b border-divider">
                   <span>{m.name}</span>
                   <span className="font-mono text-text-2">{fmtPlain(m.amount)}</span>
                 </div>
@@ -284,113 +482,234 @@ export function Dashboard() {
             <>
               {s.top_paynow_contacts.length === 0 && <div className="text-xs text-muted-2 py-1">No PayNow transfers yet</div>}
               {s.top_paynow_contacts.map((p) => (
-                <div key={p.name} className="flex justify-between text-[13px] py-1.5 border-b border-divider">
+                <div key={p.name} className="flex justify-between text-md py-1.5 border-b border-divider">
                   <span>{p.name}</span>
                   <span className="font-mono text-text-2">{fmtPlain(p.amount)}</span>
                 </div>
               ))}
             </>
           )}
-        </div>
+        </Card>
       </div>
 
       {/* Transaction feed */}
-      <div className="bg-card border border-border rounded-xl overflow-hidden">
+      <Card padding="" className="overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border gap-3 flex-wrap">
-          <div className="text-[13px] font-semibold shrink-0">Transaction Feed</div>
+          <div className="text-md font-semibold shrink-0">
+            Transaction Feed
+            <span className="text-muted-2 font-normal ml-1.5">
+              · Showing {pagedTransactions.length} of {filteredTransactions.length}
+            </span>
+          </div>
           <div className="flex items-center gap-2.5 flex-wrap">
-            <input
+            <Input
+              fullWidth={false}
               value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
+              onChange={(e) => updateSearchText(e.target.value)}
               placeholder="Search transactions…"
-              className="text-[13px] px-3 py-1.5 rounded-lg border border-border bg-input text-text w-[200px]"
+              className="w-[200px]"
             />
             <Select
               uiSize="sm"
               value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
+              onChange={(e) => updateCategoryFilter(e.target.value)}
               className="w-[160px]"
             >
               <option value="">All Categories</option>
               {categoryOptionElements(categoriesQ.data)}
             </Select>
             <label className="flex items-center gap-1.5 text-xs text-muted cursor-pointer whitespace-nowrap">
-              <Checkbox checked={excludedVisible} onChange={setExcludedVisible} />
+              <Checkbox checked={excludedVisible} onChange={updateExcludedVisible} />
               Show excluded
+            </label>
+            <label
+              className="flex items-center gap-1.5 text-xs text-muted cursor-pointer whitespace-nowrap"
+              title="Display name is the cleaned-up label (rule/contact/AI); full name is the raw text from the bank statement"
+            >
+              <Checkbox checked={showFullName} onChange={updateShowFullName} />
+              Show full name
             </label>
           </div>
         </div>
-        <div className="grid grid-cols-[80px_1fr_140px_130px_110px_30px_30px] px-5 py-2.5 text-[11px] text-muted-2 uppercase tracking-wide border-b border-divider">
-          <div>Date</div>
-          <div>Description</div>
-          <div>Category</div>
-          <div>Account</div>
-          <div className="text-right">Amount</div>
-          <div />
-          <div />
-        </div>
-        {txQ.isLoading && <div className="p-5 text-muted text-sm">Loading transactions…</div>}
-        {!txQ.isLoading && filteredTransactions.length === 0 && (
-          <div className="p-5 text-muted text-sm">
-            {searchText || categoryFilter ? 'No transactions match your filters.' : 'No transactions for this range yet.'}
+
+        {/* Active-filter chips - category and search are otherwise invisible
+            once set (the category select can be scrolled out of view, and a
+            donut-slice click sets it with no on-screen trace at all). */}
+        {(categoryFilter || searchText) && (
+          <div className="flex items-center gap-2 px-5 py-2 border-b border-divider flex-wrap">
+            {categoryFilter && (
+              <button
+                onClick={() => updateCategoryFilter('')}
+                className="inline-flex items-center gap-1.5 text-2xs px-2.5 py-1 rounded-full bg-input border border-border text-text hover:border-accent cursor-pointer"
+              >
+                Category: {categoryFilter} <span aria-hidden>×</span>
+              </button>
+            )}
+            {searchText && (
+              <button
+                onClick={() => updateSearchText('')}
+                className="inline-flex items-center gap-1.5 text-2xs px-2.5 py-1 rounded-full bg-input border border-border text-text hover:border-accent cursor-pointer"
+              >
+                Search: "{searchText}" <span aria-hidden>×</span>
+              </button>
+            )}
+            {categoryFilter && searchText && (
+              <button
+                onClick={() => {
+                  updateCategoryFilter('')
+                  updateSearchText('')
+                }}
+                className="text-2xs text-muted-2 hover:text-text underline cursor-pointer bg-transparent border-none p-0"
+              >
+                Clear all
+              </button>
+            )}
           </div>
         )}
-        {filteredTransactions.map((tx) => {
-          return (
-            <div key={tx.id}>
-              <div
-                className="grid grid-cols-[80px_1fr_140px_130px_110px_30px_30px] items-center px-5 py-3 text-[13px] border-b border-divider group"
-                style={{ opacity: tx.is_excluded ? 0.5 : 1 }}
-              >
-                <div className="text-muted font-mono text-xs">{fmtDate(tx.transaction_date)}</div>
-                <div className="truncate pr-2" title={tx.raw_description}>
-                  {tx.matched_label ?? tx.raw_description}
-                  {tx.is_excluded && (
-                    <span className="text-[10px] text-muted-2 border border-border rounded px-1.5 py-0.5 ml-1.5">
-                      excluded
-                    </span>
-                  )}
-                </div>
-                <div>
-                  <CategoryBadge category={tx.category} categories={categoriesQ.data} />
-                </div>
-                <div className="text-muted text-xs">
-                  {tx.bank_name} {tx.account_number_masked}
-                </div>
-                <div
-                  className="text-right font-mono"
-                  style={{ color: amountIntensityColor(tx.amount, maxAbsAmount) }}
-                >
-                  {fmtPlain(Math.abs(tx.amount))}
-                </div>
-                <div className="text-center">
-                  {tx.has_refund_link && (
-                    <button
-                      onClick={() => setRefundTxId(tx.id)}
-                      title="View refund pairing"
-                      className="border-none bg-transparent cursor-pointer text-accent text-base"
-                    >
-                      ⇄
-                    </button>
-                  )}
-                </div>
-                <div className="text-center">
-                  <button
-                    onClick={() => setEditingTxId(editingTxId === tx.id ? null : tx.id)}
-                    title="Edit transaction"
-                    className="border-none bg-transparent cursor-pointer text-muted-2 hover:text-text opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
-                  >
-                    <Pencil size={14} />
-                  </button>
-                </div>
-              </div>
-              {editingTxId === tx.id && (
-                <TransactionEditPopover transaction={tx} onClose={() => setEditingTxId(null)} />
-              )}
+
+        {/* Bounded, independently-scrolling region - this is what lets the
+            column header below stick at top:0 without needing to measure
+            the page-level header's height, and keeps an all-time range's
+            1000+ rows from turning the whole page into one giant scroller. */}
+        <div className="max-h-[65vh] overflow-y-auto">
+          <div
+            ref={columnHeaderRef}
+            className={`grid ${FEED_COLS} px-5 py-2.5 border-b border-divider sticky top-0 z-10 bg-card`}
+          >
+            <SortableHeader field="date" label="Date" sort={sort} onSort={toggleSort} />
+            <div className="text-2xs text-muted-2 uppercase tracking-wide">Description</div>
+            <SortableHeader field="category" label="Category" sort={sort} onSort={toggleSort} />
+            <div className="text-2xs text-muted-2 uppercase tracking-wide">Account</div>
+            <SortableHeader field="amount" label="Amount" align="right" sort={sort} onSort={toggleSort} />
+            <div />
+            <div />
+          </div>
+          {txQ.isLoading && <div className="p-5 text-muted text-sm">Loading transactions…</div>}
+          {!txQ.isLoading && filteredTransactions.length === 0 && (
+            <div className="p-5 text-muted text-sm">
+              {searchText || categoryFilter ? 'No transactions match your filters.' : 'No transactions for this range yet.'}
             </div>
-          )
-        })}
-      </div>
+          )}
+          {(() => {
+            let lastMonthKey: string | null = null
+            return pagedTransactions.map((tx) => {
+              const monthKey = tx.transaction_date.slice(0, 7)
+              const showDivider = sort.field === 'date' && monthKey !== lastMonthKey
+              lastMonthKey = monthKey
+              const agg = monthAggregates.get(monthKey)
+              const primaryText = showFullName ? tx.raw_description : (tx.matched_label ?? tx.raw_description)
+              const isHeavy = maxAbsAmount > 0 && Math.abs(tx.amount) >= maxAbsAmount * 0.5
+
+              return (
+                <div key={tx.id}>
+                  {showDivider && (
+                    <div
+                      className="sticky z-[5] px-5 py-1.5 text-2xs font-semibold text-muted-2 bg-input border-b border-divider"
+                      style={{ top: columnHeaderHeight }}
+                    >
+                      {fmtMonthYearLabel(monthKey)} · {agg?.count ?? 0} transaction{(agg?.count ?? 0) === 1 ? '' : 's'} ·{' '}
+                      {fmtPlain(agg?.outflow ?? 0)} out
+                    </div>
+                  )}
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => openEditor(tx)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        openEditor(tx)
+                      }
+                    }}
+                    className={`grid ${FEED_COLS} items-center px-5 py-3 text-md border-b border-divider group cursor-pointer hover:bg-input/50 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent`}
+                    style={{ opacity: tx.is_excluded ? 0.5 : 1 }}
+                  >
+                    <div className="text-muted font-mono text-xs">{fmtDate(tx.transaction_date, { withYear: spansMultipleYears })}</div>
+                    <div className="min-w-0 pr-2">
+                      <div className="truncate" title={tx.raw_description}>
+                        {highlightMatch(primaryText, debouncedSearch)}
+                        {tx.is_excluded && (
+                          <span className="text-[10px] text-muted-2 border border-border rounded px-1.5 py-0.5 ml-1.5">
+                            excluded
+                          </span>
+                        )}
+                      </div>
+                      {/* Full-name mode surfaces the cleaned-up label as a second line
+                          underneath the raw text - display-name mode (the default,
+                          unchanged from before this toggle existed) stays single-line,
+                          with the raw text still reachable via the title tooltip. */}
+                      {showFullName && tx.matched_label && (
+                        <div className="truncate text-2xs text-muted-2">{tx.matched_label}</div>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <CategoryBadge category={tx.category} categories={categoriesQ.data} />
+                    </div>
+                    <div className="text-muted text-xs truncate">
+                      {tx.bank_name} {tx.account_number_masked}
+                    </div>
+                    <div
+                      className={`text-right font-mono ${tx.amount > 0 ? 'text-success' : 'text-text'} ${
+                        isHeavy ? 'font-semibold' : ''
+                      }`}
+                    >
+                      {fmtSigned(tx.amount)}
+                    </div>
+                    <div className="text-center">
+                      {tx.has_refund_link && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setRefundTxId(tx.id)
+                          }}
+                          title="View refund pairing"
+                          className="border-none bg-transparent cursor-pointer text-accent text-base"
+                        >
+                          ⇄
+                        </button>
+                      )}
+                    </div>
+                    <div className="text-center">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          openEditor(tx)
+                        }}
+                        title="Edit transaction"
+                        className="border-none bg-transparent cursor-pointer text-muted-2 hover:text-text opacity-40 group-hover:opacity-100 group-focus-within:opacity-100"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                    </div>
+                  </div>
+                  {editingTxId === tx.id && (
+                    <TransactionEditPopover transaction={tx} onClose={() => setEditingTxId(null)} />
+                  )}
+                </div>
+              )
+            })
+          })()}
+          {visibleCount < filteredTransactions.length && (
+            <button
+              onClick={() => setVisibleCount((v) => v + PAGE_SIZE)}
+              className="w-full text-xs font-semibold text-muted hover:text-text px-5 py-3 border-b border-divider bg-transparent cursor-pointer"
+            >
+              Load more ({filteredTransactions.length - visibleCount} remaining)
+            </button>
+          )}
+        </div>
+
+        {filteredTransactions.length > 0 && (
+          <div className="flex items-center justify-between px-5 py-2.5 text-xs text-muted border-t border-border">
+            <div>
+              {filteredTransactions.length} transaction{filteredTransactions.length === 1 ? '' : 's'} in view
+            </div>
+            <div className={`font-mono font-semibold ${netTotal > 0 ? 'text-success' : 'text-text'}`}>
+              Net {fmtSigned(netTotal)}
+            </div>
+          </div>
+        )}
+      </Card>
 
       {refundTxId != null && <RefundDrawer transactionId={refundTxId} onClose={() => setRefundTxId(null)} />}
     </div>

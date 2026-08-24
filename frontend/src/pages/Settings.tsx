@@ -10,7 +10,11 @@ import {
 } from '../api/hooks'
 import { AiSection } from '../components/AiSection'
 import { AppearanceSection } from '../components/AppearanceSection'
+import { Button } from '../components/Button'
+import { Card } from '../components/Card'
+import { Field, Input } from '../components/Field'
 import { Modal } from '../components/Modal'
+import { PageShell } from '../components/PageShell'
 import { fmtBytes } from '../lib/format'
 
 function RelocateModal({ dbSize, onClose }: { dbSize: string; onClose: () => void }) {
@@ -26,34 +30,26 @@ function RelocateModal({ dbSize, onClose }: { dbSize: string; onClose: () => voi
   return (
     <Modal onClose={onClose} width={420}>
       <div className="text-base font-bold mb-2.5">Change Database Path</div>
-      <div className="text-[13px] text-muted leading-relaxed mb-4">
+      <div className="text-md text-muted leading-relaxed mb-4">
         This migrates a <strong className="text-text">{dbSize}</strong> database file to the new location. Active
         connections will be closed during the move, then reopened at the new path.
       </div>
-      <div className="text-xs text-muted mb-1">New location</div>
-      <input
-        value={newPath}
-        onChange={(e) => setNewPath(e.target.value)}
-        placeholder="/Users/you/Documents/sg-tracker-data.db"
-        className="w-full box-border px-3 py-2.5 rounded-lg border border-border bg-input text-text text-[13px] font-mono mb-4.5"
-      />
+      <Field label="New location" className="mb-4.5">
+        <Input
+          mono
+          value={newPath}
+          onChange={(e) => setNewPath(e.target.value)}
+          placeholder="/Users/you/Documents/sg-tracker-data.db"
+        />
+      </Field>
       {relocate.isError && (
-        <div className="text-[12px] text-danger-text mb-3">Could not relocate the database. Check the path.</div>
+        <div className="text-xs text-danger-text mb-3">Could not relocate the database. Check the path.</div>
       )}
       <div className="flex justify-end gap-2.5">
-        <button
-          onClick={onClose}
-          className="text-[13px] px-4 py-2.5 rounded-lg border border-border bg-input text-text cursor-pointer"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={handleMigrate}
-          disabled={relocate.isPending || !newPath.trim()}
-          className="text-[13px] font-semibold px-4 py-2.5 rounded-lg border-none bg-accent text-accent-fg cursor-pointer disabled:opacity-60"
-        >
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="primary" onClick={handleMigrate} disabled={relocate.isPending || !newPath.trim()}>
           Migrate Database
-        </button>
+        </Button>
       </div>
     </Modal>
   )
@@ -87,40 +83,19 @@ function ScopedDeleteModal({
 
   return (
     <Modal onClose={onClose} width={420}>
-      <div className="text-base font-bold mb-2.5" style={{ color: 'oklch(72% 0.16 25)' }}>
-        {title}
-      </div>
-      <div className="text-[13px] text-muted leading-relaxed mb-4">
+      <div className="text-base font-bold mb-2.5 text-danger-text">{title}</div>
+      <div className="text-md text-muted leading-relaxed mb-4">
         {description} Type <strong className="font-mono text-text">DELETE</strong> to confirm.
       </div>
-      <input
-        value={confirm}
-        onChange={(e) => setConfirm(e.target.value)}
-        placeholder="DELETE"
-        className="w-full box-border px-3 py-2.5 rounded-lg border border-border bg-input text-text text-[13px] font-mono mb-4.5"
-      />
+      <Input mono value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="DELETE" className="mb-4.5" />
       {mutation.isError && (
-        <div className="text-[12px] text-danger-text mb-3">Could not complete the deletion. Please try again.</div>
+        <div className="text-xs text-danger-text mb-3">Could not complete the deletion. Please try again.</div>
       )}
       <div className="flex justify-end gap-2.5">
-        <button
-          onClick={onClose}
-          className="text-[13px] px-4 py-2.5 rounded-lg border border-border bg-input text-text cursor-pointer"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={handleDelete}
-          disabled={!canDelete || mutation.isPending}
-          className="text-[13px] font-semibold px-4 py-2.5 rounded-lg border-none cursor-pointer"
-          style={{
-            background: canDelete ? 'var(--color-danger)' : 'var(--color-border)',
-            color: canDelete ? 'var(--color-danger-fg)' : 'var(--color-muted-2)',
-            cursor: canDelete ? 'pointer' : 'not-allowed',
-          }}
-        >
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="danger" onClick={handleDelete} disabled={!canDelete || mutation.isPending}>
           {confirmLabel}
-        </button>
+        </Button>
       </div>
     </Modal>
   )
@@ -145,41 +120,20 @@ function NuclearResetModal({ onClose }: { onClose: () => void }) {
 
   return (
     <Modal onClose={onClose} width={420}>
-      <div className="text-base font-bold mb-2.5" style={{ color: 'oklch(72% 0.16 25)' }}>
-        Nuclear Reset
-      </div>
-      <div className="text-[13px] text-muted leading-relaxed mb-4">
+      <div className="text-base font-bold mb-2.5 text-danger-text">Nuclear Reset</div>
+      <div className="text-md text-muted leading-relaxed mb-4">
         This permanently deletes all accounts, transactions, contacts and rules. Type{' '}
         <strong className="font-mono text-text">DELETE</strong> to confirm.
       </div>
-      <input
-        value={confirm}
-        onChange={(e) => setConfirm(e.target.value)}
-        placeholder="DELETE"
-        className="w-full box-border px-3 py-2.5 rounded-lg border border-border bg-input text-text text-[13px] font-mono mb-4.5"
-      />
+      <Input mono value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="DELETE" className="mb-4.5" />
       {reset.isError && (
-        <div className="text-[12px] text-danger-text mb-3">Could not complete the reset. Please try again.</div>
+        <div className="text-xs text-danger-text mb-3">Could not complete the reset. Please try again.</div>
       )}
       <div className="flex justify-end gap-2.5">
-        <button
-          onClick={onClose}
-          className="text-[13px] px-4 py-2.5 rounded-lg border border-border bg-input text-text cursor-pointer"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={handleReset}
-          disabled={!canReset || reset.isPending}
-          className="text-[13px] font-semibold px-4 py-2.5 rounded-lg border-none cursor-pointer"
-          style={{
-            background: canReset ? 'var(--color-danger)' : 'var(--color-border)',
-            color: canReset ? 'var(--color-danger-fg)' : 'var(--color-muted-2)',
-            cursor: canReset ? 'pointer' : 'not-allowed',
-          }}
-        >
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="danger" onClick={handleReset} disabled={!canReset || reset.isPending}>
           Purge Everything
-        </button>
+        </Button>
       </div>
     </Modal>
   )
@@ -200,102 +154,79 @@ export function Settings() {
   const dbSize = settingsQ.data ? fmtBytes(settingsQ.data.size_bytes) : '—'
 
   return (
-    <div className="px-9 pt-7 pb-15 max-w-2xl">
-      <div className="text-[22px] font-bold font-display mb-5">Settings &amp; Storage</div>
-
+    <PageShell title="Settings & Storage" maxWidth="max-w-2xl">
       <AppearanceSection />
 
       <AiSection settings={settingsQ.data} />
 
-      <div className="bg-card border border-border rounded-xl p-5 mb-4">
-        <div className="text-[13px] font-semibold mb-1">Region</div>
+      <Card className="mb-4">
+        <div className="text-md font-semibold mb-1">Region</div>
         <div className="text-xs text-muted mb-3.5">
           Statement parsing, currency formatting, and the default rule bank are all specific to this region.
         </div>
         <div className="flex gap-6 flex-wrap">
           <div>
             <div className="text-xs text-muted">Country</div>
-            <div className="text-[13px] font-mono">{settingsQ.data?.country_name ?? '—'}</div>
+            <div className="text-md font-mono">{settingsQ.data?.country_name ?? '—'}</div>
           </div>
           <div>
             <div className="text-xs text-muted">Currency</div>
-            <div className="text-[13px] font-mono">
+            <div className="text-md font-mono">
               {settingsQ.data ? `${settingsQ.data.currency_code} (${settingsQ.data.currency_symbol})` : '—'}
             </div>
           </div>
           <div>
             <div className="text-xs text-muted">Transfer scheme</div>
-            <div className="text-[13px] font-mono">{settingsQ.data?.transfer_scheme_name ?? '—'}</div>
+            <div className="text-md font-mono">{settingsQ.data?.transfer_scheme_name ?? '—'}</div>
           </div>
           <div>
             <div className="text-xs text-muted">Supported banks</div>
-            <div className="text-[13px] font-mono">{settingsQ.data?.supported_banks.join(', ') ?? '—'}</div>
+            <div className="text-md font-mono">{settingsQ.data?.supported_banks.join(', ') ?? '—'}</div>
           </div>
         </div>
-      </div>
+      </Card>
 
-      <div className="bg-card border border-border rounded-xl p-5 mb-4">
-        <div className="text-[13px] font-semibold mb-3.5">Database</div>
+      <Card className="mb-4">
+        <div className="text-md font-semibold mb-3.5">Database</div>
         <div className="text-xs text-muted mb-0.5">Path</div>
-        <div className="text-[13px] font-mono mb-3 break-all">{settingsQ.data?.db_path ?? '—'}</div>
+        <div className="text-md font-mono mb-3 break-all">{settingsQ.data?.db_path ?? '—'}</div>
         <div className="flex gap-6 mb-4">
           <div>
             <div className="text-xs text-muted">Size</div>
-            <div className="text-[13px] font-mono">{dbSize}</div>
+            <div className="text-md font-mono">{dbSize}</div>
           </div>
           <div>
             <div className="text-xs text-muted">Schema version</div>
-            <div className="text-[13px] font-mono">{settingsQ.data?.schema_version ?? '—'}</div>
+            <div className="text-md font-mono">{settingsQ.data?.schema_version ?? '—'}</div>
           </div>
         </div>
-        <button
-          onClick={() => setRelocateOpen(true)}
-          className="text-[13px] font-semibold px-4 py-2.5 rounded-lg border border-border bg-input text-text cursor-pointer"
-        >
+        <Button variant="secondary" className="font-semibold" onClick={() => setRelocateOpen(true)}>
           Change Database Path
-        </button>
-      </div>
+        </Button>
+      </Card>
 
-      <div className="bg-card rounded-xl p-5" style={{ border: '1px solid oklch(40% 0.08 25)' }}>
-        <div className="text-[13px] font-semibold mb-1.5" style={{ color: 'oklch(72% 0.16 25)' }}>
-          Danger Zone
-        </div>
-        <div className="text-[13px] text-muted mb-3.5 leading-relaxed">
+      <Card style={{ border: '1px solid var(--color-danger-surface-border)' }}>
+        <div className="text-md font-semibold mb-1.5 text-danger-text">Danger Zone</div>
+        <div className="text-md text-muted mb-3.5 leading-relaxed">
           Selectively clear one part of the local database, or permanently delete everything. None of this can be
           undone.
         </div>
         <div className="flex gap-2.5 flex-wrap mb-4">
-          <button
-            onClick={() => setDeleteScope('rules')}
-            className="text-[13px] font-semibold px-4 py-2.5 rounded-lg cursor-pointer bg-input"
-            style={{ border: '1px solid oklch(45% 0.15 25)', color: 'oklch(70% 0.18 25)' }}
-          >
+          <Button variant="danger-outline" onClick={() => setDeleteScope('rules')}>
             Delete All Rules
-          </button>
-          <button
-            onClick={() => setDeleteScope('contacts')}
-            className="text-[13px] font-semibold px-4 py-2.5 rounded-lg cursor-pointer bg-input"
-            style={{ border: '1px solid oklch(45% 0.15 25)', color: 'oklch(70% 0.18 25)' }}
-          >
+          </Button>
+          <Button variant="danger-outline" onClick={() => setDeleteScope('contacts')}>
             Delete All Contacts
-          </button>
-          <button
-            onClick={() => setDeleteScope('transactions')}
-            className="text-[13px] font-semibold px-4 py-2.5 rounded-lg cursor-pointer bg-input"
-            style={{ border: '1px solid oklch(45% 0.15 25)', color: 'oklch(70% 0.18 25)' }}
-          >
+          </Button>
+          <Button variant="danger-outline" onClick={() => setDeleteScope('transactions')}>
             Delete All Transactions
-          </button>
+          </Button>
         </div>
         <div className="h-px bg-border/70 mb-4" />
-        <button
-          onClick={() => setResetOpen(true)}
-          className="text-[13px] font-semibold px-4 py-2.5 rounded-lg border-none cursor-pointer text-white"
-          style={{ background: 'oklch(55% 0.19 25)' }}
-        >
+        <Button variant="danger" onClick={() => setResetOpen(true)}>
           Nuclear Reset
-        </button>
-      </div>
+        </Button>
+      </Card>
 
       {relocateOpen && <RelocateModal dbSize={dbSize} onClose={() => setRelocateOpen(false)} />}
       {resetOpen && <NuclearResetModal onClose={() => setResetOpen(false)} />}
@@ -326,6 +257,6 @@ export function Settings() {
           onClose={() => setDeleteScope(null)}
         />
       )}
-    </div>
+    </PageShell>
   )
 }

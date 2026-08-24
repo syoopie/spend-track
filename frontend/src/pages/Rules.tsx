@@ -1,12 +1,24 @@
 import { Pencil } from 'lucide-react'
 import { useState } from 'react'
 import { useCategories, useCreateRule, useDeleteRule, useReorderRules, useRules, useUpdateRule } from '../api/hooks'
+import { Button } from '../components/Button'
+import { Card } from '../components/Card'
 import { CategoryBadge } from '../components/CategoryBadge'
 import { categoryOptionElements } from '../components/CategoryOptions'
 import { Checkbox } from '../components/Checkbox'
+import { Field, Input } from '../components/Field'
 import { Modal } from '../components/Modal'
+import { PageShell } from '../components/PageShell'
 import { Select } from '../components/Select'
 import type { CategoryDirection, Rule } from '../api/types'
+
+// Rough client-side preview of the backend's fallback (engine/rules.py:
+// `display_label or match_pattern.title()`) - not required to match Python's
+// str.title() byte-for-byte, since it's only ever shown as a placeholder
+// hint here, never actually sent or applied.
+function titleCase(text: string): string {
+  return text.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase())
+}
 
 function RuleFormModal({ rule, onClose }: { rule?: Rule; onClose: () => void }) {
   const categoriesQ = useCategories()
@@ -14,6 +26,7 @@ function RuleFormModal({ rule, onClose }: { rule?: Rule; onClose: () => void }) 
   const updateRule = useUpdateRule()
   const [pattern, setPattern] = useState(rule?.match_pattern ?? '')
   const [category, setCategory] = useState(rule?.target_category ?? '')
+  const [displayLabel, setDisplayLabel] = useState(rule?.display_label ?? '')
   const [priority, setPriority] = useState<number | ''>(rule?.priority ?? '')
   const [isExclusion, setIsExclusion] = useState(rule?.is_exclusion_rule ?? false)
   const [exclusionReason, setExclusionReason] = useState(rule?.exclusion_reason ?? '')
@@ -33,6 +46,7 @@ function RuleFormModal({ rule, onClose }: { rule?: Rule; onClose: () => void }) 
       exclusion_reason: isExclusion ? exclusionReason.trim() || null : null,
       direction: isExclusion ? exclusionDirection : undefined,
       priority: priority === '' ? null : priority,
+      display_label: isExclusion ? null : displayLabel.trim() || null,
     }
     if (rule) {
       await updateRule.mutateAsync({ id: rule.id, body })
@@ -47,21 +61,14 @@ function RuleFormModal({ rule, onClose }: { rule?: Rule; onClose: () => void }) 
   return (
     <Modal onClose={onClose} width={460}>
       <div className="text-base font-bold mb-1">{rule ? 'Edit Rule' : 'New Rule'}</div>
-      <div className="text-[12px] text-muted mb-4">Applies to every transaction whose description contains the text below.</div>
+      <div className="text-xs text-muted mb-4">Applies to every transaction whose description contains the text below.</div>
 
       <div className="flex flex-col gap-3.5">
-        <div>
-          <div className="text-xs text-muted mb-1">Description contains</div>
-          <input
-            autoFocus
-            value={pattern}
-            onChange={(e) => setPattern(e.target.value)}
-            placeholder="e.g. NETFLIX"
-            className="w-full box-border px-3 py-2.5 rounded-lg border border-border bg-input text-text text-[13px]"
-          />
-        </div>
+        <Field label="Description contains">
+          <Input autoFocus value={pattern} onChange={(e) => setPattern(e.target.value)} placeholder="e.g. NETFLIX" />
+        </Field>
 
-        <label className="flex items-center gap-2 cursor-pointer text-[13px]">
+        <label className="flex items-center gap-2 cursor-pointer text-md">
           <Checkbox checked={isExclusion} onChange={setIsExclusion} />
           Exclude these transactions instead of categorizing them
         </label>
@@ -78,17 +85,28 @@ function RuleFormModal({ rule, onClose }: { rule?: Rule; onClose: () => void }) 
           </div>
         )}
 
+        {!isExclusion && (
+          <Field
+            label="Display name (optional)"
+            hint='Shown instead of the raw bank description for matching transactions. Leave blank to just title-case the pattern above.'
+          >
+            <Input
+              value={displayLabel}
+              onChange={(e) => setDisplayLabel(e.target.value)}
+              placeholder={pattern.trim() ? titleCase(pattern.trim()) : 'e.g. Netflix'}
+            />
+          </Field>
+        )}
+
         {isExclusion && (
           <div className="flex flex-col gap-3.5">
-            <div>
-              <div className="text-xs text-muted mb-1">Exclusion reason</div>
-              <input
+            <Field label="Exclusion reason">
+              <Input
                 value={exclusionReason}
                 onChange={(e) => setExclusionReason(e.target.value)}
                 placeholder="e.g. Self-transfer between own accounts"
-                className="w-full box-border px-3 py-2.5 rounded-lg border border-border bg-input text-text text-[13px]"
               />
-            </div>
+            </Field>
             <div>
               <div className="text-xs text-muted mb-1">Applies to</div>
               <Select
@@ -99,7 +117,7 @@ function RuleFormModal({ rule, onClose }: { rule?: Rule; onClose: () => void }) 
                 <option value="outflow">Outflow transactions only</option>
                 <option value="inflow">Inflow transactions only</option>
               </Select>
-              <div className="text-[11px] text-muted-2 mt-1">
+              <div className="text-2xs text-muted-2 mt-1">
                 An exclusion rule has no category to imply a direction from, so this must be picked explicitly -
                 otherwise a pattern like a self-transfer's description could exclude both legs of an unrelated
                 transaction pair.
@@ -111,32 +129,24 @@ function RuleFormModal({ rule, onClose }: { rule?: Rule; onClose: () => void }) 
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="text-xs text-muted">Priority</div>
-            <div className="text-[11px] text-muted-2">Lower numbers are evaluated first</div>
+            <div className="text-2xs text-muted-2">Lower numbers are evaluated first</div>
           </div>
-          <input
+          <Input
+            fullWidth={false}
             type="number"
             value={priority}
             onChange={(e) => setPriority(e.target.value === '' ? '' : Number(e.target.value))}
             placeholder="auto"
-            className="w-20 box-border px-2.5 py-2 rounded-lg border border-border bg-input text-text text-[13px] text-right"
+            className="w-20 text-right"
           />
         </div>
       </div>
 
       <div className="flex justify-end gap-2.5 mt-5">
-        <button
-          onClick={onClose}
-          className="text-[13px] px-4 py-2.5 rounded-lg border border-border bg-input text-text cursor-pointer"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={handleSave}
-          disabled={saving || !pattern.trim()}
-          className="text-[13px] font-semibold px-4 py-2.5 rounded-lg border-none bg-accent text-accent-fg cursor-pointer disabled:opacity-60"
-        >
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="primary" onClick={handleSave} disabled={saving || !pattern.trim()}>
           {rule ? 'Save Changes' : 'Save Rule'}
-        </button>
+        </Button>
       </div>
     </Modal>
   )
@@ -171,21 +181,16 @@ export function Rules() {
   }
 
   return (
-    <div className="px-9 pt-7 pb-15">
-      <div className="flex items-start justify-between mb-5 gap-4 flex-wrap">
-        <div>
-          <div className="text-[22px] font-bold font-display">Categorization &amp; Exclusion Rules</div>
-          <div className="text-[13px] text-muted mt-0.5">Evaluated top to bottom — the first match wins</div>
-        </div>
-        <button
-          onClick={() => setFormTarget('new')}
-          className="text-[13px] font-semibold px-4 py-2.5 rounded-lg border-none bg-accent text-accent-fg cursor-pointer self-start"
-        >
+    <PageShell
+      title="Categorization & Exclusion Rules"
+      subtitle="Evaluated top to bottom — the first match wins"
+      actions={
+        <Button variant="primary" onClick={() => setFormTarget('new')}>
           + New Rule
-        </button>
-      </div>
-
-      <div className="bg-card border border-border rounded-xl overflow-hidden">
+        </Button>
+      }
+    >
+      <Card padding="" className="overflow-hidden">
         {rulesQ.isLoading && <div className="p-5 text-muted text-sm">Loading…</div>}
         {!rulesQ.isLoading && rules.length === 0 && (
           <div className="p-5 text-muted text-sm">No rules yet — transactions fall back to contact matching, then "Others".</div>
@@ -204,7 +209,7 @@ export function Rules() {
               <div className="w-6.5 h-6.5 rounded-md bg-input text-muted text-xs font-bold flex items-center justify-center shrink-0">
                 {r.priority}
               </div>
-              <div className="flex-1 text-[13px]">
+              <div className="flex-1 text-md">
                 <span className="text-muted-2">IF</span> Transaction{' '}
                 <span className="text-muted-2">CONTAINS</span>{' '}
                 <span className="font-mono bg-input px-1.5 py-0.5 rounded">{r.match_pattern}</span>{' '}
@@ -212,18 +217,25 @@ export function Rules() {
                 {r.is_exclusion_rule ? (
                   <>
                     <span
-                      className="text-[11px] font-semibold px-2 py-0.5 rounded-md"
-                      style={{ background: 'oklch(28% 0.06 25)', color: 'oklch(75% 0.15 25)' }}
+                      className="text-2xs font-semibold px-2 py-0.5 rounded-md"
+                      style={{ background: 'var(--color-danger-badge-bg)', color: 'var(--color-danger-badge-fg)' }}
                     >
                       EXCLUDE
                     </span>
-                    <span className="text-muted-2 text-[11px] uppercase tracking-wide ml-1.5">
+                    <span className="text-muted-2 text-2xs uppercase tracking-wide ml-1.5">
                       {r.direction} only
                     </span>
                     <span className="text-muted-2 text-xs"> — {r.exclusion_reason}</span>
                   </>
                 ) : (
-                  <CategoryBadge category={r.target_category ?? ''} categories={categoriesQ.data} />
+                  <>
+                    <CategoryBadge category={r.target_category ?? ''} categories={categoriesQ.data} />
+                    {r.display_label && (
+                      <span className="text-muted-2 text-xs ml-1.5">
+                        as <span className="text-text-2 font-medium">{r.display_label}</span>
+                      </span>
+                    )}
+                  </>
                 )}
               </div>
               <button
@@ -242,11 +254,11 @@ export function Rules() {
             </div>
           )
         })}
-      </div>
+      </Card>
 
       {formTarget && (
         <RuleFormModal rule={formTarget === 'new' ? undefined : formTarget} onClose={() => setFormTarget(null)} />
       )}
-    </div>
+    </PageShell>
   )
 }

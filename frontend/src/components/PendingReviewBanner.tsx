@@ -1,3 +1,4 @@
+import { Button } from './Button'
 import { useUploadDialog } from './UploadProvider'
 
 // Shown above every page's content (see App.tsx's MainLayout), not just the
@@ -11,17 +12,14 @@ export function PendingReviewBanner() {
   return (
     <div
       className="flex items-center justify-between gap-4 mx-9 mt-5 px-4.5 py-3 rounded-xl border"
-      style={{ background: 'oklch(24% 0.05 70)', borderColor: 'oklch(40% 0.08 70)' }}
+      style={{ background: 'var(--color-warning-surface)', borderColor: 'var(--color-warning-surface-border)' }}
     >
-      <div className="text-[13px]" style={{ color: 'oklch(85% 0.12 70)' }}>
+      <div className="text-md" style={{ color: 'var(--color-warning-text)' }}>
         A statement is awaiting review before it can be committed.
       </div>
-      <button
-        onClick={openReview}
-        className="text-[12px] font-semibold px-3.5 py-2 rounded-lg border-none bg-accent text-accent-fg cursor-pointer shrink-0"
-      >
+      <Button variant="primary" size="sm" onClick={openReview} className="shrink-0">
         Review Now
-      </button>
+      </Button>
     </div>
   )
 }

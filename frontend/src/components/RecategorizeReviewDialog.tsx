@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useBatchActions, useCurrentRecategorizeBatch, useRecategorizeTransactions } from '../api/hooks'
 import { fmtMonthRangeLabel } from '../lib/format'
+import { Button } from './Button'
 import { Modal } from './Modal'
 import { ReviewDialog, type ReviewRow, type ReviewStatCard } from './ReviewDialog'
 
@@ -47,29 +48,20 @@ export function RecategorizeReviewDialog({
   if (!batchQ.data) {
     return (
       <Modal onClose={onClose} width={420}>
-        <div className="text-[15px] font-semibold mb-2.5">Recategorize Transactions</div>
-        <div className="text-[13px] text-muted mb-4">
+        <div className="text-title-sm font-semibold mb-2.5">Recategorize Transactions</div>
+        <div className="text-md text-muted mb-4">
           Re-run every categorization rule against transactions from{' '}
           <span className="text-text font-medium">{fmtMonthRangeLabel(range.from, range.to)}</span>
           {accountId ? ' for the selected account' : ' across all accounts'}. Nothing is applied until you review
           and commit — this proposes the recomputed category, label, and exclusion status for each transaction in
           that range (including ones you've manually edited before) without changing anything yet.
         </div>
-        {confirmError && <div className="text-[12px] text-danger-text mb-3">{confirmError}</div>}
+        {confirmError && <div className="text-xs text-danger-text mb-3">{confirmError}</div>}
         <div className="flex justify-end gap-2.5">
-          <button
-            onClick={onClose}
-            className="text-[12px] px-3.5 py-2 rounded-lg border border-border bg-card text-text cursor-pointer"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleConfirm}
-            disabled={recategorize.isPending}
-            className="text-[12px] font-semibold px-3.5 py-2 rounded-lg border-none bg-accent text-accent-fg cursor-pointer disabled:opacity-60"
-          >
+          <Button size="sm" onClick={onClose}>Cancel</Button>
+          <Button variant="primary" size="sm" onClick={handleConfirm} disabled={recategorize.isPending}>
             {recategorize.isPending ? 'Scanning…' : 'Recategorize'}
-          </button>
+          </Button>
         </div>
       </Modal>
     )
@@ -99,6 +91,8 @@ export function RecategorizeReviewDialog({
     exclusion_reason: r.exclusion_reason,
     needs_review: r.needs_review,
     is_paynow: r.is_paynow,
+    original_category: r.original_category,
+    original_label: r.original_label,
     ai_suggested: r.ai_suggested,
     ai_category: r.ai_category,
     ai_label: r.ai_label,
@@ -125,7 +119,9 @@ export function RecategorizeReviewDialog({
       rows={rows}
       onApplyRow={(row, body) => actions.applyRow(row.key, body)}
       applyPending={actions.applyPending}
-      onCreateRule={(_row, matchPattern, targetCategory) => actions.createRule(matchPattern, targetCategory)}
+      onCreateRule={(_row, matchPattern, targetCategory, displayLabel) =>
+        actions.createRule(matchPattern, targetCategory, displayLabel)
+      }
       createRulePending={actions.createRulePending}
       onUndoRule={actions.undoRule}
       undoRulePending={actions.undoRulePending}
@@ -133,27 +129,22 @@ export function RecategorizeReviewDialog({
       footer={
         <>
           {batch.ai_status === 'running' && (
-            <div className="text-[11px] text-muted mr-auto">
+            <div className="text-2xs text-muted mr-auto">
               AI categorization still running — you can commit once it finishes, or close this and check back
               later.
             </div>
           )}
-          <button
-            onClick={handleDiscard}
-            disabled={actions.discardPending}
-            className="text-[13px] font-semibold px-4.5 py-2.5 rounded-lg cursor-pointer bg-input disabled:opacity-60"
-            style={{ border: '1px solid oklch(45% 0.15 25)', color: 'oklch(70% 0.18 25)' }}
-          >
+          <Button variant="danger-outline" onClick={handleDiscard} disabled={actions.discardPending}>
             Discard
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="primary"
             onClick={handleCommit}
             disabled={actions.commitPending || batch.rows.length === 0 || batch.ai_status === 'running'}
             title={batch.ai_status === 'running' ? 'Wait for AI categorization to finish, or close this dialog' : undefined}
-            className="text-[13px] font-semibold px-5 py-2.5 rounded-lg border-none bg-accent text-accent-fg cursor-pointer disabled:opacity-60"
           >
             Commit {batch.changed} Change{batch.changed === 1 ? '' : 's'}
-          </button>
+          </Button>
         </>
       }
     />

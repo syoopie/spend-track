@@ -1,4 +1,5 @@
 import { useBatchActions, useCurrentStagingBatch } from '../api/hooks'
+import { Button } from './Button'
 import { ReviewDialog, type ReviewRow, type ReviewStatCard } from './ReviewDialog'
 
 export function StagingReviewDialog({ onClose }: { onClose: () => void }) {
@@ -53,6 +54,8 @@ export function StagingReviewDialog({ onClose }: { onClose: () => void }) {
     exclusion_reason: r.exclusion_reason,
     needs_review: r.needs_review,
     is_paynow: r.is_paynow,
+    original_category: r.original_category,
+    original_label: r.original_label,
     ai_suggested: r.ai_suggested,
     ai_category: r.ai_category,
     ai_label: r.ai_label,
@@ -83,7 +86,9 @@ export function StagingReviewDialog({ onClose }: { onClose: () => void }) {
       rows={rows}
       onApplyRow={(row, body) => actions.applyRow(row.key, body)}
       applyPending={actions.applyPending}
-      onCreateRule={(_row, matchPattern, targetCategory) => actions.createRule(matchPattern, targetCategory)}
+      onCreateRule={(_row, matchPattern, targetCategory, displayLabel) =>
+        actions.createRule(matchPattern, targetCategory, displayLabel)
+      }
       createRulePending={actions.createRulePending}
       onUndoRule={actions.undoRule}
       undoRulePending={actions.undoRulePending}
@@ -91,27 +96,22 @@ export function StagingReviewDialog({ onClose }: { onClose: () => void }) {
       footer={
         <>
           {batch.ai_status === 'running' && (
-            <div className="text-[11px] text-muted mr-auto">
+            <div className="text-2xs text-muted mr-auto">
               AI categorization still running — you can commit once it finishes, or close this and check back
               later.
             </div>
           )}
-          <button
-            onClick={handleDiscard}
-            disabled={actions.discardPending}
-            className="text-[13px] font-semibold px-4.5 py-2.5 rounded-lg cursor-pointer bg-input disabled:opacity-60"
-            style={{ border: '1px solid oklch(45% 0.15 25)', color: 'oklch(70% 0.18 25)' }}
-          >
+          <Button variant="danger-outline" onClick={handleDiscard} disabled={actions.discardPending}>
             Discard Batch
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="primary"
             onClick={handleCommit}
             disabled={actions.commitPending || visibleRows.length === 0 || batch.ai_status === 'running'}
             title={batch.ai_status === 'running' ? 'Wait for AI categorization to finish, or close this dialog' : undefined}
-            className="text-[13px] font-semibold px-5 py-2.5 rounded-lg border-none bg-accent text-accent-fg cursor-pointer disabled:opacity-60"
           >
             Commit {batch.new_extracted} Transaction{batch.new_extracted === 1 ? '' : 's'}
-          </button>
+          </Button>
         </>
       }
     />

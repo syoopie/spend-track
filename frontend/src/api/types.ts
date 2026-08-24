@@ -27,6 +27,8 @@ export interface BatchRow {
   needs_review: boolean
   is_duplicate: boolean
   is_paynow: boolean
+  original_category: string
+  original_label: string | null
   ai_suggested: boolean
   ai_category: string | null
   ai_label: string | null
@@ -56,6 +58,7 @@ export interface StagingBatch {
 // RecategorizeRowUpdateRequest, identical fields under different names).
 export interface BatchRowUpdateRequest {
   category: string
+  matched_label?: string | null
   subcategory?: string | null
   save_as_rule?: boolean
   rule_pattern?: string | null
@@ -63,8 +66,7 @@ export interface BatchRowUpdateRequest {
   save_as_contact?: boolean
   contact_name?: string | null
   contact_identifier?: string | null
-  reject_ai?: boolean
-  restore_ai?: boolean
+  restore_default?: boolean
 }
 
 // The "Create Rule" action's own request/response shape - deliberately
@@ -76,6 +78,7 @@ export interface RuleQuickCreateRequest {
   match_pattern: string
   target_category: string
   target_subcategory?: string | null
+  display_label?: string | null
 }
 
 // Both directions of a rule-rerun's row diff - the server returns one of
@@ -239,6 +242,8 @@ export interface RuleCreateRequest {
   // target_category) - required in practice for an exclusion rule, which
   // has nothing else to derive it from.
   direction?: CategoryDirection | null
+  // Meaningless (and ignored by the backend) for an exclusion rule.
+  display_label?: string | null
 }
 
 export interface RuleUpdateRequest {
@@ -249,6 +254,7 @@ export interface RuleUpdateRequest {
   is_exclusion_rule?: boolean
   exclusion_reason?: string | null
   direction?: CategoryDirection | null
+  display_label?: string | null
 }
 
 export type CategoryDirection = 'inflow' | 'outflow'

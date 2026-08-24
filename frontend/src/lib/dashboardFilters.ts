@@ -1,6 +1,10 @@
 export interface DashboardFilters {
   range?: { from: string; to: string }
   accountId?: string
+  showFullName?: boolean
+  searchText?: string
+  categoryFilter?: string
+  excludedVisible?: boolean
 }
 
 const STORAGE_KEY = 'sg-tracker-dashboard-filters'
@@ -15,7 +19,11 @@ export function loadDashboardFilters(): DashboardFilters {
         ? { from: parsed.range.from, to: parsed.range.to }
         : undefined
     const accountId = typeof parsed.accountId === 'string' ? parsed.accountId : undefined
-    return { range, accountId }
+    const showFullName = typeof parsed.showFullName === 'boolean' ? parsed.showFullName : undefined
+    const searchText = typeof parsed.searchText === 'string' ? parsed.searchText : undefined
+    const categoryFilter = typeof parsed.categoryFilter === 'string' ? parsed.categoryFilter : undefined
+    const excludedVisible = typeof parsed.excludedVisible === 'boolean' ? parsed.excludedVisible : undefined
+    return { range, accountId, showFullName, searchText, categoryFilter, excludedVisible }
   } catch {
     return {}
   }

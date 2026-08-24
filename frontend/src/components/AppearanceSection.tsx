@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { ACCENT_PRESETS, DEFAULT_ACCENT, loadStoredAccentColor, resetAccentColor, saveAccentColor } from '../lib/accentColor'
+import { Card } from './Card'
 
 // Entirely frontend-only - accent color persists to localStorage, there's no
 // backend endpoint for it at all.
@@ -17,8 +18,8 @@ export function AppearanceSection() {
   }
 
   return (
-    <div className="bg-card border border-border rounded-xl p-5 mb-4">
-      <div className="text-[13px] font-semibold mb-1">Appearance</div>
+    <Card className="mb-4">
+      <div className="text-md font-semibold mb-1">Appearance</div>
       <div className="text-xs text-muted mb-3.5">Choose the accent color used for buttons, links, and highlights.</div>
       <div className="flex items-center gap-2.5 flex-wrap">
         {ACCENT_PRESETS.map((p) => (
@@ -53,11 +54,11 @@ export function AppearanceSection() {
         </label>
         <button
           onClick={reset}
-          className="text-[12px] text-muted hover:text-text cursor-pointer border-none bg-transparent ml-1"
+          className="text-xs text-muted hover:text-text cursor-pointer border-none bg-transparent ml-1"
         >
           Reset to default
         </button>
       </div>
-    </div>
+    </Card>
   )
 }

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { Category, CategoryBreakdownSlice } from '../api/types'
+import { Card } from './Card'
 import { categoryDotColor, categoryIcon } from '../lib/categoryColor'
 import { fmtCompact, fmtPlain } from '../lib/format'
 
@@ -34,7 +35,7 @@ export function CategoryDonut({
 
   const content = (
     <>
-      <div className="text-[13px] font-semibold mb-3.5">Category Breakdown</div>
+      <div className="text-md font-semibold mb-3.5">Category Breakdown</div>
       <div className="flex items-center gap-4.5">
         <div className="w-[110px] h-[110px] relative shrink-0">
           {segments.length === 0 ? (
@@ -107,5 +108,5 @@ export function CategoryDonut({
   )
 
   if (bare) return content
-  return <div className="bg-card border border-border rounded-xl p-5">{content}</div>
+  return <Card>{content}</Card>
 }

@@ -153,7 +153,7 @@ export function Select({
   }
 
   const selected = options.find((o) => o.value === value)
-  const padding = uiSize === 'sm' ? 'pl-2.5 pr-7 py-1.5 text-[13px]' : 'pl-3 pr-8 py-2 text-[13px]'
+  const padding = uiSize === 'sm' ? 'pl-2.5 pr-7 py-1.5 text-md' : 'pl-3 pr-8 py-2 text-md'
   const bgClass = bg === 'card' ? 'bg-card' : 'bg-input'
 
   return (
@@ -196,7 +196,7 @@ export function Select({
                 disabled={o.disabled}
                 onMouseEnter={() => setActiveIndex(i)}
                 onClick={() => commit(i)}
-                className={`w-full flex items-center gap-1.5 text-left px-3 py-1.5 text-[13px] whitespace-nowrap cursor-pointer border-0 bg-transparent
+                className={`w-full flex items-center gap-1.5 text-left px-3 py-1.5 text-md whitespace-nowrap cursor-pointer border-0 bg-transparent
                   disabled:opacity-40 disabled:cursor-not-allowed
                   ${i === activeIndex ? 'bg-accent/12' : ''}
                   ${o.value === value ? 'text-accent font-semibold' : 'text-text'}`}

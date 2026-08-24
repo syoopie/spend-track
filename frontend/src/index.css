@@ -20,9 +20,43 @@
   --color-danger: oklch(55% 0.19 25);
   --color-danger-fg: #fff;
   --color-danger-text: oklch(72% 0.16 25);
+  --color-danger-border: oklch(45% 0.15 25);
+  --color-danger-surface-border: oklch(40% 0.08 25);
+  --color-danger-badge-bg: oklch(28% 0.06 25);
+  --color-danger-badge-fg: oklch(76% 0.15 25);
   --color-success: oklch(72% 0.17 150);
+  --color-success-surface: oklch(22% 0.05 150);
+  --color-success-surface-border: oklch(40% 0.08 150);
+  --color-success-text: oklch(80% 0.13 150);
+  --color-warning-surface: oklch(24% 0.05 70);
+  --color-warning-surface-border: oklch(40% 0.08 70);
+  --color-warning-badge-bg: oklch(30% 0.07 70);
+  --color-warning-text: oklch(82% 0.13 70);
+  --color-ai-surface: oklch(22% 0.045 285);
+  --color-ai-surface-border: oklch(45% 0.1 285);
+  --color-ai-badge-bg: oklch(30% 0.09 285);
+  --color-ai-text: oklch(82% 0.1 285);
   --font-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
   --font-display: 'Space Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+
+  /* Fixed type scale for sizes that fall between Tailwind's defaults - named
+     distinctly (not xs/sm/base/lg) so this never silently reflows the ~85
+     call sites already using Tailwind's own default scale. text-[12px]
+     literals already match the default text-xs exactly and use that instead. */
+  --text-2xs: 0.6875rem;      /* 11px - was a mix of text-[10.5px]/text-[11px] */
+  --text-2xs--line-height: 1.4;
+  --text-md: 0.8125rem;       /* 13px - the most-repeated ad-hoc literal, body copy */
+  --text-md--line-height: 1.5;
+  --text-title-sm: 0.9375rem; /* 15px */
+  --text-title-sm--line-height: 1.4;
+  --text-title: 1.375rem;     /* 22px - page titles */
+  --text-title--line-height: 1.25;
+
+  /* rounded-md/lg/xl/2xl already match this app's 6/8/12/16px radii exactly
+     at Tailwind's own defaults and are used consistently - the only true
+     off-scale outlier was rounded-[10px] (ReviewDialog stat cards,
+     RefundDrawer), which sits between lg and xl with no default home. */
+  --radius-2lg: 0.625rem; /* 10px */
 }
 
 body {
@@ -30,6 +64,13 @@ body {
   background: var(--color-bg);
   color: var(--color-text);
   font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}
+
+/* Every currency/count figure in the app uses the font-mono utility -
+   tabular-nums keeps digits a fixed width so stacked numbers (amount
+   columns, metric cards) align instead of drifting per-digit. */
+.font-mono {
+  font-variant-numeric: tabular-nums;
 }
 
 ::-webkit-scrollbar {

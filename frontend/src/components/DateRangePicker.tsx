@@ -33,7 +33,7 @@ export function DateRangePicker({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="text-[13px] px-3 py-2 rounded-lg border border-border bg-input text-text cursor-pointer flex items-center gap-1.5"
+        className="text-md px-3 py-2 rounded-lg border border-border bg-input text-text cursor-pointer flex items-center gap-1.5"
       >
         {fmtMonthRangeLabel(value.from, value.to)}
         <span className="text-muted-2 text-[10px]">▾</span>
@@ -55,7 +55,7 @@ export function DateRangePicker({
                 onChange({ from: latest, to: latest })
                 setOpen(false)
               }}
-              className="text-[12px] text-accent hover:text-accent-hover bg-transparent border-none cursor-pointer p-0"
+              className="text-xs text-accent hover:text-accent-hover bg-transparent border-none cursor-pointer p-0"
             >
               Latest month
             </button>
@@ -65,7 +65,7 @@ export function DateRangePicker({
                 onChange({ from: earliest, to: latest })
                 setOpen(false)
               }}
-              className="text-[12px] text-accent hover:text-accent-hover bg-transparent border-none cursor-pointer p-0"
+              className="text-xs text-accent hover:text-accent-hover bg-transparent border-none cursor-pointer p-0"
             >
               All time
             </button>

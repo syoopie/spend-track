@@ -1,4 +1,5 @@
 import type { CashFlowMonth, MonthlyTotal } from '../api/types'
+import { Card } from './Card'
 import { fmtCompact, fmtMonthLabel } from '../lib/format'
 
 const MIN_MONTHS = 6
@@ -45,7 +46,7 @@ export function CashFlowChart({
 
   const content = (
     <>
-      <div className="text-[13px] font-semibold mb-4">{title}</div>
+      <div className="text-md font-semibold mb-4">{title}</div>
       <div className={`flex items-end ${colGap} h-[150px] px-1.5`}>
         {chartData.map((m) => {
           const isSelected = !padded || (m.month >= rangeFrom && m.month <= rangeTo)
@@ -67,14 +68,14 @@ export function CashFlowChart({
                   />
                 </div>
               </div>
-              <div className={`text-[11px] text-center ${isSelected ? 'text-text font-semibold' : 'text-muted-2'}`}>
+              <div className={`text-2xs text-center ${isSelected ? 'text-text font-semibold' : 'text-muted-2'}`}>
                 {fmtMonthLabel(m.month)}
               </div>
             </div>
           )
         })}
       </div>
-      <div className="flex gap-4 text-[11px] text-muted mt-1.5">
+      <div className="flex gap-4 text-2xs text-muted mt-1.5">
         <span>
           <span className="text-success">■</span> Inflow
         </span>
@@ -91,5 +92,5 @@ export function CashFlowChart({
   )
 
   if (bare) return content
-  return <div className="bg-card border border-border rounded-xl p-5">{content}</div>
+  return <Card>{content}</Card>
 }
