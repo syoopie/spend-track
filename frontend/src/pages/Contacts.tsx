@@ -12,6 +12,7 @@ import { Button } from '../components/Button'
 import { Card } from '../components/Card'
 import { CategoryBadge } from '../components/CategoryBadge'
 import { categoryOptionElements } from '../components/CategoryOptions'
+import { DataTableCell, DataTableHeader, DataTableRow, dataTableGridClass, type DataTableColumn } from '../components/DataTable'
 import { EmptyState, ErrorState } from '../components/EmptyState'
 import { Field, Input } from '../components/Field'
 import { Modal } from '../components/Modal'
@@ -87,6 +88,15 @@ function ContactFormModal({ contact, onClose }: { contact?: Contact; onClose: ()
   )
 }
 
+const CONTACT_COLUMNS: DataTableColumn[] = [
+  { key: 'contact', header: 'Contact', width: '1fr' },
+  { key: 'identifiers', header: 'Linked Identifiers', width: '1.6fr' },
+  { key: 'category', header: 'Default Category', width: '160px' },
+  { key: 'spend', header: 'Historical Spend', width: '140px', align: 'right' },
+  { key: 'actions', header: '', width: '36px' },
+]
+const CONTACT_GRID = dataTableGridClass(CONTACT_COLUMNS)
+
 export function Contacts() {
   const contactsQ = useContacts()
   const categoriesQ = useCategories()
@@ -121,14 +131,12 @@ export function Contacts() {
         </>
       }
     >
-      <Card padding="" className="overflow-hidden">
-        <div className="grid grid-cols-[1fr_1.6fr_160px_140px_36px] px-5 py-2.5 text-2xs text-muted-2 uppercase tracking-wide border-b border-divider">
-          <div>Contact</div>
-          <div>Linked Identifiers</div>
-          <div>Default Category</div>
-          <div className="text-right">Historical Spend</div>
-          <div />
-        </div>
+      <Card padding="" className="overflow-hidden" role="grid" aria-label="Contacts">
+        <DataTableHeader
+          columns={CONTACT_COLUMNS}
+          gridClassName={CONTACT_GRID}
+          className="px-5 py-2.5 text-2xs text-muted-2 uppercase tracking-wide border-b border-divider"
+        />
         {contactsQ.isLoading && <div className="p-5 text-muted text-sm">Loading…</div>}
         {contactsQ.isError && (
           <ErrorState description="Couldn't load your contacts." onRetry={() => contactsQ.refetch()} />
@@ -146,26 +154,27 @@ export function Contacts() {
           />
         )}
         {(contactsQ.data ?? []).map((c) => (
-          <div
-            key={c.id}
-            className="grid grid-cols-[1fr_1.6fr_160px_140px_36px] items-center px-5 py-3.5 text-md border-b border-divider"
-          >
-            <div className="font-semibold">{c.name}</div>
-            <div className="flex gap-1.5 flex-wrap">
-              {c.identifiers.map((id) => (
-                <span
-                  key={id}
-                  className="text-2xs font-mono px-2 py-0.5 rounded-md bg-input text-text-2"
-                >
-                  {id}
-                </span>
-              ))}
-            </div>
-            <div>
+          <DataTableRow key={c.id} gridClassName={CONTACT_GRID} className="items-center px-5 py-3.5 text-md border-b border-divider">
+            <DataTableCell className="font-semibold">{c.name}</DataTableCell>
+            <DataTableCell>
+              <div className="flex gap-1.5 flex-wrap">
+                {c.identifiers.map((id) => (
+                  <span
+                    key={id}
+                    className="text-2xs font-mono px-2 py-0.5 rounded-md bg-input text-text-2"
+                  >
+                    {id}
+                  </span>
+                ))}
+              </div>
+            </DataTableCell>
+            <DataTableCell>
               <CategoryBadge category={c.default_category} categories={categoriesQ.data} />
-            </div>
-            <div className="text-right font-mono">{fmtPlain(c.historical_spend)}</div>
-            <div className="text-right">
+            </DataTableCell>
+            <DataTableCell align="right" className="font-mono">
+              {fmtPlain(c.historical_spend)}
+            </DataTableCell>
+            <DataTableCell align="right">
               <button
                 onClick={() => setFormTarget(c)}
                 title="Edit contact"
@@ -173,8 +182,8 @@ export function Contacts() {
               >
                 <Pencil size={14} />
               </button>
-            </div>
-          </div>
+            </DataTableCell>
+          </DataTableRow>
         ))}
       </Card>
 

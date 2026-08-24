@@ -6,6 +6,7 @@ import { categoryIcon } from '../lib/categoryColor'
 import { fmtDate, fmtSigned } from '../lib/format'
 import { CategoryBadge } from './CategoryBadge'
 import { Checkbox } from './Checkbox'
+import { DataTableHeader, dataTableGridClass, type DataTableColumn } from './DataTable'
 import { EmptyState } from './EmptyState'
 import { Modal } from './Modal'
 import { Select } from './Select'
@@ -21,8 +22,20 @@ const SUCCESS_FG = 'var(--color-success-text)'
 // Leading 20px checkbox (REV-1) and 24px chevron (REV-3) columns, ahead of
 // the four original Date/Description/Category/Amount columns - shared by
 // the column header and every row so they can never drift out of
-// alignment with each other.
-const ROW_GRID_COLS = 'grid-cols-[20px_24px_80px_1fr_180px_110px]'
+// alignment with each other. Drives DataTableHeader's real
+// role="columnheader" row (X-6); the data rows below deliberately don't use
+// DataTable's row/cell wrapper - each is its own role="button" disclosure
+// row (click/Enter opens the popover, arrow keys move focus between rows),
+// not an ARIA grid row, so cells there stay plain divs. See DataTable.tsx.
+const ROW_COLUMNS: DataTableColumn[] = [
+  { key: 'select', header: '', width: '20px' },
+  { key: 'expand', header: '', width: '24px' },
+  { key: 'date', header: 'Date', width: '80px' },
+  { key: 'description', header: 'Description', width: '1fr' },
+  { key: 'category', header: 'Category', width: '180px' },
+  { key: 'amount', header: 'Amount', width: '110px', align: 'right' },
+]
+const ROW_GRID_COLS = dataTableGridClass(ROW_COLUMNS)
 
 // Shared shape both the staging batch's rows and the recategorize batch's
 // rows get mapped into, so the row list/popover only need to be written
@@ -915,17 +928,12 @@ export function ReviewDialog({
       )}
 
       <div ref={scrollerRef} className="bg-input border border-border rounded-xl overflow-y-auto mb-5 max-h-[45vh]">
-        <div
-          ref={columnHeaderRef}
-          className={`grid ${ROW_GRID_COLS} px-5 py-2.5 text-2xs text-muted-2 uppercase tracking-wide border-b border-border/70 sticky top-0 bg-input`}
-        >
-          <div />
-          <div />
-          <div>Date</div>
-          <div>Description</div>
-          <div>Category</div>
-          <div className="text-right">Amount</div>
-        </div>
+        <DataTableHeader
+          headerRef={columnHeaderRef}
+          columns={ROW_COLUMNS}
+          gridClassName={ROW_GRID_COLS}
+          className="px-5 py-2.5 text-2xs text-muted-2 uppercase tracking-wide border-b border-border/70 sticky top-0 bg-input"
+        />
         {rows.length === 0 && <EmptyState icon={Inbox} title={emptyMessage} />}
         {rows.length > 0 && visibleRows.length === 0 && (
           <EmptyState icon={Inbox} title="No rows match this filter" />

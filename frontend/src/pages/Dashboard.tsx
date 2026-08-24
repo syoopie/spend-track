@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, ChevronsUpDown, FileUp, Pencil, Receipt, RefreshCw, SearchX } from 'lucide-react'
+import { FileUp, Pencil, Receipt, RefreshCw, SearchX } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useAccounts, useCategories, useDashboardSummary, useMonthlyTotals, useTransactions } from '../api/hooks'
@@ -12,6 +12,7 @@ import { VelocityChart } from '../components/VelocityChart'
 import { RefundDrawer } from '../components/RefundDrawer'
 import { Button } from '../components/Button'
 import { Card } from '../components/Card'
+import { DataTableHeader, dataTableGridClass, type DataTableColumn } from '../components/DataTable'
 import { DateRangePicker } from '../components/DateRangePicker'
 import { EmptyState, ErrorState } from '../components/EmptyState'
 import { Input } from '../components/Field'
@@ -24,7 +25,6 @@ import { useUploadDialog } from '../components/UploadProvider'
 import type { Transaction, TopEntry } from '../api/types'
 
 const PAGE_SIZE = 100
-const FEED_COLS = 'grid-cols-[76px_minmax(0,1fr)_168px_120px_120px_28px_28px]'
 
 type SortField = 'date' | 'amount' | 'category'
 type SortDir = 'asc' | 'desc'
@@ -67,37 +67,25 @@ function RankedBarRow({ entry, maxAmount }: { entry: TopEntry; maxAmount: number
   )
 }
 
-// Column headers for date/amount/category double as sort triggers - the
-// other two (description, account) have no meaningful sort so stay plain
-// text in the caller.
-function SortableHeader({
-  field,
-  label,
-  align = 'left',
-  sort,
-  onSort,
-}: {
-  field: SortField
-  label: string
-  align?: 'left' | 'right'
-  sort: { field: SortField; dir: SortDir }
-  onSort: (field: SortField) => void
-}) {
-  const active = sort.field === field
-  const Icon = active ? (sort.dir === 'asc' ? ChevronUp : ChevronDown) : ChevronsUpDown
-  return (
-    <button
-      type="button"
-      onClick={() => onSort(field)}
-      className={`inline-flex items-center gap-1 bg-transparent border-none cursor-pointer p-0 text-2xs uppercase tracking-wide hover:text-text ${
-        active ? 'text-text' : 'text-muted-2'
-      } ${align === 'right' ? 'justify-end w-full' : ''}`}
-    >
-      {label}
-      <Icon size={11} className="shrink-0" />
-    </button>
-  )
-}
+// Column definitions for the feed's header row (X-6 in UI Review.dc.html) -
+// DataTableHeader drives the sortable date/category/amount columns from
+// this one array instead of a hand-rolled SortableHeader repeated per
+// column. The BODY rows below intentionally do NOT go through DataTable's
+// row/cell wrapper: each row is its own role="button" (click opens the
+// transaction editor, arrow keys move between rows) - a legitimate, already
+// -accessible pattern, just not the ARIA grid-row one. Forcing
+// role="gridcell" onto cells inside a role="button" row would misdescribe
+// what they are, not fix a real gap - see DataTable.tsx's own comment.
+const FEED_COLUMNS: DataTableColumn<SortField>[] = [
+  { key: 'date', header: 'Date', width: '76px', sortKey: 'date' },
+  { key: 'description', header: 'Description', width: 'minmax(0,1fr)' },
+  { key: 'category', header: 'Category', width: '168px', sortKey: 'category' },
+  { key: 'account', header: 'Account', width: '120px' },
+  { key: 'amount', header: 'Amount', width: '120px', align: 'right', sortKey: 'amount' },
+  { key: 'refund', header: '', width: '28px' },
+  { key: 'edit', header: '', width: '28px' },
+]
+const FEED_COLS = dataTableGridClass(FEED_COLUMNS)
 
 // Wraps the first case-insensitive occurrence of `query` in `text` with a
 // highlight span - only ever called with the debounced query, and silently
@@ -635,18 +623,14 @@ export function Dashboard() {
             the page-level header's height, and keeps an all-time range's
             1000+ rows from turning the whole page into one giant scroller. */}
         <div className="max-h-[65vh] overflow-y-auto">
-          <div
-            ref={columnHeaderRef}
-            className={`grid ${FEED_COLS} px-5 py-2.5 border-b border-divider sticky top-0 z-10 bg-card`}
-          >
-            <SortableHeader field="date" label="Date" sort={sort} onSort={toggleSort} />
-            <div className="text-2xs text-muted-2 uppercase tracking-wide">Description</div>
-            <SortableHeader field="category" label="Category" sort={sort} onSort={toggleSort} />
-            <div className="text-2xs text-muted-2 uppercase tracking-wide">Account</div>
-            <SortableHeader field="amount" label="Amount" align="right" sort={sort} onSort={toggleSort} />
-            <div />
-            <div />
-          </div>
+          <DataTableHeader
+            headerRef={columnHeaderRef}
+            columns={FEED_COLUMNS}
+            gridClassName={FEED_COLS}
+            sort={sort}
+            onSort={toggleSort}
+            className="px-5 py-2.5 border-b border-divider sticky top-0 z-10 bg-card text-2xs text-muted-2 uppercase tracking-wide"
+          />
           {txQ.isLoading && <div className="p-5 text-muted text-sm">Loading transactions…</div>}
           {txQ.isError && <ErrorState description="Couldn't load transactions for this range." onRetry={() => txQ.refetch()} />}
           {txQ.isSuccess && filteredTransactions.length === 0 && (
