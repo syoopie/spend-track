@@ -18,6 +18,7 @@ import type {
   DeleteScopeResult,
   MatchCount,
   MonthlyTotal,
+  PathCheckResult,
   RecategorizeBatch,
   RecategorizeCommitResult,
   RecategorizeRequest,
@@ -552,55 +553,108 @@ export function useAiStatus(enabled: boolean) {
   })
 }
 
+// No onError toast here - SET-1 in UI Review.dc.html is explicit that a
+// failed save shows its error inline under the checkbox (AiSection already
+// renders updateAi.isError), not in a corner toast on top of that.
 export function useUpdateAiSettings() {
   const qc = useQueryClient()
+  const toast = useToast()
   return useMutation({
     mutationFn: (body: AiSettingsUpdateRequest) => api.patch<AiSettings>('/ai', body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['settings'] })
       qc.invalidateQueries({ queryKey: ['ai-status'] })
+      toast.success('AI settings saved.')
     },
   })
 }
 
+// Checks reachability for whatever's currently typed into the AI section's
+// fields, without saving them first (SET-4 in UI Review.dc.html) - a plain
+// mutation, not a query, since it's fired on demand from a button click with
+// a draft body that isn't cached anywhere. Reachable/unreachable renders
+// inline from the mutation's own data/error, the same as the existing
+// Recheck-connection status pill - no toast, for the same reason.
+export function useTestAiSettings() {
+  return useMutation({
+    mutationFn: (body: AiSettingsUpdateRequest) => api.post<AiStatus>('/ai/test', body),
+  })
+}
+
 // Data lifecycle (relocate/reset/scoped deletes) lives under its own
-// /api/data-lifecycle prefix, not nested under /api/settings/*.
+// /api/data-lifecycle prefix, not nested under /api/settings/*. Validated
+// on blur by the Relocate modal (SET-6) - renders inline next to the field,
+// not as a toast.
+export function useCheckPath() {
+  return useMutation({
+    mutationFn: (path: string) => api.post<PathCheckResult>('/data-lifecycle/check-path', { path }),
+  })
+}
+
+// No onError toast on any of the five mutations below - each caller
+// (RelocateModal/ScopedDeleteModal/NuclearResetModal in Settings.tsx)
+// already renders its own inline "Could not ___. Please try again." on
+// mutation.isError, and stacking a toast on top of that would just repeat
+// the same failure twice (the established rule from Batch 2 - see
+// docs/ui-conventions.md). The success toasts are new (SET-3): the modal
+// closes on success with no other confirmation, and DeleteScopeResult's
+// count used to be fetched and silently discarded.
 export function useRelocateDb() {
   const qc = useQueryClient()
+  const toast = useToast()
   return useMutation({
     mutationFn: (newPath: string) => api.post<Settings>('/data-lifecycle/relocate', { new_path: newPath }),
-    onSuccess: (data) => qc.setQueryData(['settings'], data),
+    onSuccess: (data) => {
+      qc.setQueryData(['settings'], data)
+      toast.success('Database relocated.')
+    },
   })
 }
 
 export function useResetDb() {
   const qc = useQueryClient()
+  const toast = useToast()
   return useMutation({
     mutationFn: (confirm: string) => api.post('/data-lifecycle/reset', { confirm }),
-    onSuccess: () => qc.invalidateQueries(),
+    onSuccess: () => {
+      qc.invalidateQueries()
+      toast.success('Everything has been reset.')
+    },
   })
 }
 
 export function useDeleteAllRules() {
   const qc = useQueryClient()
+  const toast = useToast()
   return useMutation({
     mutationFn: (confirm: string) => api.post<DeleteScopeResult>('/data-lifecycle/delete-rules', { confirm }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['rules'] }),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['rules'] })
+      toast.success(`${data.deleted_count} rule${data.deleted_count === 1 ? '' : 's'} deleted.`)
+    },
   })
 }
 
 export function useDeleteAllContacts() {
   const qc = useQueryClient()
+  const toast = useToast()
   return useMutation({
     mutationFn: (confirm: string) => api.post<DeleteScopeResult>('/data-lifecycle/delete-contacts', { confirm }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['contacts'] }),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['contacts'] })
+      toast.success(`${data.deleted_count} contact${data.deleted_count === 1 ? '' : 's'} deleted.`)
+    },
   })
 }
 
 export function useDeleteAllTransactions() {
   const qc = useQueryClient()
+  const toast = useToast()
   return useMutation({
     mutationFn: (confirm: string) => api.post<DeleteScopeResult>('/data-lifecycle/delete-transactions', { confirm }),
-    onSuccess: () => qc.invalidateQueries(),
+    onSuccess: (data) => {
+      qc.invalidateQueries()
+      toast.success(`${data.deleted_count} transaction${data.deleted_count === 1 ? '' : 's'} deleted.`)
+    },
   })
 }

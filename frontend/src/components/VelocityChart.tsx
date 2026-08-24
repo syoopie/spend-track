@@ -62,7 +62,10 @@ export function VelocityChart({
 
   const content = (
     <>
-      <div className="text-md font-semibold mb-3.5">Spend Velocity — Cumulative Pace</div>
+      {/* DASH-3: dropped when bare - the tab already reads "Spend Velocity",
+          the qualifier ("cumulative pace") is rendered by Dashboard.tsx on
+          the shared Tabs row instead of as a second heading here. */}
+      {!bare && <div className="text-md font-semibold mb-3.5">Spend Velocity — Cumulative Pace</div>}
       <div className="relative">
         <svg
           ref={svgRef}

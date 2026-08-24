@@ -1,12 +1,17 @@
+import { Loader2 } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
+  useCheckPath,
+  useContacts,
   useDeleteAllContacts,
   useDeleteAllRules,
   useDeleteAllTransactions,
   useRelocateDb,
   useResetDb,
+  useRules,
   useSettings,
+  useTransactions,
 } from '../api/hooks'
 import { AiSection } from '../components/AiSection'
 import { AppearanceSection } from '../components/AppearanceSection'
@@ -17,36 +22,76 @@ import { Modal } from '../components/Modal'
 import { PageShell } from '../components/PageShell'
 import { fmtBytes } from '../lib/format'
 
-function RelocateModal({ dbSize, onClose }: { dbSize: string; onClose: () => void }) {
+function RelocateModal({ dbSize, currentPath, onClose }: { dbSize: string; currentPath: string; onClose: () => void }) {
   const relocate = useRelocateDb()
-  const [newPath, setNewPath] = useState('')
+  const checkPath = useCheckPath()
+  const [newPath, setNewPath] = useState(currentPath)
+  // The result in checkPath.data only describes THIS path - tracked
+  // separately so an edit after a check doesn't keep showing the previous
+  // (now stale) result as if it still applied to what's on screen.
+  const [checkedPath, setCheckedPath] = useState<string | null>(null)
+
+  function handleBlur() {
+    const trimmed = newPath.trim()
+    if (!trimmed || trimmed === checkedPath) return
+    setCheckedPath(trimmed)
+    checkPath.mutate(trimmed)
+  }
+
+  const pathChanged = newPath.trim() !== currentPath
+  const canMigrate = pathChanged && checkedPath === newPath.trim() && checkPath.data?.valid === true
 
   async function handleMigrate() {
-    if (!newPath.trim()) return
+    if (!canMigrate) return
     await relocate.mutateAsync(newPath.trim())
     onClose()
   }
 
   return (
-    <Modal onClose={onClose} width={420} title="Change Database Path">
+    <Modal onClose={onClose} width={440} title="Change Database Path">
       <div className="text-md text-muted leading-relaxed mb-4">
         This migrates a <strong className="text-text">{dbSize}</strong> database file to the new location. Active
         connections will be closed during the move, then reopened at the new path.
       </div>
-      <Field label="New location" className="mb-4.5">
+      <Field label="New location" className="mb-1.5">
         <Input
           mono
           value={newPath}
-          onChange={(e) => setNewPath(e.target.value)}
+          onChange={(e) => {
+            setNewPath(e.target.value)
+            setCheckedPath(null)
+          }}
+          onBlur={handleBlur}
           placeholder="/Users/you/Documents/sg-tracker-data.db"
         />
       </Field>
+      {/* SET-6: validated on blur, not left to fail silently until Migrate
+          is clicked - shows the resolved absolute path and free space at
+          the target directory before the button is even enabled. */}
+      <div className="mb-4.5 min-h-5">
+        {checkPath.isPending ? (
+          <div className="text-2xs text-muted flex items-center gap-1.5">
+            <Loader2 size={12} className="animate-spin" /> Checking…
+          </div>
+        ) : checkPath.data && checkedPath === newPath.trim() ? (
+          checkPath.data.valid ? (
+            <div className="text-2xs text-success font-mono break-all">
+              {checkPath.data.resolved_path}
+              {checkPath.data.free_bytes != null && ` · ${fmtBytes(checkPath.data.free_bytes)} free`}
+            </div>
+          ) : (
+            <div className="text-2xs text-danger-text">{checkPath.data.error}</div>
+          )
+        ) : !pathChanged ? (
+          <div className="text-2xs text-muted-2">Current location.</div>
+        ) : null}
+      </div>
       {relocate.isError && (
         <div className="text-xs text-danger-text mb-3">Could not relocate the database. Check the path.</div>
       )}
       <div className="flex justify-end gap-2.5">
         <Button onClick={onClose}>Cancel</Button>
-        <Button variant="primary" onClick={handleMigrate} disabled={relocate.isPending || !newPath.trim()}>
+        <Button variant="primary" onClick={handleMigrate} disabled={relocate.isPending || !canMigrate}>
           Migrate Database
         </Button>
       </div>
@@ -92,6 +137,50 @@ function ScopedDeleteModal({
       <div className="flex justify-end gap-2.5">
         <Button onClick={onClose}>Cancel</Button>
         <Button variant="danger" onClick={handleDelete} disabled={!canDelete || mutation.isPending}>
+          {confirmLabel}
+        </Button>
+      </div>
+    </Modal>
+  )
+}
+
+// A single confirm button, no type-DELETE step (SET-3) - reserved for the
+// two scoped deletes that are recoverable by re-doing normal, everyday work
+// (re-upload a statement to regenerate rules via the review dialog, re-add a
+// contact). Delete All Transactions and Nuclear Reset keep the type-DELETE
+// step in ScopedDeleteModal/NuclearResetModal below - those two destroy
+// data with no equivalent "just redo it" path.
+function SimpleConfirmModal({
+  title,
+  description,
+  confirmLabel,
+  mutation,
+  onClose,
+}: {
+  title: string
+  description: string
+  confirmLabel: string
+  mutation: ReturnType<typeof useDeleteAllRules> | ReturnType<typeof useDeleteAllContacts>
+  onClose: () => void
+}) {
+  async function handleConfirm() {
+    try {
+      await mutation.mutateAsync('DELETE')
+      onClose()
+    } catch {
+      // swallow - mutation.isError below renders the failure, modal stays open so the user can retry
+    }
+  }
+
+  return (
+    <Modal onClose={onClose} width={400} title={<span className="text-danger-text">{title}</span>}>
+      <div className="text-md text-muted leading-relaxed mb-4.5">{description}</div>
+      {mutation.isError && (
+        <div className="text-xs text-danger-text mb-3">Could not complete the deletion. Please try again.</div>
+      )}
+      <div className="flex justify-end gap-2.5">
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="danger" onClick={handleConfirm} disabled={mutation.isPending}>
           {confirmLabel}
         </Button>
       </div>
@@ -148,10 +237,22 @@ export function Settings() {
   const deleteContacts = useDeleteAllContacts()
   const deleteTransactions = useDeleteAllTransactions()
 
+  // Live counts for the Danger Zone (SET-3) - "This deletes 23 rules" beats
+  // an undifferentiated "This permanently deletes every rule" regardless of
+  // whether that's 2 rules or 200. Only fetched for the count itself, so
+  // there's no attempt to reuse/paginate these the way Rules/Contacts/
+  // Dashboard's own list views do.
+  const rulesQ = useRules(false)
+  const contactsQ = useContacts()
+  const txQ = useTransactions({ include_excluded: true })
+  const rulesCount = rulesQ.data?.length ?? 0
+  const contactsCount = contactsQ.data?.length ?? 0
+  const txCount = txQ.data?.length ?? 0
+
   const dbSize = settingsQ.data ? fmtBytes(settingsQ.data.size_bytes) : '—'
 
   return (
-    <PageShell title="Settings & Storage" maxWidth="max-w-2xl">
+    <PageShell title="Settings & Storage" maxWidth="max-w-4xl">
       <AppearanceSection />
 
       <AiSection settings={settingsQ.data} />
@@ -161,7 +262,7 @@ export function Settings() {
         <div className="text-xs text-muted mb-3.5">
           Statement parsing, currency formatting, and the default rule bank are all specific to this region.
         </div>
-        <div className="flex gap-6 flex-wrap">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <div>
             <div className="text-xs text-muted">Country</div>
             <div className="text-md font-mono">{settingsQ.data?.country_name ?? '—'}</div>
@@ -187,7 +288,7 @@ export function Settings() {
         <div className="text-md font-semibold mb-3.5">Database</div>
         <div className="text-xs text-muted mb-0.5">Path</div>
         <div className="text-md font-mono mb-3 break-all">{settingsQ.data?.db_path ?? '—'}</div>
-        <div className="flex gap-6 mb-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
           <div>
             <div className="text-xs text-muted">Size</div>
             <div className="text-md font-mono">{dbSize}</div>
@@ -225,21 +326,23 @@ export function Settings() {
         </Button>
       </Card>
 
-      {relocateOpen && <RelocateModal dbSize={dbSize} onClose={() => setRelocateOpen(false)} />}
+      {relocateOpen && (
+        <RelocateModal dbSize={dbSize} currentPath={settingsQ.data?.db_path ?? ''} onClose={() => setRelocateOpen(false)} />
+      )}
       {resetOpen && <NuclearResetModal onClose={() => setResetOpen(false)} />}
       {deleteScope === 'rules' && (
-        <ScopedDeleteModal
+        <SimpleConfirmModal
           title="Delete All Rules"
-          description="This permanently deletes every rule you've created. Built-in default rules are not affected."
+          description={`This permanently deletes ${rulesCount} rule${rulesCount === 1 ? '' : 's'} you've created. Built-in default rules are not affected.`}
           confirmLabel="Delete Rules"
           mutation={deleteRules}
           onClose={() => setDeleteScope(null)}
         />
       )}
       {deleteScope === 'contacts' && (
-        <ScopedDeleteModal
+        <SimpleConfirmModal
           title="Delete All Contacts"
-          description="This permanently deletes every contact and their linked identifiers."
+          description={`This permanently deletes ${contactsCount} contact${contactsCount === 1 ? '' : 's'} and their linked identifiers.`}
           confirmLabel="Delete Contacts"
           mutation={deleteContacts}
           onClose={() => setDeleteScope(null)}
@@ -248,7 +351,7 @@ export function Settings() {
       {deleteScope === 'transactions' && (
         <ScopedDeleteModal
           title="Delete All Transactions"
-          description="This permanently deletes every committed transaction. Accounts themselves are kept, so you can re-upload statements without losing account setup."
+          description={`This permanently deletes ${txCount} committed transaction${txCount === 1 ? '' : 's'}. Accounts themselves are kept, so you can re-upload statements without losing account setup.`}
           confirmLabel="Delete Transactions"
           mutation={deleteTransactions}
           onClose={() => setDeleteScope(null)}

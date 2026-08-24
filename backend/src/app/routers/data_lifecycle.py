@@ -6,6 +6,7 @@ Its own top-level `/api/data-lifecycle` prefix (rather than nested under
 just the file layout.
 """
 
+import os
 import shutil
 from pathlib import Path
 
@@ -14,7 +15,7 @@ from fastapi import APIRouter
 from app.config import get_db_path, set_db_path
 from app.db import get_conn, init_db
 from app.errors import api_error
-from app.models import DeleteScopeResult, RelocateRequest, ResetRequest, SettingsOut
+from app.models import DeleteScopeResult, PathCheckRequest, PathCheckResult, RelocateRequest, ResetRequest, SettingsOut
 from app.routers.settings import build_settings_out
 
 router = APIRouter(prefix="/api/data-lifecycle", tags=["data-lifecycle"])
@@ -23,6 +24,35 @@ router = APIRouter(prefix="/api/data-lifecycle", tags=["data-lifecycle"])
 def _require_delete_confirmation(body: ResetRequest) -> None:
     if body.confirm != "DELETE":
         raise api_error(400, "RESET_CONFIRMATION_MISMATCH", "Type DELETE to confirm.")
+
+
+@router.post("/check-path", response_model=PathCheckResult)
+def check_path(body: PathCheckRequest):
+    """Validated on blur by the Relocate modal (SET-6) - the user used to type
+    an absolute path from memory with no feedback until Migrate was clicked
+    and it failed. Checks the *parent* directory (not the target file, which
+    usually doesn't exist yet) is writable, and reports free space there."""
+    raw = body.path.strip()
+    if not raw:
+        return PathCheckResult(valid=False, resolved_path="", free_bytes=None, error="Enter a path.")
+    try:
+        candidate = Path(raw).expanduser()
+        if not candidate.is_absolute():
+            return PathCheckResult(valid=False, resolved_path=str(candidate), free_bytes=None, error="Path must be absolute.")
+        resolved = candidate.resolve()
+        if resolved.exists() and resolved.is_dir():
+            return PathCheckResult(
+                valid=False, resolved_path=str(resolved), free_bytes=None, error="That's a directory - name a file, not a folder."
+            )
+        parent = resolved.parent
+        if not parent.exists():
+            return PathCheckResult(valid=False, resolved_path=str(resolved), free_bytes=None, error="Parent directory does not exist.")
+        if not os.access(parent, os.W_OK):
+            return PathCheckResult(valid=False, resolved_path=str(resolved), free_bytes=None, error="Directory is not writable.")
+        free_bytes = shutil.disk_usage(parent).free
+        return PathCheckResult(valid=True, resolved_path=str(resolved), free_bytes=free_bytes, error=None)
+    except OSError as exc:
+        return PathCheckResult(valid=False, resolved_path=raw, free_bytes=None, error=str(exc))
 
 
 @router.post("/relocate", response_model=SettingsOut)

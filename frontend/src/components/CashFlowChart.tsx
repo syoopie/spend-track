@@ -1,9 +1,22 @@
+import { useState } from 'react'
 import type { CashFlowMonth, MonthlyTotal } from '../api/types'
 import { Card } from './Card'
-import { fmtCompact, fmtMonthLabel } from '../lib/format'
+import { fmtMonthLabel, fmtPlain } from '../lib/format'
 
 const MIN_MONTHS = 6
 const MAX_MONTHS = 12
+
+// Exposed so Dashboard.tsx can render this on the shared Tabs row's right
+// edge instead of as a second heading inside the card (DASH-3 in
+// UI Review.dc.html - the tab already reads "Cash Flow", so the panel
+// heading below it repeating "Cash Flow — ..." was a literal duplicate).
+// null means there's nothing to add beyond what the tab label already says.
+export function cashFlowQualifier(data: CashFlowMonth[], trend: MonthlyTotal[] | undefined): string | null {
+  const padded = data.length < MIN_MONTHS && !!trend && trend.length > 0
+  if (padded) return 'recent trend'
+  if (data.length > MAX_MONTHS) return 'most recent 12 months'
+  return null
+}
 
 export function CashFlowChart({
   data,
@@ -18,21 +31,17 @@ export function CashFlowChart({
   rangeTo: string
   bare?: boolean
 }) {
+  const [hovered, setHovered] = useState<string | null>(null)
+
   const padded = data.length < MIN_MONTHS && !!trend && trend.length > 0
   const chartData = padded
     ? trend!.filter((m) => m.month <= rangeTo).slice(-MIN_MONTHS)
     : data.length > MAX_MONTHS
       ? data.slice(-MAX_MONTHS)
       : data
-  const truncated = !padded && data.length > MAX_MONTHS
 
   const max = Math.max(1, ...chartData.flatMap((d) => [d.inflow, d.outflow]))
-  // The selected range is already shown in the sticky header above - this
-  // only needs to say when it's padding out to more months than that
-  // range covers, not restate the range itself.
-  const title = padded
-    ? 'Cash Flow — Recent Trend'
-    : `Cash Flow — Inflow vs Outflow${truncated ? ' (most recent 12 months)' : ''}`
+  const hoveredMonth = chartData.find((m) => m.month === hovered) ?? null
 
   // Bars used to sit in flex-1 columns with a fixed 36px min-width, which
   // forced a horizontal scrollbar once 9+ months didn't fit that width in a
@@ -46,27 +55,43 @@ export function CashFlowChart({
 
   const content = (
     <>
-      <div className="text-md font-semibold mb-4">{title}</div>
+      {!bare && <div className="text-md font-semibold mb-4">Cash Flow</div>}
+      {/* DASH-4: a per-bar value label above all 24 bars at 12 months was a
+          wall of grey micro-text over 8px-wide bars. Now only the hovered
+          month's figures show, in a floating tooltip - the same "hover for
+          detail" contract VelocityChart already uses in the same card. */}
       <div className={`flex items-end ${colGap} h-[150px] px-1.5`}>
         {chartData.map((m) => {
           const isSelected = !padded || (m.month >= rangeFrom && m.month <= rangeTo)
           return (
-            <div key={m.month} className={`flex flex-col items-center gap-1.5 flex-1 min-w-0 ${isSelected ? '' : 'opacity-45'}`}>
+            <div
+              key={m.month}
+              onMouseEnter={() => setHovered(m.month)}
+              onMouseLeave={() => setHovered((h) => (h === m.month ? null : h))}
+              className={`relative flex flex-col items-center gap-1.5 flex-1 min-w-0 ${isSelected ? '' : 'opacity-45'}`}
+            >
+              {hoveredMonth?.month === m.month && (
+                <div className="absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 pointer-events-none bg-card border border-border rounded-lg shadow-xl px-2.5 py-2 text-2xs whitespace-nowrap z-10">
+                  <div className="font-semibold text-text mb-1">{fmtMonthLabel(m.month)}</div>
+                  <div className="flex items-center gap-1.5 text-success">
+                    <span className="w-1.5 h-1.5 rounded-full bg-success shrink-0" />
+                    Inflow: <span className="font-mono text-text">{fmtPlain(m.inflow)}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5" style={{ color: isSelected ? 'var(--color-accent)' : 'var(--color-dim)' }}>
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: isSelected ? 'var(--color-accent)' : 'var(--color-dim)' }} />
+                    Outflow: <span className="font-mono text-text">{fmtPlain(m.outflow)}</span>
+                  </div>
+                </div>
+              )}
               <div className={`flex items-end ${barGap} h-[120px]`}>
-                <div className="flex flex-col items-center justify-end h-full">
-                  {m.inflow > 0 && <div className="text-[10px] font-mono text-muted-2 mb-0.5">{fmtCompact(m.inflow)}</div>}
-                  <div
-                    className={`${barW} rounded-t-[3px] bg-success`}
-                    style={{ height: `${Math.max(1, (m.inflow / max) * 120)}px` }}
-                  />
-                </div>
-                <div className="flex flex-col items-center justify-end h-full">
-                  {m.outflow > 0 && <div className="text-[10px] font-mono text-muted-2 mb-0.5">{fmtCompact(m.outflow)}</div>}
-                  <div
-                    className={`${barW} rounded-t-[3px]`}
-                    style={{ height: `${Math.max(1, (m.outflow / max) * 120)}px`, background: isSelected ? 'var(--color-accent)' : 'var(--color-dim)' }}
-                  />
-                </div>
+                <div
+                  className={`${barW} rounded-t-[3px] bg-success transition-opacity ${hovered && !hoveredMonth ? '' : hovered && hovered !== m.month ? 'opacity-60' : ''}`}
+                  style={{ height: `${Math.max(1, (m.inflow / max) * 120)}px` }}
+                />
+                <div
+                  className={`${barW} rounded-t-[3px] transition-opacity ${hovered && hovered !== m.month ? 'opacity-60' : ''}`}
+                  style={{ height: `${Math.max(1, (m.outflow / max) * 120)}px`, background: isSelected ? 'var(--color-accent)' : 'var(--color-dim)' }}
+                />
               </div>
               <div className={`text-2xs text-center ${isSelected ? 'text-text font-semibold' : 'text-muted-2'}`}>
                 {fmtMonthLabel(m.month)}

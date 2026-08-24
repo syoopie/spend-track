@@ -393,6 +393,17 @@ class DeleteScopeResult(BaseModel):
     deleted_count: int
 
 
+class PathCheckRequest(BaseModel):
+    path: str
+
+
+class PathCheckResult(BaseModel):
+    valid: bool
+    resolved_path: str
+    free_bytes: int | None
+    error: str | None
+
+
 class MetricCards(BaseModel):
     net_expenditure: float
     total_inflow: float

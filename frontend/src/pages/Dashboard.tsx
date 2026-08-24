@@ -4,7 +4,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useAccounts, useCategories, useDashboardSummary, useMonthlyTotals, useTransactions } from '../api/hooks'
 import { fmtDate, fmtMonthRangeLabel, fmtMonthYearLabel, fmtPlain, fmtSigned, shiftMonth } from '../lib/format'
 import { loadDashboardFilters, saveDashboardFilters, type DashboardFilters } from '../lib/dashboardFilters'
-import { CashFlowChart } from '../components/CashFlowChart'
+import { CashFlowChart, cashFlowQualifier } from '../components/CashFlowChart'
 import { CategoryBadge } from '../components/CategoryBadge'
 import { categoryOptionElements } from '../components/CategoryOptions'
 import { CategoryDonut } from '../components/CategoryDonut'
@@ -21,7 +21,7 @@ import { Checkbox } from '../components/Checkbox'
 import { Select } from '../components/Select'
 import { Tabs } from '../components/Tabs'
 import { useUploadDialog } from '../components/UploadProvider'
-import type { Transaction } from '../api/types'
+import type { Transaction, TopEntry } from '../api/types'
 
 const PAGE_SIZE = 100
 const FEED_COLS = 'grid-cols-[76px_minmax(0,1fr)_168px_120px_120px_28px_28px]'
@@ -46,6 +46,24 @@ function MetricCard({
       <div className={`text-2xl font-bold font-mono ${valueClassName}`}>{value}</div>
       {hint && <div className="text-xs text-muted-2 mt-1">{hint}</div>}
     </Card>
+  )
+}
+
+// Merchants/PayNow used to render as plain text rows with no visual sense of
+// scale - a $6 tap and a $600 tap looked identical apart from the digits
+// (DASH-4 in UI Review.dc.html). A proportional bar behind the row gives
+// the same at-a-glance read the donut's ring already provides for
+// categories.
+function RankedBarRow({ entry, maxAmount }: { entry: TopEntry; maxAmount: number }) {
+  const pct = maxAmount > 0 ? (entry.amount / maxAmount) * 100 : 0
+  return (
+    <div className="relative py-1">
+      <div className="absolute inset-y-1 left-0 rounded bg-accent/12" style={{ width: `${pct}%` }} />
+      <div className="relative flex justify-between text-md px-1.5">
+        <span className="truncate pr-2">{entry.name}</span>
+        <span className="font-mono text-text-2 shrink-0">{fmtPlain(entry.amount)}</span>
+      </div>
+    </div>
   )
 }
 
@@ -211,7 +229,12 @@ export function Dashboard() {
   // Clicking the same category again clears the filter instead of being a
   // no-op re-select - lets the donut/legend double as a toggle.
   function selectCategoryFilter(category: string) {
-    updateCategoryFilter(categoryFilter === category ? '' : category)
+    const next = categoryFilter === category ? '' : category
+    updateCategoryFilter(next)
+    // DASH-5: the donut is above the fold but the feed it filters can be
+    // well below it - without this, picking a category silently changes a
+    // list the user isn't looking at.
+    if (next) feedRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   const accountsQ = useAccounts()
@@ -309,6 +332,10 @@ export function Dashboard() {
   // single-line row, no resize listener needed).
   const columnHeaderRef = useRef<HTMLDivElement>(null)
   const [columnHeaderHeight, setColumnHeaderHeight] = useState(0)
+  // Scroll target for selectCategoryFilter (DASH-5) - the feed card itself,
+  // not the row list inside it, so the card's own header/filter chips come
+  // into view too, not just a blank first row.
+  const feedRef = useRef<HTMLDivElement>(null)
   // Layout effect, not a plain effect - runs before the browser paints, so
   // the very first divider (if one's visible without scrolling) never
   // flashes at top:0 overlapping the column header for a frame.
@@ -473,6 +500,7 @@ export function Dashboard() {
             ]}
             active={chartsTab}
             onChange={setChartsTab}
+            right={chartsTab === 'cashflow' ? cashFlowQualifier(s.cash_flow, monthlyTotalsQ.data) : 'cumulative pace'}
           />
           {chartsTab === 'cashflow' ? (
             <CashFlowChart data={s.cash_flow} trend={monthlyTotalsQ.data} rangeFrom={s.date_from} rangeTo={s.date_to} bare />
@@ -486,7 +514,10 @@ export function Dashboard() {
           )}
         </Card>
 
-        <Card>
+        {/* DASH-4: a shared min-height so switching Category/Merchants/
+            PayNow doesn't resize the card - Merchants/PayNow used to be a
+            handful of unpadded text rows with no fixed height. */}
+        <Card className="min-h-[268px]">
           <Tabs
             tabs={[
               { key: 'category', label: 'Category Breakdown' },
@@ -501,36 +532,31 @@ export function Dashboard() {
               data={s.category_breakdown}
               categories={categoriesQ.data}
               onCategoryClick={selectCategoryFilter}
+              selectedCategory={categoryFilter || undefined}
               bare
             />
           )}
           {breakdownTab === 'merchants' && (
-            <>
+            <div className="flex flex-col">
               {s.top_merchants.length === 0 && <div className="text-xs text-muted-2 py-1">No spending yet</div>}
               {s.top_merchants.map((m) => (
-                <div key={m.name} className="flex justify-between text-md py-1.5 border-b border-divider">
-                  <span>{m.name}</span>
-                  <span className="font-mono text-text-2">{fmtPlain(m.amount)}</span>
-                </div>
+                <RankedBarRow key={m.name} entry={m} maxAmount={s.top_merchants[0]?.amount ?? 0} />
               ))}
-            </>
+            </div>
           )}
           {breakdownTab === 'paynow' && (
-            <>
+            <div className="flex flex-col">
               {s.top_paynow_contacts.length === 0 && <div className="text-xs text-muted-2 py-1">No PayNow transfers yet</div>}
               {s.top_paynow_contacts.map((p) => (
-                <div key={p.name} className="flex justify-between text-md py-1.5 border-b border-divider">
-                  <span>{p.name}</span>
-                  <span className="font-mono text-text-2">{fmtPlain(p.amount)}</span>
-                </div>
+                <RankedBarRow key={p.name} entry={p} maxAmount={s.top_paynow_contacts[0]?.amount ?? 0} />
               ))}
-            </>
+            </div>
           )}
         </Card>
       </div>
 
       {/* Transaction feed */}
-      <Card padding="" className="overflow-hidden">
+      <Card ref={feedRef} padding="" className="overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border gap-3 flex-wrap">
           <div className="text-md font-semibold shrink-0">
             Transaction Feed

@@ -311,6 +311,13 @@ export interface AiStatus {
   error: string | null
 }
 
+export interface PathCheckResult {
+  valid: boolean
+  resolved_path: string
+  free_bytes: number | null
+  error: string | null
+}
+
 export interface Settings extends AiSettingsFields {
   db_path: string
   size_bytes: number

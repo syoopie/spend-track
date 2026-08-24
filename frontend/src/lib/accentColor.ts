@@ -40,11 +40,40 @@ function relativeLuminance(hex: string): number {
   return 0.2126 * rl + 0.7152 * gl + 0.0722 * bl
 }
 
+function contrastRatio(hexA: string, hexB: string): number {
+  const lA = relativeLuminance(hexA)
+  const lB = relativeLuminance(hexB)
+  const lighter = Math.max(lA, lB)
+  const darker = Math.min(lA, lB)
+  return (lighter + 0.05) / (darker + 0.05)
+}
+
+// WCAG AA for normal-size text/icons on a solid fill.
+const MIN_CONTRAST = 4.5
+
+// Whichever ink (near-black vs near-white) contrasts better against `hex` -
+// what the accent-foreground token actually uses. Exported so the Appearance
+// picker can warn when even the *better* of the two options still falls
+// short (SET-5 in UI Review.dc.html) - a custom color close to mid-grey can
+// fail 4.5:1 against both, not just the one a fixed dark ink would have
+// picked.
+export function bestAccentForeground(hex: string): { fg: string; contrast: number } {
+  const dark = '#1a0e18'
+  const light = '#f3f3f6'
+  const darkContrast = contrastRatio(hex, dark)
+  const lightContrast = contrastRatio(hex, light)
+  return darkContrast >= lightContrast ? { fg: dark, contrast: darkContrast } : { fg: light, contrast: lightContrast }
+}
+
+export function hasLowContrast(hex: string): boolean {
+  return bestAccentForeground(hex).contrast < MIN_CONTRAST
+}
+
 export function applyAccentColor(hex: string): void {
   const root = document.documentElement
   root.style.setProperty('--color-accent', hex)
   root.style.setProperty('--color-accent-hover', mix(hex, '#ffffff', 0.22))
-  root.style.setProperty('--color-accent-fg', relativeLuminance(hex) > 0.45 ? '#1a0e18' : '#f3f3f6')
+  root.style.setProperty('--color-accent-fg', bestAccentForeground(hex).fg)
 }
 
 export function loadStoredAccentColor(): string {

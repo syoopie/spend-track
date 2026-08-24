@@ -10,18 +10,34 @@ import { fmtCompact, fmtPlain } from '../lib/format'
 const R = 46
 const CIRCUMFERENCE = 2 * Math.PI * R
 
+// Beyond this many rows the legend becomes an unreadable wall of 12px text
+// (DASH-5 in UI Review.dc.html) - collapse everything past it into one
+// non-interactive "Other (n) · $amount" row. The ring itself still draws
+// every real segment; only the text legend simplifies.
+const LEGEND_HEAD = 6
+
 export function CategoryDonut({
   data,
   categories,
   bare = false,
   onCategoryClick,
+  selectedCategory,
 }: {
   data: CategoryBreakdownSlice[]
   categories: Category[] | undefined
   bare?: boolean
   onCategoryClick?: (category: string) => void
+  // The category the feed is currently filtered to (DASH-5) - kept at full
+  // chroma/opacity even without an active hover, so "this is what's
+  // filtering the feed" stays visible after the mouse moves away, not just
+  // during the hover itself.
+  selectedCategory?: string
 }) {
   const [hovered, setHovered] = useState<string | null>(null)
+  // Hover wins over the persisted selection while it's active - a user
+  // scanning other slices shouldn't have the selected one visually pinned
+  // in front of whichever slice their cursor is actually over.
+  const active = hovered ?? selectedCategory ?? null
 
   let cumulativePct = 0
   const segments = data.map((s) => {
@@ -31,11 +47,16 @@ export function CategoryDonut({
     return { ...s, dash, offset }
   })
   const total = data.reduce((sum, s) => sum + s.amount, 0)
-  const hoveredSlice = data.find((s) => s.category === hovered)
+  const activeSlice = data.find((s) => s.category === active)
+
+  const head = data.slice(0, LEGEND_HEAD)
+  const tail = data.slice(LEGEND_HEAD)
+  const tailTotal = tail.reduce((sum, s) => sum + s.amount, 0)
+  const tailPct = tail.reduce((sum, s) => sum + s.pct, 0)
 
   const content = (
     <>
-      <div className="text-md font-semibold mb-3.5">Category Breakdown</div>
+      {!bare && <div className="text-md font-semibold mb-3.5">Category Breakdown</div>}
       <div className="flex items-center gap-4.5">
         <div className="w-[110px] h-[110px] relative shrink-0">
           {segments.length === 0 ? (
@@ -53,10 +74,10 @@ export function CategoryDonut({
                     r={R}
                     fill="none"
                     stroke={categoryDotColor(categories, seg.category)}
-                    strokeWidth={hovered === seg.category ? 24 : 20}
+                    strokeWidth={active === seg.category ? 24 : 20}
                     strokeDasharray={`${seg.dash} ${CIRCUMFERENCE - seg.dash}`}
                     strokeDashoffset={seg.offset}
-                    opacity={hovered && hovered !== seg.category ? 0.4 : 1}
+                    opacity={active && active !== seg.category ? 0.4 : 1}
                     onMouseEnter={() => setHovered(seg.category)}
                     onMouseLeave={() => setHovered(null)}
                     onClick={() => onCategoryClick?.(seg.category)}
@@ -71,21 +92,21 @@ export function CategoryDonut({
             </svg>
           )}
           <div className="absolute inset-5 bg-card rounded-full flex flex-col items-center justify-center text-center pointer-events-none">
-            {hoveredSlice ? (
+            {activeSlice ? (
               <>
-                <div className="text-[10px] font-bold font-mono">{fmtCompact(hoveredSlice.amount)}</div>
-                <div className="text-[9px] text-muted-2">{hoveredSlice.pct}%</div>
+                <div className="text-[10px] font-bold font-mono">{fmtCompact(activeSlice.amount)}</div>
+                <div className="text-[9px] text-muted-2">{activeSlice.pct}%</div>
               </>
             ) : (
               <div className="text-xs font-bold font-mono">{fmtCompact(total)}</div>
             )}
           </div>
         </div>
-        <div className="flex flex-col gap-1.5 text-xs">
+        <div className="flex flex-col gap-1.5 text-xs min-w-0">
           {data.length === 0 && <div className="text-muted-2">No spending yet</div>}
-          {data.map((s) => {
+          {head.map((s) => {
             const Icon = categoryIcon(categories, s.category)
-            const isHovered = hovered === s.category
+            const isActive = active === s.category
             return (
               <div
                 key={s.category}
@@ -94,16 +115,35 @@ export function CategoryDonut({
                 onClick={() => onCategoryClick?.(s.category)}
                 className={`flex items-center gap-1.5 rounded-md px-1 -mx-1 transition-colors ${
                   onCategoryClick ? 'cursor-pointer' : ''
-                } ${isHovered ? 'bg-input text-text' : 'text-text-2'} ${hovered && !isHovered ? 'opacity-50' : ''}`}
+                } ${isActive ? 'bg-input text-text' : 'text-text-2'} ${active && !isActive ? 'opacity-50' : ''}`}
               >
                 <Icon size={12} color={categoryDotColor(categories, s.category)} className="shrink-0" />
-                {s.category} <span className="text-muted-2">{s.pct}%</span>
-                {isHovered && <span className="font-mono text-muted-2">· {fmtPlain(s.amount)}</span>}
+                <span className="truncate">{s.category}</span>
+                {/* Amount now shows on every row, not just on hover (DASH-5) -
+                    it used to require hovering each row in turn to see what
+                    any of them actually cost. */}
+                <span className="text-muted-2 shrink-0 ml-auto pl-1.5">{s.pct}%</span>
+                <span className="font-mono text-muted-2 shrink-0">· {fmtPlain(s.amount)}</span>
               </div>
             )
           })}
+          {tail.length > 0 && (
+            <div className="flex items-center gap-1.5 px-1 -mx-1 text-muted-2">
+              <span className="w-3 shrink-0 text-center">⋯</span>
+              <span>Other ({tail.length})</span>
+              <span className="ml-auto pl-1.5">{Math.round(tailPct)}%</span>
+              <span className="font-mono shrink-0">· {fmtPlain(tailTotal)}</span>
+            </div>
+          )}
         </div>
       </div>
+      {/* DASH-5: this was a real, useful filter control with zero indication
+          it was clickable at all - no cursor hint at rest, no tooltip, no
+          selected state left behind afterwards (the last of which is now
+          handled by `selectedCategory` above). */}
+      {onCategoryClick && data.length > 0 && (
+        <div className="text-2xs text-muted-2 mt-2.5">Click a category to filter the feed below</div>
+      )}
     </>
   )
 

@@ -59,6 +59,27 @@ def get_ai_status():
     return AiStatusOut(reachable=health.reachable, models=health.models, error=health.error)
 
 
+@router.post("/test", response_model=AiStatusOut)
+def test_ai_settings(body: AiSettingsUpdateRequest):
+    """Checks reachability for a draft config without persisting it (SET-4 in
+    UI Review.dc.html) - "Save to test this provider's connection" meant the
+    only way to check a key was to write it to config.json first. Merges the
+    same way update_ai_settings does (a blank key field means "keep whatever
+    is already saved", never "clear it") but never calls set_ai_settings."""
+    current = get_ai_settings()
+    updates = body.model_dump(exclude={"clear_openai_api_key", "clear_anthropic_api_key"}, exclude_none=True)
+    for key_field in ("openai_api_key", "anthropic_api_key"):
+        if not updates.get(key_field):
+            updates.pop(key_field, None)
+    merged = {**current, **updates}
+    try:
+        provider = build_provider(merged)
+    except ValueError as exc:
+        return AiStatusOut(reachable=False, models=[], error=str(exc))
+    health = provider.check_health()
+    return AiStatusOut(reachable=health.reachable, models=health.models, error=health.error)
+
+
 @router.patch("", response_model=AiSettingsOut)
 def update_ai_settings(body: AiSettingsUpdateRequest):
     current = get_ai_settings()
