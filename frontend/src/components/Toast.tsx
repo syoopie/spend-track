@@ -3,22 +3,40 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 
 export type ToastKind = 'success' | 'error'
 
+interface ToastAction {
+  label: string
+  onClick: () => void
+}
+
+interface ToastOptions {
+  // Renders a small button inside the toast (e.g. "Undo") - clicking it
+  // fires the callback and dismisses the toast immediately, regardless of
+  // durationMs.
+  action?: ToastAction
+  // Overrides the kind-based default (SUCCESS_DURATION_MS/ERROR_DURATION_MS)
+  // - X-2's "Rule deleted - Undo" toast needs a longer, fixed 6s window
+  // regardless of which kind it's styled as.
+  durationMs?: number
+}
+
 interface QueuedToast {
   id: number
   kind: ToastKind
   text: string
+  action?: ToastAction
 }
 
 interface ToastContextValue {
-  success: (text: string) => void
-  error: (text: string) => void
+  success: (text: string, options?: ToastOptions) => void
+  error: (text: string, options?: ToastOptions) => void
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null)
 
 // How long a toast stays up before auto-dismissing - success is a quick
 // confirmation, error stays longer since it's more likely the user needs to
-// actually read it (and possibly go fix something).
+// actually read it (and possibly go fix something). A caller can override
+// via ToastOptions.durationMs (see the Undo toast above).
 const SUCCESS_DURATION_MS = 3000
 const ERROR_DURATION_MS = 6000
 
@@ -39,17 +57,18 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const show = useCallback(
-    (kind: ToastKind, text: string) => {
+    (kind: ToastKind, text: string, options?: ToastOptions) => {
       const id = nextId.current++
-      setToasts((prev) => [...prev, { id, kind, text }])
-      setTimeout(() => dismiss(id), kind === 'success' ? SUCCESS_DURATION_MS : ERROR_DURATION_MS)
+      setToasts((prev) => [...prev, { id, kind, text, action: options?.action }])
+      const duration = options?.durationMs ?? (kind === 'success' ? SUCCESS_DURATION_MS : ERROR_DURATION_MS)
+      setTimeout(() => dismiss(id), duration)
     },
     [dismiss],
   )
 
   const value: ToastContextValue = {
-    success: (text) => show('success', text),
-    error: (text) => show('error', text),
+    success: (text, options) => show('success', text, options),
+    error: (text, options) => show('error', text, options),
   }
 
   return (
@@ -90,6 +109,19 @@ function ToastItem({ toast, onDismiss }: { toast: QueuedToast; onDismiss: () => 
         <XCircle size={15} className="shrink-0" />
       )}
       {toast.text}
+      {toast.action && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            toast.action!.onClick()
+            onDismiss()
+          }}
+          className="ml-1 text-sm font-semibold underline decoration-1 underline-offset-2 bg-transparent border-none cursor-pointer p-0"
+          style={{ color: 'inherit' }}
+        >
+          {toast.action.label}
+        </button>
+      )}
     </div>
   )
 }

@@ -28,8 +28,7 @@ function RelocateModal({ dbSize, onClose }: { dbSize: string; onClose: () => voi
   }
 
   return (
-    <Modal onClose={onClose} width={420}>
-      <div className="text-base font-bold mb-2.5">Change Database Path</div>
+    <Modal onClose={onClose} width={420} title="Change Database Path">
       <div className="text-md text-muted leading-relaxed mb-4">
         This migrates a <strong className="text-text">{dbSize}</strong> database file to the new location. Active
         connections will be closed during the move, then reopened at the new path.
@@ -82,8 +81,7 @@ function ScopedDeleteModal({
   }
 
   return (
-    <Modal onClose={onClose} width={420}>
-      <div className="text-base font-bold mb-2.5 text-danger-text">{title}</div>
+    <Modal onClose={onClose} width={420} title={<span className="text-danger-text">{title}</span>}>
       <div className="text-md text-muted leading-relaxed mb-4">
         {description} Type <strong className="font-mono text-text">DELETE</strong> to confirm.
       </div>
@@ -119,8 +117,7 @@ function NuclearResetModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <Modal onClose={onClose} width={420}>
-      <div className="text-base font-bold mb-2.5 text-danger-text">Nuclear Reset</div>
+    <Modal onClose={onClose} width={420} title={<span className="text-danger-text">Nuclear Reset</span>}>
       <div className="text-md text-muted leading-relaxed mb-4">
         This permanently deletes all accounts, transactions, contacts and rules. Type{' '}
         <strong className="font-mono text-text">DELETE</strong> to confirm.

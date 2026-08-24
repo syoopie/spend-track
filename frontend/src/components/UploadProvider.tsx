@@ -42,8 +42,7 @@ function PasswordModal({
 }) {
   const [password, setPassword] = useState('')
   return (
-    <Modal onClose={onCancel}>
-      <div className="text-base font-bold mb-2.5">Password Protected</div>
+    <Modal onClose={onCancel} title="Password Protected">
       <div className="text-md text-muted mb-4 leading-relaxed">
         <span className="text-text font-medium">{filename}</span> is encrypted. Enter its password to unlock it -
         processing happens locally and the password is never saved. The same password is tried against every file

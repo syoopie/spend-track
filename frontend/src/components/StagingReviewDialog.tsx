@@ -69,7 +69,7 @@ export function StagingReviewDialog({ onClose }: { onClose: () => void }) {
   }
   if (batchQ.isError) {
     return (
-      <Modal onClose={onClose} width={420}>
+      <Modal onClose={onClose} width={420} title="Staging & Pre-Commit Review">
         <ErrorState description="Couldn't load the staged batch." onRetry={() => batchQ.refetch()} />
       </Modal>
     )

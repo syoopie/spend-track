@@ -40,7 +40,7 @@ export function RecategorizeReviewDialog({
 
   if (batchQ.isLoading) {
     return (
-      <Modal onClose={onClose} width={460}>
+      <Modal onClose={onClose} width={460} title="Recategorize Transactions">
         <div className="text-muted text-sm">Loading…</div>
       </Modal>
     )
@@ -48,7 +48,7 @@ export function RecategorizeReviewDialog({
 
   if (batchQ.isError) {
     return (
-      <Modal onClose={onClose} width={420}>
+      <Modal onClose={onClose} width={420} title="Recategorize Transactions">
         <ErrorState description="Couldn't check for a pending recategorization." onRetry={() => batchQ.refetch()} />
       </Modal>
     )
@@ -56,8 +56,7 @@ export function RecategorizeReviewDialog({
 
   if (!batchQ.data) {
     return (
-      <Modal onClose={onClose} width={420}>
-        <div className="text-title-sm font-semibold mb-2.5">Recategorize Transactions</div>
+      <Modal onClose={onClose} width={420} title="Recategorize Transactions">
         <div className="text-md text-muted mb-4">
           Re-run every categorization rule against transactions from{' '}
           <span className="text-text font-medium">{fmtMonthRangeLabel(range.from, range.to)}</span>

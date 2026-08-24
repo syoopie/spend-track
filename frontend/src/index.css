@@ -94,3 +94,23 @@ input[type="number"]::-webkit-outer-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
+
+/* Global fallback so every interactive element gets a visible focus ring
+   by default (X-7 in UI Review.dc.html) - before this, only Select and
+   Checkbox had their own hand-added focus-visible outline, and every
+   plain button/link/input relied on the browser default, which is nearly
+   invisible against this palette. Button/Field/Checkbox/Select already
+   set the same outline via Tailwind utility classes on themselves; this
+   rule is what covers every native element that isn't going through one
+   of those primitives (Sidebar nav links, calendar day-cell buttons,
+   native <select> in MonthRangeCalendar, etc.) - redundant, not
+   conflicting, when a component already sets its own. */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}

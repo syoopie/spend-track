@@ -53,9 +53,7 @@ function ContactFormModal({ contact, onClose }: { contact?: Contact; onClose: ()
   }
 
   return (
-    <Modal onClose={onClose}>
-      <div className="text-base font-bold mb-4">{isEditing ? 'Edit Contact' : 'Add Contact'}</div>
-
+    <Modal onClose={onClose} title={isEditing ? 'Edit Contact' : 'Add Contact'}>
       <Field label="Name" className="mb-3.5">
         <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Auntie Mei" />
       </Field>

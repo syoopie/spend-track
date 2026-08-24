@@ -474,10 +474,14 @@ export function useDeleteRule() {
   const toast = useToast()
   return useMutation({
     mutationFn: (id: number) => api.delete(`/rules/${id}`),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['rules'] })
-      toast.success('Rule deleted.')
-    },
+    // No success toast here - the delete itself fires 6 seconds after the
+    // user clicks Delete (see Rules.tsx's undo window, X-2 in
+    // UI Review.dc.html), and that click already got its own "Rule deleted
+    // - Undo" toast immediately. A second toast when the deferred request
+    // actually lands would be redundant noise for something the user
+    // already confirmed. A failure still needs to surface, though - it's
+    // the one case the optimistic removal turns out to have been wrong.
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['rules'] }),
     onError: (err) => toast.error(errMsg(err, "Couldn't delete the rule.")),
   })
 }
@@ -485,13 +489,40 @@ export function useDeleteRule() {
 export function useReorderRules() {
   const qc = useQueryClient()
   const toast = useToast()
+  // Rules.tsx only ever calls useRules() (includeDefault=false) - that's
+  // the one cache entry a drag-and-drop reorder there needs to feel
+  // instant. useRules(true) (DefaultRules.tsx) is reconciled via the
+  // plain invalidate in onSuccess instead, since default rules are never
+  // reorderable and don't need an optimistic path.
+  const queryKey = ['rules', false] as const
   return useMutation({
     mutationFn: (orderedIds: number[]) => api.post<Rule[]>('/rules/reorder', { ordered_ids: orderedIds }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['rules'] }),
-    onError: (err) => {
-      qc.invalidateQueries({ queryKey: ['rules'] })
+    onMutate: async (orderedIds) => {
+      await qc.cancelQueries({ queryKey })
+      const previous = qc.getQueryData<Rule[]>(queryKey)
+      if (previous) {
+        const byId = new Map(previous.map((r) => [r.id, r]))
+        // Priorities reassigned 1..N to mirror reorder_rules' own
+        // enumerate(..., start=1) exactly, so the priority badge shown
+        // during the round trip already matches what the server will
+        // actually save (X-2's "list re-jumps" complaint was this exact
+        // gap - before, the UI just showed the pre-drop order until the
+        // response came back, then jumped to the real one).
+        const next = orderedIds
+          .map((id, i) => {
+            const rule = byId.get(id)
+            return rule ? { ...rule, priority: i + 1 } : null
+          })
+          .filter((r): r is Rule => r != null)
+        qc.setQueryData(queryKey, next)
+      }
+      return { previous }
+    },
+    onError: (err, _vars, context) => {
+      if (context?.previous) qc.setQueryData(queryKey, context.previous)
       toast.error(errMsg(err, "Couldn't save the new rule order - it's been reset."))
     },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['rules'] }),
   })
 }
 
