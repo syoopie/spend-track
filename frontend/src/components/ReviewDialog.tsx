@@ -1,7 +1,7 @@
 import { Check, ChevronRight, Inbox, ListPlus, Loader2, RotateCcw, Sparkles, Undo2, XCircle } from 'lucide-react'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useCategories, useRuleMatchCount } from '../api/hooks'
-import type { AiJobStatus, RuleRerunRowSnapshot } from '../api/types'
+import type { AiJobStatus, Category, RuleRerunRowSnapshot } from '../api/types'
 import { categoryIcon } from '../lib/categoryColor'
 import { fmtDate, fmtSigned } from '../lib/format'
 import { CategoryBadge } from './CategoryBadge'
@@ -517,6 +517,190 @@ function ReviewRowPopover({
   )
 }
 
+// One row plus its popover-when-open, split out of ReviewDialog's own
+// render and wrapped in memo() so that opening/closing one row, checking
+// one checkbox, or typing into one popover's fields doesn't force React to
+// re-run the render function (and re-look-up each row's category icon,
+// tint, etc.) for every OTHER row in the batch. Before this, all of that
+// lived inline in a single `.map()` inside ReviewDialog's own render, so
+// every row's JSX was regenerated and diffed on every state change,
+// however small - the more rows in the batch (a large multi-file upload
+// can mean hundreds), the slower each click felt. `isOpen`/`checked`/
+// `pending` are passed down as plain booleans computed by the caller
+// (rather than this component re-deriving them from a Set/Map it holds a
+// reference to) specifically so memo's default shallow prop comparison
+// can tell "this row's own state changed" apart from "some other row's
+// state changed" - the latter must leave this row's props byte-for-byte
+// identical, or the whole point of memoizing is lost.
+const ReviewRowItem = memo(function ReviewRowItem({
+  row,
+  index,
+  isOpen,
+  checked,
+  pending,
+  categories,
+  batchRows,
+  registerRef,
+  onToggleOpen,
+  onToggleSelect,
+  onMoveFocus,
+  onApplyRow,
+  onCreateRule,
+  createRulePending,
+  onRuleCreated,
+}: {
+  row: ReviewRow
+  index: number
+  isOpen: boolean
+  checked: boolean
+  pending: boolean
+  categories: Category[] | undefined
+  batchRows: ReviewRow[]
+  registerRef: (key: number, el: HTMLDivElement | null) => void
+  onToggleOpen: (key: number) => void
+  onToggleSelect: (key: number, index: number, shiftKey: boolean) => void
+  onMoveFocus: (fromIndex: number, direction: 1 | -1) => void
+  onApplyRow: (row: ReviewRow, body: ApplyRowBody) => Promise<void>
+  onCreateRule: (
+    row: ReviewRow,
+    matchPattern: string,
+    targetCategory: string,
+    displayLabel: string | null,
+  ) => Promise<{ rule_id: number; updated_rows: RuleRerunRowSnapshot[] }>
+  createRulePending: boolean
+  onRuleCreated: (
+    result: { rule_id: number; updated_rows: RuleRerunRowSnapshot[] },
+    matchPattern: string,
+    category: string,
+  ) => void
+}) {
+  const shiftKeyRef = useRef(false)
+  const current = aiIsCurrent(row)
+  const colorOverride = row.needs_review
+    ? { bg: AMBER_BADGE_BG, fg: AMBER_BADGE_FG }
+    : row.ai_suggested && current
+      ? { bg: AI_BADGE_BG, fg: AI_BADGE_FG }
+      : undefined
+  const rowBg = pending
+    ? AI_BG
+    : row.needs_review
+      ? AMBER_BG
+      : row.ai_suggested && current
+        ? AI_BG
+        : undefined
+  return (
+    <div>
+      <div
+        ref={(el) => registerRef(row.key, el)}
+        role="button"
+        tabIndex={0}
+        aria-expanded={isOpen}
+        onClick={() => onToggleOpen(row.key)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            onToggleOpen(row.key)
+          } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault()
+            onMoveFocus(index, e.key === 'ArrowDown' ? 1 : -1)
+          }
+        }}
+        className={`grid ${ROW_GRID_COLS} items-center px-5 py-2.5 text-md border-b border-border/70 cursor-pointer
+          hover:ring-1 hover:ring-inset hover:ring-accent/40 focus-visible:outline focus-visible:outline-2
+          focus-visible:-outline-offset-2 focus-visible:outline-accent`}
+        style={{ background: rowBg ?? (isOpen ? 'var(--color-input)' : undefined) }}
+      >
+        {/* stopPropagation keeps this click from also opening the row below;
+            unlike the old version, this deliberately does NOT preventDefault
+            the checkbox's own native click - letting the browser's real
+            toggle happen and driving selection off the resulting onChange
+            avoids a controlled-input race where the DOM's own checked state
+            could end up out of step with React's, requiring an unrelated
+            re-render elsewhere to force the checkbox back in sync. shiftKey
+            is captured on mousedown (which always fires before the click/
+            change pair) rather than read off the change event itself -
+            TypeScript's ChangeEvent type has no modifier keys, even though
+            React's actual checkbox onChange event does carry them. */}
+        <div
+          className="flex items-center justify-center"
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => {
+            shiftKeyRef.current = e.shiftKey
+          }}
+        >
+          <Checkbox checked={checked} onChange={() => onToggleSelect(row.key, index, shiftKeyRef.current)} />
+        </div>
+        <ChevronRight size={14} className={`shrink-0 text-muted-2 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+        <div className="text-muted font-mono text-xs">{fmtDate(row.transaction_date)}</div>
+        <div className="min-w-0 pr-2 flex items-center gap-1.5">
+          {(row.ai_suggested || pending) && (
+            <Sparkles
+              size={11}
+              className={`shrink-0 ${pending ? 'animate-pulse' : ''}`}
+              style={{ color: current || pending ? AI_BADGE_FG : 'var(--color-muted-2)' }}
+            />
+          )}
+          <div className="min-w-0">
+            <div className="truncate">{row.matched_label ?? row.raw_description}</div>
+            {/* The clean label/AI suggestion is never the only thing shown - the
+                full raw bank description stays visible underneath it, not just
+                in a hover title, so it's never hidden behind an edited name. */}
+            {row.matched_label && (
+              <div className="truncate text-2xs text-muted-2" title={row.raw_description}>
+                {row.raw_description}
+              </div>
+            )}
+          </div>
+        </div>
+        <div>
+          {/* A shimmer placeholder, not a dimmed row - opacity-0.75
+              on the whole row used to read as "this row is
+              disabled", when the category is really the only thing
+              not settled yet while AI works (REV-6). */}
+          {pending ? (
+            <div className="h-5 w-24 rounded-full bg-border animate-pulse" />
+          ) : (
+            <CategoryBadge category={row.category} categories={categories} colorOverride={colorOverride} />
+          )}
+        </div>
+        <div className={`text-right font-mono ${row.amount > 0 ? 'text-success' : 'text-text'}`}>
+          {fmtSigned(row.amount)}
+        </div>
+      </div>
+      {isOpen && (
+        <ReviewRowPopover
+          row={row}
+          batchRows={batchRows}
+          onApply={async (body) => {
+            // Deliberately doesn't close the popover on success (even
+            // on failure, there's nothing to undo here) - the whole
+            // point of auto-apply-on-change (category, label,
+            // save-as-contact, restore default) is that each control
+            // can be used independently without losing the others;
+            // forcing a close after the first one would cut that
+            // short. The row header's own click toggle is still how
+            // the user closes it when done.
+            try {
+              await onApplyRow(row, body)
+            } catch {
+              // swallow - nothing else to do here; the user can just retry
+            }
+          }}
+          createRulePending={createRulePending}
+          onCreateRule={async (matchPattern, targetCategory, displayLabel) => {
+            try {
+              const result = await onCreateRule(row, matchPattern, targetCategory, displayLabel)
+              onRuleCreated(result, matchPattern, targetCategory)
+            } catch {
+              // leave the popover open on failure so the user can retry
+            }
+          }}
+        />
+      )}
+    </div>
+  )
+})
+
 export function ReviewDialog({
   title,
   subtitle,
@@ -535,7 +719,10 @@ export function ReviewDialog({
   emptyMessage = 'Nothing to show.',
 }: {
   title: string
-  subtitle: string
+  // ReactNode, not string - StagingReviewDialog needs a native title
+  // tooltip over a shortened multi-file summary rather than dumping every
+  // filename into the subtitle as plain text.
+  subtitle: ReactNode
   onClose: () => void
   statCards: ReviewStatCard[]
   aiStatus: AiJobStatus
@@ -591,24 +778,37 @@ export function ReviewDialog({
     return () => clearTimeout(t)
   }, [search])
 
-  const filterCounts = {
-    all: rows.length,
-    needs_review: rows.filter((r) => matchesFilter(r, 'needs_review')).length,
-    ai_suggested: rows.filter((r) => matchesFilter(r, 'ai_suggested')).length,
-    uncategorized: rows.filter((r) => matchesFilter(r, 'uncategorized')).length,
-  }
+  // Memoized (rather than recomputed inline on every render) because every
+  // one of these does a full pass over `rows` - with a large multi-file
+  // upload putting hundreds of rows in the batch, redoing that work on
+  // every keystroke, checkbox click, or row open (none of which actually
+  // change `rows`/`rowFilter`/`debouncedSearch`) was a real, measurable
+  // source of the sluggishness this was rewritten to fix.
+  const filterCounts = useMemo(
+    () => ({
+      all: rows.length,
+      needs_review: rows.filter((r) => matchesFilter(r, 'needs_review')).length,
+      ai_suggested: rows.filter((r) => matchesFilter(r, 'ai_suggested')).length,
+      uncategorized: rows.filter((r) => matchesFilter(r, 'uncategorized')).length,
+    }),
+    [rows],
+  )
   const stillNeedsReviewCount = filterCounts.needs_review + filterCounts.uncategorized
 
   const q = debouncedSearch.trim().toLowerCase()
-  const visibleRows = rows.filter((r) => {
-    if (!matchesFilter(r, rowFilter)) return false
-    if (!q) return true
-    return (
-      (r.matched_label ?? '').toLowerCase().includes(q) ||
-      r.raw_description.toLowerCase().includes(q) ||
-      r.category.toLowerCase().includes(q)
-    )
-  })
+  const visibleRows = useMemo(
+    () =>
+      rows.filter((r) => {
+        if (!matchesFilter(r, rowFilter)) return false
+        if (!q) return true
+        return (
+          (r.matched_label ?? '').toLowerCase().includes(q) ||
+          r.raw_description.toLowerCase().includes(q) ||
+          r.category.toLowerCase().includes(q)
+        )
+      }),
+    [rows, rowFilter, q],
+  )
 
   // Multi-select with shift-click ranges (REV-1) - bulkApply below is what
   // both the bulk action bar and "Accept all AI suggestions" run against.
@@ -623,35 +823,6 @@ export function ReviewDialog({
   useEffect(() => {
     setSelectedKeys(new Set())
   }, [rowFilter, debouncedSearch])
-
-  function toggleSelect(key: number, index: number, shiftKey: boolean) {
-    // Captured BEFORE the ref is overwritten below, and passed into the
-    // updater as a value rather than read live from the ref inside it -
-    // setSelectedKeys's updater runs asynchronously (deferred to React's
-    // next render pass), so by the time it actually executes,
-    // lastClickedIndexRef.current has already been reassigned to `index`
-    // by the synchronous line at the end of this function. Reading the
-    // ref live from inside the updater made from/to collapse to the same
-    // value every time, silently turning every shift-click into a
-    // single-row toggle instead of a range.
-    const anchorIndex = lastClickedIndexRef.current
-    setSelectedKeys((prev) => {
-      const next = new Set(prev)
-      if (shiftKey && anchorIndex != null) {
-        const [from, to] = [anchorIndex, index].sort((a, b) => a - b)
-        for (let i = from; i <= to; i++) {
-          const k = orderedRows[i]?.key
-          if (k != null) next.add(k)
-        }
-      } else if (next.has(key)) {
-        next.delete(key)
-      } else {
-        next.add(key)
-      }
-      return next
-    })
-    lastClickedIndexRef.current = index
-  }
 
   async function bulkApply(targetRows: ReviewRow[], body: (row: ReviewRow) => ApplyRowBody) {
     setBulkPending(true)
@@ -670,7 +841,7 @@ export function ReviewDialog({
   // Every AI suggestion not already applied - across the whole batch,
   // regardless of the current filter/search/selection - what "Accept all"
   // beside the status pill operates on.
-  const acceptableAiRows = rows.filter((r) => r.ai_suggested && !aiIsCurrent(r))
+  const acceptableAiRows = useMemo(() => rows.filter((r) => r.ai_suggested && !aiIsCurrent(r)), [rows])
 
   // While AI categorization is running, its not-yet-resolved candidates get
   // pulled into their own group at the very top of the row list (highest
@@ -681,18 +852,94 @@ export function ReviewDialog({
   // as one unit. If no rows currently qualify (e.g. they're all filtered
   // out as duplicates), fall back to the old top-of-dialog banner instead
   // of showing an empty group header.
-  const aiPendingRows = aiStatus === 'running' ? visibleRows.filter(isAiPending).sort(byDateDesc) : []
-  const aiPendingKeys = new Set(aiPendingRows.map((r) => r.key))
-  const otherRows = [...visibleRows]
-    .filter((r) => !aiPendingKeys.has(r.key))
-    .sort((a, b) => Number(b.ai_suggested) - Number(a.ai_suggested) || byDateDesc(a, b))
+  const aiPendingRows = useMemo(
+    () => (aiStatus === 'running' ? visibleRows.filter(isAiPending).sort(byDateDesc) : []),
+    [aiStatus, visibleRows],
+  )
+  const aiPendingKeys = useMemo(() => new Set(aiPendingRows.map((r) => r.key)), [aiPendingRows])
+  const otherRows = useMemo(
+    () =>
+      [...visibleRows]
+        .filter((r) => !aiPendingKeys.has(r.key))
+        .sort((a, b) => Number(b.ai_suggested) - Number(a.ai_suggested) || byDateDesc(a, b)),
+    [visibleRows, aiPendingKeys],
+  )
   // The actual on-screen row order, computed once - both the render below
   // and the ArrowUp/ArrowDown keyboard handler (REV-3) walk this same
   // array, so "next row" always means the same thing to both.
-  const orderedRows = [...aiPendingRows, ...otherRows]
+  const orderedRows = useMemo(() => [...aiPendingRows, ...otherRows], [aiPendingRows, otherRows])
 
+  // useCallback so this one stable function reference is what every row
+  // receives as a prop (rather than a fresh closure per row per render) -
+  // part of the same memoization that lets ReviewRowItem skip re-rendering
+  // rows whose own state didn't change. It depends on `orderedRows` (for
+  // the shift-range branch) so it's only recreated when the row set/order
+  // actually changes, not on every selection change.
+  const handleToggleSelect = useCallback(
+    (key: number, index: number, shiftKey: boolean) => {
+      // Captured BEFORE the ref is overwritten below, and passed into the
+      // updater as a value rather than read live from the ref inside it -
+      // setSelectedKeys's updater runs asynchronously (deferred to React's
+      // next render pass), so by the time it actually executes,
+      // lastClickedIndexRef.current has already been reassigned to `index`
+      // by the synchronous line at the end of this function. Reading the
+      // ref live from inside the updater made from/to collapse to the same
+      // value every time, silently turning every shift-click into a
+      // single-row toggle instead of a range.
+      const anchorIndex = lastClickedIndexRef.current
+      setSelectedKeys((prev) => {
+        const next = new Set(prev)
+        if (shiftKey && anchorIndex != null) {
+          const [from, to] = [anchorIndex, index].sort((a, b) => a - b)
+          for (let i = from; i <= to; i++) {
+            const k = orderedRows[i]?.key
+            if (k != null) next.add(k)
+          }
+        } else if (next.has(key)) {
+          next.delete(key)
+        } else {
+          next.add(key)
+        }
+        return next
+      })
+      lastClickedIndexRef.current = index
+    },
+    [orderedRows],
+  )
+
+  const handleToggleOpen = useCallback((key: number) => {
+    setOpenKey((prev) => (prev === key ? null : key))
+  }, [])
+
+  const registerRowRef = useCallback((key: number, el: HTMLDivElement | null) => {
+    if (el) rowRefs.current.set(key, el)
+    else rowRefs.current.delete(key)
+  }, [])
+
+  const handleMoveFocus = useCallback(
+    (fromIndex: number, direction: 1 | -1) => {
+      const next = orderedRows[fromIndex + direction]
+      if (next) rowRefs.current.get(next.key)?.focus()
+    },
+    [orderedRows],
+  )
+
+  const handleRuleCreated = useCallback(
+    (result: { rule_id: number; updated_rows: RuleRerunRowSnapshot[] }, matchPattern: string, category: string) => {
+      setOpenKey(null)
+      setRuleBanner({ ruleId: result.rule_id, rows: result.updated_rows, matchPattern, category })
+    },
+    [],
+  )
+
+  // Wide enough to use up real screen space on anything but a small
+  // window, instead of a flat 860px that left a lot of unused space on a
+  // wide monitor - still capped by Modal's own calc(100vw - 48px) so it
+  // never touches the edges. Match this in StagingReviewDialog's own
+  // skeleton (REV-7) so the loading shell doesn't visibly resize once real
+  // data replaces it.
   return (
-    <Modal onClose={onClose} width={860}>
+    <Modal onClose={onClose} width="min(1400px, 92vw)">
       <div className="flex items-start justify-between mb-0.5">
         <div>
           <div className="text-lg font-bold">{title}</div>
@@ -957,137 +1204,26 @@ export function ReviewDialog({
             {aiModel}… you can keep working, or close this and check back later.
           </div>
         )}
-        {orderedRows.map((row, i) => {
-          const isOpen = openKey === row.key
-          const current = aiIsCurrent(row)
-          const pending = aiPendingKeys.has(row.key)
-          const colorOverride = row.needs_review
-            ? { bg: AMBER_BADGE_BG, fg: AMBER_BADGE_FG }
-            : row.ai_suggested && current
-              ? { bg: AI_BADGE_BG, fg: AI_BADGE_FG }
-              : undefined
-          const rowBg = pending
-            ? AI_BG
-            : row.needs_review
-              ? AMBER_BG
-              : row.ai_suggested && current
-                ? AI_BG
-                : undefined
-          return (
-            <div key={row.key}>
-              <div
-                ref={(el) => {
-                  if (el) rowRefs.current.set(row.key, el)
-                  else rowRefs.current.delete(row.key)
-                }}
-                role="button"
-                tabIndex={0}
-                aria-expanded={isOpen}
-                onClick={() => setOpenKey(isOpen ? null : row.key)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    setOpenKey(isOpen ? null : row.key)
-                  } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-                    e.preventDefault()
-                    const next = orderedRows[i + (e.key === 'ArrowDown' ? 1 : -1)]
-                    if (next) rowRefs.current.get(next.key)?.focus()
-                  }
-                }}
-                className={`grid ${ROW_GRID_COLS} items-center px-5 py-2.5 text-md border-b border-border/70 cursor-pointer
-                  hover:ring-1 hover:ring-inset hover:ring-accent/40 focus-visible:outline focus-visible:outline-2
-                  focus-visible:-outline-offset-2 focus-visible:outline-accent`}
-                style={{ background: rowBg ?? (isOpen ? 'var(--color-input)' : undefined) }}
-              >
-                {/* preventDefault stops the checkbox's own native toggle so
-                    toggleSelect (which supports shift-click ranges) is the
-                    only thing driving its checked state; stopPropagation
-                    keeps this click from also opening the row below. */}
-                <div
-                  onClick={(e) => {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    toggleSelect(row.key, i, e.shiftKey)
-                  }}
-                >
-                  <Checkbox checked={selectedKeys.has(row.key)} onChange={() => {}} />
-                </div>
-                <ChevronRight size={14} className={`shrink-0 text-muted-2 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
-                <div className="text-muted font-mono text-xs">{fmtDate(row.transaction_date)}</div>
-                <div className="min-w-0 pr-2 flex items-center gap-1.5">
-                  {(row.ai_suggested || pending) && (
-                    <Sparkles
-                      size={11}
-                      className={`shrink-0 ${pending ? 'animate-pulse' : ''}`}
-                      style={{ color: current || pending ? AI_BADGE_FG : 'var(--color-muted-2)' }}
-                    />
-                  )}
-                  <div className="min-w-0">
-                    <div className="truncate">{row.matched_label ?? row.raw_description}</div>
-                    {/* The clean label/AI suggestion is never the only thing shown - the
-                        full raw bank description stays visible underneath it, not just
-                        in a hover title, so it's never hidden behind an edited name. */}
-                    {row.matched_label && (
-                      <div className="truncate text-2xs text-muted-2" title={row.raw_description}>
-                        {row.raw_description}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div>
-                  {/* A shimmer placeholder, not a dimmed row - opacity-0.75
-                      on the whole row used to read as "this row is
-                      disabled", when the category is really the only thing
-                      not settled yet while AI works (REV-6). */}
-                  {pending ? (
-                    <div className="h-5 w-24 rounded-full bg-border animate-pulse" />
-                  ) : (
-                    <CategoryBadge category={row.category} categories={categoriesQ.data} colorOverride={colorOverride} />
-                  )}
-                </div>
-                <div className={`text-right font-mono ${row.amount > 0 ? 'text-success' : 'text-text'}`}>
-                  {fmtSigned(row.amount)}
-                </div>
-              </div>
-              {isOpen && (
-                <ReviewRowPopover
-                  row={row}
-                  batchRows={rows}
-                  onApply={async (body) => {
-                    // Deliberately doesn't close the popover on success (even
-                    // on failure, there's nothing to undo here) - the whole
-                    // point of auto-apply-on-change (category, label,
-                    // save-as-contact, restore default) is that each control
-                    // can be used independently without losing the others;
-                    // forcing a close after the first one would cut that
-                    // short. The row header's own click toggle is still how
-                    // the user closes it when done.
-                    try {
-                      await onApplyRow(row, body)
-                    } catch {
-                      // swallow - nothing else to do here; the user can just retry
-                    }
-                  }}
-                  createRulePending={createRulePending}
-                  onCreateRule={async (matchPattern, targetCategory, displayLabel) => {
-                    try {
-                      const result = await onCreateRule(row, matchPattern, targetCategory, displayLabel)
-                      setOpenKey(null)
-                      setRuleBanner({
-                        ruleId: result.rule_id,
-                        rows: result.updated_rows,
-                        matchPattern,
-                        category: targetCategory,
-                      })
-                    } catch {
-                      // leave the popover open on failure so the user can retry
-                    }
-                  }}
-                />
-              )}
-            </div>
-          )
-        })}
+        {orderedRows.map((row, i) => (
+          <ReviewRowItem
+            key={row.key}
+            row={row}
+            index={i}
+            isOpen={openKey === row.key}
+            checked={selectedKeys.has(row.key)}
+            pending={aiPendingKeys.has(row.key)}
+            categories={categoriesQ.data}
+            batchRows={rows}
+            registerRef={registerRowRef}
+            onToggleOpen={handleToggleOpen}
+            onToggleSelect={handleToggleSelect}
+            onMoveFocus={handleMoveFocus}
+            onApplyRow={onApplyRow}
+            onCreateRule={onCreateRule}
+            createRulePending={createRulePending}
+            onRuleCreated={handleRuleCreated}
+          />
+        ))}
       </div>
 
       <div className="flex items-center justify-end gap-3">

@@ -15,7 +15,7 @@ const SKELETON_ROW_COLS = 'grid-cols-[80px_1fr_180px_110px]'
 // nothing about a slow parse/AI pass should block dismissing the dialog.
 function StagingReviewSkeleton({ onClose }: { onClose: () => void }) {
   return (
-    <Modal onClose={onClose} width={860}>
+    <Modal onClose={onClose} width="min(1400px, 92vw)">
       <div className="flex items-start justify-between mb-4">
         <div>
           <div className="h-[18px] w-64 bg-input rounded animate-pulse mb-2.5" />
@@ -109,6 +109,16 @@ export function StagingReviewDialog({ onClose }: { onClose: () => void }) {
     ai_rule_pattern: r.ai_rule_pattern,
   }))
 
+  // A large multi-file upload used to dump every filename, comma-joined,
+  // into the subtitle as one long line of plain text - not very readable
+  // and not very appealing to look at. A compact count with the full list
+  // in a native hover tooltip keeps the header short regardless of how
+  // many files went in.
+  const filenameSummary =
+    batch.source_filenames.length === 1
+      ? batch.source_filenames[0]
+      : `${batch.source_filenames.length} statement files`
+
   const statCards: ReviewStatCard[] = [
     { label: 'New Extracted', value: batch.new_extracted },
     { label: 'Duplicates Skipped', value: batch.duplicates_skipped, tone: 'muted' },
@@ -124,7 +134,11 @@ export function StagingReviewDialog({ onClose }: { onClose: () => void }) {
   return (
     <ReviewDialog
       title="Staging & Pre-Commit Review"
-      subtitle={`${batch.source_filenames.join(', ')} — parsed, awaiting commit`}
+      subtitle={
+        <span title={batch.source_filenames.length > 1 ? batch.source_filenames.join(', ') : undefined}>
+          {filenameSummary} — parsed, awaiting commit
+        </span>
+      }
       onClose={onClose}
       statCards={statCards}
       aiStatus={batch.ai_status}

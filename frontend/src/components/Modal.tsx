@@ -18,7 +18,10 @@ export function Modal({
 }: {
   onClose: () => void
   children: ReactNode
-  width?: number
+  // A number is a raw px value; a string is passed through verbatim (e.g.
+  // 'min(1400px, 92vw)' for a dialog that should use up available screen
+  // space on a wide window without needing a hardcoded pixel guess).
+  width?: number | string
   // ReactNode, not string - some callers need a styled title (the danger-
   // red heading on a destructive-action modal), not just plain text.
   title?: ReactNode
