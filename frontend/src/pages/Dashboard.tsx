@@ -659,7 +659,7 @@ export function Dashboard() {
 
   return (
     <div className="px-9 pb-15">
-      <div className="sticky top-0 z-20 -mx-9 px-9 bg-bg pt-7 pb-5.5 relative">
+      <div className="sticky top-0 z-20 -mx-9 px-9 bg-bg pt-7 pb-5.5 relative shadow-[0_4px_6px_-4px_rgba(0,0,0,0.4)]">
         <div
           className={`absolute bottom-0 left-0 right-0 h-[2px] bg-accent transition-opacity duration-200 ${isRefreshing ? 'opacity-100' : 'opacity-0'}`}
         />
@@ -944,7 +944,7 @@ export function Dashboard() {
             gridTemplate={FEED_GRID_TEMPLATE}
             sort={sort}
             onSort={toggleSort}
-            className="px-5 py-2.5 border-b border-divider sticky top-0 z-10 bg-card text-2xs text-muted-2 uppercase tracking-wide"
+            className="px-5 py-2.5 border-b border-divider sticky top-0 z-10 bg-card text-2xs text-muted-2 uppercase tracking-wide shadow-[0_4px_6px_-4px_rgba(0,0,0,0.4)]"
           />
           {txQ.isLoading && <div className="p-5 text-muted text-sm">Loading transactions…</div>}
           {txQ.isError && <ErrorState description="Couldn't load transactions for this range." onRetry={() => txQ.refetch()} />}
@@ -987,12 +987,13 @@ export function Dashboard() {
               const agg = monthAggregates.get(monthKey)
               const primaryText = showFullName ? tx.raw_description : (tx.matched_label ?? tx.raw_description)
               const isHeavy = maxAbsAmount > 0 && Math.abs(tx.amount) >= maxAbsAmount * 0.5
+              const isOpen = editingTxId === tx.id
 
               return (
                 <div key={tx.id}>
                   {showDivider && (
                     <div
-                      className="sticky z-[5] px-5 py-1.5 text-2xs font-semibold text-muted-2 bg-input border-b border-divider"
+                      className="sticky z-[5] px-5 py-1.5 text-2xs font-semibold text-muted-2 bg-input border-b border-divider shadow-[0_4px_6px_-4px_rgba(0,0,0,0.4)]"
                       style={{ top: columnHeaderHeight }}
                     >
                       {fmtMonthYearLabel(monthKey)} · {agg?.count ?? 0} transaction{(agg?.count ?? 0) === 1 ? '' : 's'} ·{' '}
@@ -1009,7 +1010,16 @@ export function Dashboard() {
                         openEditor(tx)
                       }
                     }}
-                    className="grid items-center px-5 py-3 text-md border-b border-divider group cursor-pointer hover:bg-input/50 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
+                    className={`grid items-center px-5 py-3 text-md border-b border-divider group cursor-pointer
+                      focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent
+                      ${
+                        // A persistent accent ring for the row whose editor is
+                        // currently open below it - same fix, same reasoning,
+                        // as ReviewDialog.tsx's row list: nothing here
+                        // previously marked which row you were editing once
+                        // you'd scrolled, or clicked into the popover itself.
+                        isOpen ? 'ring-2 ring-inset ring-accent rounded-lg' : 'hover:bg-input/50'
+                      }`}
                     style={{ gridTemplateColumns: FEED_GRID_TEMPLATE, opacity: tx.is_excluded ? 0.5 : 1 }}
                   >
                     <div className="text-muted font-mono text-xs">{fmtDate(tx.transaction_date, { withYear: spansMultipleYears })}</div>
@@ -1080,9 +1090,7 @@ export function Dashboard() {
                       </button>
                     </div>
                   </div>
-                  {editingTxId === tx.id && (
-                    <TransactionEditPopover transaction={tx} onClose={() => setEditingTxId(null)} />
-                  )}
+                  {isOpen && <TransactionEditPopover transaction={tx} onClose={() => setEditingTxId(null)} />}
                 </div>
               )
             })

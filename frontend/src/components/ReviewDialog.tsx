@@ -662,7 +662,7 @@ const ReviewRowItem = memo(function ReviewRowItem({
             // since rowBg always wins over it), so a currently-open row had
             // no reliable "this is the one I'm editing" cue while scrolling
             // a long batch. Independent of rowBg for exactly that reason.
-            isOpen ? 'ring-2 ring-inset ring-accent' : 'hover:ring-1 hover:ring-inset hover:ring-accent/40'
+            isOpen ? 'ring-2 ring-inset ring-accent rounded-lg' : 'hover:ring-1 hover:ring-inset hover:ring-accent/40'
           }`}
         style={{ gridTemplateColumns: ROW_GRID_TEMPLATE, background: rowBg ?? (isOpen ? 'var(--color-input)' : undefined) }}
       >
@@ -856,21 +856,12 @@ export function ReviewDialog({
   } | null>(null)
   const categoriesQ = useCategories()
   // Row header refs, keyed by row.key - lets keyboard Up/Down move focus
-  // between rows (REV-3) and lets opening a row scroll it to the top of the
-  // scroller below, rather than the newly-opened popover shoving everything
-  // below it down inside a fixed-height scroll region.
+  // between rows (REV-3). Opening a row no longer force-scrolls it to the
+  // top of the scroller - that fought the user's own scroll position (they
+  // clicked a row because they could already see it) for no real benefit,
+  // since the popover pushing later rows down is a normal, expected result
+  // of expanding something in a scroll region.
   const rowRefs = useRef(new Map<number, HTMLDivElement>())
-  const scrollerRef = useRef<HTMLDivElement>(null)
-  const columnHeaderRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (openKey == null) return
-    const rowEl = rowRefs.current.get(openKey)
-    const scroller = scrollerRef.current
-    if (!rowEl || !scroller) return
-    const headerHeight = columnHeaderRef.current?.offsetHeight ?? 0
-    scroller.scrollTop = rowEl.offsetTop - scroller.offsetTop - headerHeight
-  }, [openKey])
 
   // REV-1: a filter bar + search over the row list, so reviewing a
   // 100+-row batch doesn't mean scrolling past everything already resolved
@@ -1290,9 +1281,8 @@ export function ReviewDialog({
           rows, so picking a narrower category made the dialog visibly
           resize. h-[45vh] always reserves the same space; a short list just
           leaves it partly empty instead of collapsing the box around it. */}
-      <div ref={scrollerRef} className="bg-input border border-border rounded-xl overflow-y-auto mb-5 h-[45vh]">
+      <div className="bg-input border border-border rounded-xl overflow-y-auto mb-5 h-[45vh]">
         <DataTableHeader
-          headerRef={columnHeaderRef}
           columns={ROW_COLUMNS}
           gridTemplate={ROW_GRID_TEMPLATE}
           // z-10 is load-bearing, not decorative: a sticky element with no
@@ -1303,7 +1293,7 @@ export function ReviewDialog({
           // once AI categorization is actually running with real pending
           // rows (see Dashboard.tsx's feed header, which already carries the
           // same z-10 for the identical reason).
-          className="px-5 py-2.5 text-2xs text-muted-2 uppercase tracking-wide border-b border-border/70 sticky top-0 z-10 bg-input"
+          className="px-5 py-2.5 text-2xs text-muted-2 uppercase tracking-wide border-b border-border/70 sticky top-0 z-10 bg-input shadow-[0_4px_6px_-4px_rgba(0,0,0,0.4)]"
         />
         {rows.length === 0 && <EmptyState icon={Inbox} title={emptyMessage} />}
         {rows.length > 0 && visibleRows.length === 0 && (
