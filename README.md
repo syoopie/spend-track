@@ -150,7 +150,7 @@ uv sync
 uv run uvicorn app.main:app --reload
 ```
 
-The SQLite database defaults to `~/.spendtrack/data.db`; `SPENDTRACK_DB_PATH` overrides it, which is handy for pointing a second instance at a scratch database. (The pre-rename `SG_TRACKER_*` variable names still work — see `backend/src/app/config.py`.)
+The SQLite database defaults to `~/.spendtrack/data.db`; `SPENDTRACK_DB_PATH` overrides it, which is handy for pointing a second instance at a scratch database. (The pre-rename `SG_TRACKER_*` variable names still work — see `backend/src/app/config.py`.) `./scripts/start-test.sh` (or `.ps1` on Windows) automates exactly that: a whole second instance on ports 8001/5174 against a scratch database at `.scratch-test/data.db`, so you (or an agent) can try something without touching your real data or the copy already running on 5173/8000.
 
 **Frontend** (from `frontend/`) — serves the UI on `http://localhost:5173` and proxies `/api/*` to the backend:
 

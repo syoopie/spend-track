@@ -24,6 +24,9 @@ frontend/dist-ssr/
 *.db-wal
 *.db-shm
 
+# Scratch database for scripts/start-test.* (agent/automated testing instance)
+.scratch-test/
+
 # Editors / OS
 .vscode/*
 !.vscode/extensions.json
