@@ -14,6 +14,10 @@
 
 Give it a statement PDF you downloaded from your bank, and it reads every transaction, sorts them into categories, cancels out refunds against the purchases they reverse, and shows you where your money actually went.
 
+**Using it** · [Download and run](#download-and-run) · [Try the sample data](#try-it-before-using-your-own-statements) · [The everyday routine](#the-everyday-routine) · [AI categorization](#optional-let-ai-sort-out-the-leftovers) · [Questions](#questions)
+
+**Working on it** · [Adding a bank](#adding-a-bank) · [Run it from source](#run-it-from-source) · [For developers](#for-developers)
+
 ![The dashboard: inflow, outflow and net expenditure for the selected months, a cash flow chart, a category breakdown donut, and the searchable transaction feed](docs/screenshots/dashboard.jpg)
 
 ## Your data stays on your computer
@@ -45,7 +49,7 @@ A small window opens showing where your data is stored and the address the app i
 <details>
 <summary>Why does my computer warn me about it?</summary>
 
-Both warnings mean the same thing: the download isn't signed with a paid developer certificate (Apple charges $99/year, Microsoft rather more). Nothing about the app changes if you get past the warning — but you shouldn't take that on faith from the person who wrote it. Everything here is source code you can read, and the download is built in the open by [this GitHub Actions workflow](.github/workflows/desktop-build.yml), from the exact commit each release names. If you'd rather not run an unsigned binary at all, [run it from source](#running-from-source) instead.
+Both warnings mean the same thing: the download isn't signed with a paid developer certificate (Apple charges $99/year, Microsoft rather more). Nothing about the app changes if you get past the warning — but you shouldn't take that on faith from the person who wrote it. Everything here is source code you can read, and the download is built in the open by [this GitHub Actions workflow](.github/workflows/desktop-build.yml), from the exact commit each release names. If you'd rather not run an unsigned binary at all, [run it from source](#run-it-from-source) instead.
 
 </details>
 
@@ -104,33 +108,29 @@ The goal is to read statements from any Singapore bank; UOB is simply the one th
 
 If you have statements from a bank you'd like read, that's the blocker worth removing: [open a bank support request](https://github.com/syoopie/spend-track/issues/new?template=bank-support.yml) (don't attach a real statement — it has your account number in it), or see `backend/src/app/parsing/` for how a parser plugs in — each is one folder implementing `detect()` and `parse()`, registered in one list. **Settings → Region** always shows the live state: which banks parse, and which are recognized but waiting on a parser.
 
-## For developers
+## Run it from source
+
+Everything the download does, from a checkout — for anyone who'd rather not run an unsigned binary, is on a platform with no build yet, or wants to change something. Both prerequisites have ordinary installers: **[uv](https://docs.astral.sh/uv/)** (Python) and **[Node.js](https://nodejs.org/)** 18 or newer.
 
 <details>
-<summary>Running the two dev servers by hand, tests, and project layout</summary>
-
-### Running from source
-
-Two prerequisites, both with ordinary installers: **[uv](https://docs.astral.sh/uv/)** (Python) and **[Node.js](https://nodejs.org/)** 18 or newer. Then:
+<summary><b>Start it with one script</b> — the simplest way to run from source</summary>
 
 ```bash
 git clone https://github.com/syoopie/spend-track.git
 cd spend-track
-./scripts/start.sh      # Windows: scripts\start.bat
+./scripts/start.sh
 ```
 
-That script starts both halves, waits for them, and opens `http://localhost:5173`. `Ctrl+C` stops it.
+On Windows, double-click `scripts\start.bat` (or run it from a terminal); `scripts/start.ps1` is the PowerShell equivalent the `.bat` calls.
 
-### Building the download yourself
+The script installs what's missing, starts the API and the UI, waits for both to come up, and opens `http://localhost:5173`. `Ctrl+C` in that terminal stops both. Re-running it is safe — it notices what's already running instead of starting a second copy.
 
-```bash
-cd backend
-uv run --group build python scripts/build_desktop.py
-```
+The first run takes a few minutes while dependencies download; after that it starts in seconds.
 
-Compiles the frontend, then freezes it and the API into one executable in `backend/dist/` — `SpendTrack.exe` on Windows, `SpendTrack.app` on macOS, `SpendTrack` on Linux. PyInstaller freezes the interpreter it runs under, so each platform's build has to happen on that platform; `.github/workflows/desktop-build.yml` does all three on every pull request and attaches them to a release on a `v*` tag.
+</details>
 
-### Manual run
+<details>
+<summary><b>Run the two servers by hand</b> — for editing code with hot reload</summary>
 
 **Backend** (from `backend/`) — serves the API on `http://127.0.0.1:8000`:
 
@@ -148,21 +148,50 @@ npm install
 npm run dev
 ```
 
-### Tests
+</details>
+
+<details>
+<summary><b>Build the download yourself</b> — the same executable CI publishes</summary>
+
+```bash
+cd backend
+uv run --group build python scripts/build_desktop.py
+```
+
+Compiles the frontend, then freezes it and the API into one executable in `backend/dist/` — `SpendTrack.exe` on Windows, `SpendTrack.app` on macOS, `SpendTrack` on Linux.
+
+PyInstaller freezes the interpreter it runs under, so each platform's build has to happen on that platform; `.github/workflows/desktop-build.yml` does all three on every pull request, smoke-starts each one, and attaches them to a release on a `v*` tag.
+
+</details>
+
+## For developers
+
+<details>
+<summary><b>Tests</b></summary>
 
 ```bash
 cd backend && uv run pytest
 ```
 
-Parser regression tests run against every committed sanitized sample PDF, alongside full API integration tests via FastAPI's `TestClient` — all pass on a fresh clone with no setup beyond `uv sync`. A few extra tests run only if you've dropped your own real UOB statements into a local, gitignored `PDF Examples/UOB/` folder (they cross-validate against each statement's own printed totals) and are skipped, not failed, when it doesn't exist. The synthetic samples are generated by `backend/scripts/generate_sample_pdfs.py` at the exact column positions the real parser expects, so they exercise the genuine parsing path. `backend/scripts/seed_demo_data.py` rebuilds the exact database the screenshots above were taken from — a throwaway `SG_TRACKER_DB_PATH`, the whole sample folder uploaded in one batch, plus placeholder contacts and rules. The frontend has no automated test suite yet — verified manually in-browser, with `npx tsc -b` and `npm run build` for type and build checks.
+Parser regression tests run against every committed sanitized sample PDF, alongside full API integration tests via FastAPI's `TestClient` — all pass on a fresh clone with no setup beyond `uv sync`. A few extra tests run only if you've dropped your own real UOB statements into a local, gitignored `PDF Examples/UOB/` folder (they cross-validate against each statement's own printed totals) and are skipped, not failed, when it doesn't exist.
 
-### Stack
+The synthetic samples are generated by `backend/scripts/generate_sample_pdfs.py` at the exact column positions the real parser expects, so they exercise the genuine parsing path. `backend/scripts/seed_demo_data.py` rebuilds the exact database the screenshots above were taken from — a throwaway `SG_TRACKER_DB_PATH`, the whole sample folder uploaded in one batch, plus placeholder contacts and rules.
+
+The frontend has no automated test suite yet — verified manually in-browser, with `npx tsc -b` and `npm run build` for type and build checks.
+
+</details>
+
+<details>
+<summary><b>Stack</b></summary>
 
 - **Backend**: Python 3.12, FastAPI, SQLite (stdlib `sqlite3`, no ORM), `pdfplumber` for PDF parsing, `pypdf` for encrypted PDFs, `httpx` for AI provider calls. Managed with `uv`.
 - **Frontend**: React + TypeScript, Vite, Tailwind CSS v4, TanStack Query, React Router. No charting library — every chart is hand-rolled SVG.
 - **Packaging**: PyInstaller. The compiled frontend rides inside the executable and is served by the same FastAPI process as the API (`app/webui.py`), so a packaged copy is one process on one port with no Node anywhere — Node is a build-time dependency only.
 
-### Layout
+</details>
+
+<details>
+<summary><b>Project layout</b></summary>
 
 ```text
 backend/src/app/
@@ -173,18 +202,26 @@ backend/src/app/
   repo.py        DB-query helpers shared across routers
   errors.py      shared API error-response construction
   migrations.py  schema DDL migration + default-rule/category reconciliation
+  webui.py       serves the compiled UI in a packaged build (no-op in dev)
+  desktop.py     the entry point behind the double-clickable build
 frontend/src/
   api/           fetch client + typed React Query hooks
   pages/         one file per screen
   components/    shared UI (charts, modals, sidebar)
+backend/packaging/  PyInstaller spec for the desktop build
 docs/            original design docs + screenshots
 scripts/         start.bat / start.sh / start.ps1
 ```
 
-### Where the reasoning lives
+</details>
 
-`CLAUDE.md` documents the non-obvious implementation decisions — why PDF parsing clusters whitespace instead of extracting tables, the categorization precedence order, why staging is in-memory, how the default rule bank is reconciled on every startup, and the known traps in each area.
+<details>
+<summary><b>Where the reasoning lives</b></summary>
+
+`CLAUDE.md` documents the non-obvious implementation decisions — why PDF parsing clusters whitespace instead of extracting tables, the categorization precedence order, why staging is in-memory, how the default rule bank is reconciled on every startup, what the packaged build has to be told by hand, and the known traps in each area.
 
 `docs/technical-spec.md` and `docs/ux-spec.md` are the original design docs, written before implementation; where the app has since diverged on purpose, that's recorded in `CLAUDE.md` rather than rewritten back into the specs.
+
+`docs/ui-conventions.md` is the living UI checklist — each rule exists because a real instance of it was found and fixed.
 
 </details>
