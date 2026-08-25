@@ -446,6 +446,18 @@ export function Guide() {
                 ),
               },
               {
+                term: 'Backups',
+                children: (
+                  <>
+                    <strong className="text-text">Download Backup</strong> saves a single zip holding your database,
+                    your settings, and a note explaining how to restore them — on this computer or a different one.
+                    Your AI provider key is left out on purpose (a backup often ends up in cloud storage), so
+                    re-enter it after restoring. The database inside is ordinary SQLite: any SQLite browser can open
+                    it, so your data is never locked in here.
+                  </>
+                ),
+              },
+              {
                 term: 'Danger Zone',
                 children: (
                   <>

@@ -39,6 +39,7 @@ There is no account to create, no website to log into, and nothing is uploaded. 
 - **Nets off refunds** against the original purchase, matching on the merchant name as well as the amount, so two unrelated transactions don't get paired by accident.
 - **Names the people you pay.** Save a PayNow number or UEN as a contact once, and future transfers to them are labelled and categorized on their own.
 - **Shows you the picture:** money in and out, spending by category, whether you're spending faster than last month, your top merchants and your most-paid PayNow contacts — all filterable by date range and account.
+- **Gives your data back in one click.** **Settings → Download Backup** produces a zip you can archive, carry to another computer, or open in any SQLite browser. Nothing here is a format you can only read inside this app.
 
 ## Download and run
 
@@ -88,7 +89,9 @@ If the model isn't reachable, the app tells you with a warning instead of leavin
 
 ## Questions
 
-**Where is my data kept?** In a single database file at `~/.spendtrack/data.db` — **Settings** shows the exact path. (An install from before the app was renamed keeps using its original `~/.sg-expenditure-tracker` folder rather than having its database moved out from under it.) **Settings → Change Database Path** lets you move it — pointing it at a Dropbox or OneDrive folder is an easy way to get backups and access from another computer.
+**How do I back up my data, or move it to another computer?** **Settings → Download Backup** gives you a single `.zip` with your database, your settings, and a plain-text note explaining how to put them back. Install the app on the other computer, start it once so it creates its folder, quit it, and copy the two files from the zip in. (Your AI provider key is deliberately left out — a backup tends to end up in cloud storage or an email, and a key that leaks is one someone else can spend. Re-enter it after restoring.)
+
+**Where is my data kept?** In a single database file at `~/.spendtrack/data.db` — **Settings** shows the exact path. (An install from before the app was renamed keeps using its original `~/.sg-expenditure-tracker` folder rather than having its database moved out from under it.) **Settings → Change Database Path** lets you move it — pointing it at a Dropbox or OneDrive folder is an easy way to get continuous backups and access from another computer. It's an ordinary SQLite file, so you can also open it in any SQLite browser if you ever want your data out of this app entirely.
 
 **Does it need my bank login?** No. It only reads statement PDFs you've already downloaded yourself, and never connects to your bank.
 
