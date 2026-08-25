@@ -7,6 +7,7 @@ import { CategoryBadge } from './CategoryBadge'
 import { categoryOptionElements } from './CategoryOptions'
 import { Checkbox } from './Checkbox'
 import { DataTableHeader, dataTableGridTemplate, type DataTableColumn } from './DataTable'
+import { fmtElapsed, useElapsedMs } from './ElapsedTimer'
 import { EmptyState } from './EmptyState'
 import { Modal } from './Modal'
 import { Select } from './Select'
@@ -699,19 +700,10 @@ const ReviewRowItem = memo(function ReviewRowItem({
 // CATEGORIZE_TIMEOUT comment) - this button is what replaces it.
 const CANCEL_OFFER_MS = 15_000
 
-function fmtElapsed(ms: number): string {
-  const totalSeconds = Math.max(0, Math.floor(ms / 1000))
-  const minutes = Math.floor(totalSeconds / 60)
-  const seconds = totalSeconds % 60
-  return `${minutes}:${String(seconds).padStart(2, '0')}`
-}
-
-// Ticks its own elapsed-time display off a fixed startedAt anchor (a
-// setInterval re-rendering this one small component, not the whole dialog)
-// rather than polling the server for it - the batch query already refreshes
-// every 1.5s while running (see useCurrentStagingBatch), which is plenty to
-// catch aiStatus leaving "running", but far too coarse for a readable
-// second-by-second clock.
+// Adds the Terminate action on top of the shared ElapsedTimer clock -
+// see ElapsedTimer.tsx for why the ticking logic itself lives there instead
+// of here (PendingReviewBanner.tsx and Dashboard.tsx's Recategorize button
+// need the same clock with no Terminate button).
 function AiRunningTimer({
   startedAt,
   onCancel,
@@ -721,13 +713,7 @@ function AiRunningTimer({
   onCancel: () => void
   cancelPending: boolean
 }) {
-  const startMs = useMemo(() => new Date(startedAt).getTime(), [startedAt])
-  const [elapsedMs, setElapsedMs] = useState(() => Date.now() - startMs)
-  useEffect(() => {
-    setElapsedMs(Date.now() - startMs)
-    const t = setInterval(() => setElapsedMs(Date.now() - startMs), 1000)
-    return () => clearInterval(t)
-  }, [startMs])
+  const elapsedMs = useElapsedMs(startedAt)
 
   return (
     <span className="inline-flex items-center gap-2 shrink-0">

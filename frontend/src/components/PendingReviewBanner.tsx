@@ -1,6 +1,8 @@
+import { Loader2 } from 'lucide-react'
 import { useCurrentStagingBatch } from '../api/hooks'
 import { fmtRelativeTime } from '../lib/format'
 import { Button } from './Button'
+import { ElapsedTimer } from './ElapsedTimer'
 import { useUploadDialog } from './UploadProvider'
 
 // Shown above every page's content (see App.tsx's MainLayout, which keeps
@@ -26,17 +28,49 @@ export function PendingReviewBanner() {
       ? batch.source_filenames[0]
       : `${batch.source_filenames.length} statement files`
 
+  // Distinct AI-tinted state (same colors ReviewDialog's own in-dialog
+  // banner uses for this) rather than the plain "awaiting review" amber -
+  // the two mean different things: amber says a human needs to look at
+  // this, the AI state says a background job is still working and there's
+  // nothing to review yet. Task 7 in this session's request list: the
+  // banner previously looked identical in both states with no timer at all.
+  const aiRunning = batch.ai_status === 'running'
+
   return (
     <div
       className="flex items-center justify-between gap-4 mx-9 mt-5 px-4.5 py-3 rounded-xl border"
-      style={{ background: 'var(--color-warning-surface)', borderColor: 'var(--color-warning-surface-border)' }}
+      style={
+        aiRunning
+          ? { background: 'var(--color-ai-surface)', borderColor: 'var(--color-ai-surface-border)' }
+          : { background: 'var(--color-warning-surface)', borderColor: 'var(--color-warning-surface-border)' }
+      }
     >
-      <div className="text-md" style={{ color: 'var(--color-warning-text)' }}>
-        <span className="font-semibold">{filenameSummary}</span> — {batch.new_extracted} transaction
-        {batch.new_extracted === 1 ? '' : 's'} awaiting review, staged {fmtRelativeTime(batch.created_at)}.
+      <div
+        className="text-md flex items-center gap-2"
+        style={{ color: aiRunning ? 'var(--color-ai-text)' : 'var(--color-warning-text)' }}
+      >
+        {aiRunning ? (
+          <>
+            <Loader2 size={14} className="animate-spin shrink-0" />
+            <span>
+              AI is categorizing <span className="font-semibold">{filenameSummary}</span> with {batch.ai_model}
+              {batch.ai_started_at && (
+                <>
+                  {' '}
+                  · <ElapsedTimer startedAt={batch.ai_started_at} />
+                </>
+              )}
+            </span>
+          </>
+        ) : (
+          <span>
+            <span className="font-semibold">{filenameSummary}</span> — {batch.new_extracted} transaction
+            {batch.new_extracted === 1 ? '' : 's'} awaiting review, staged {fmtRelativeTime(batch.created_at)}.
+          </span>
+        )}
       </div>
       <Button variant="primary" size="sm" onClick={openReview} className="shrink-0">
-        Review Now
+        {aiRunning ? 'View Progress' : 'Review Now'}
       </Button>
     </div>
   )

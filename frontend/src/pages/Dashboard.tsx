@@ -1,15 +1,17 @@
-import { ArrowDown, ArrowUp, FileUp, LayoutGrid, Pencil, Receipt, RefreshCw, SearchX, SlidersHorizontal, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, FileUp, LayoutGrid, Loader2, Pencil, Receipt, RefreshCw, SearchX, SlidersHorizontal, Trash2 } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   useAccounts,
   useCategories,
+  useCurrentRecategorizeBatch,
   useDashboardSummary,
   useDeleteTransaction,
   useMonthlyTotals,
   useSettings,
   useTransactions,
 } from '../api/hooks'
+import { ElapsedTimer } from '../components/ElapsedTimer'
 import { useToast } from '../components/Toast'
 import { fmtDate, fmtMonthRangeLabel, fmtMonthYearLabel, fmtPlain, fmtSigned, shiftMonth } from '../lib/format'
 import { loadDashboardFilters, saveDashboardFilters, type DashboardFilters, type DirectionFilter } from '../lib/dashboardFilters'
@@ -418,6 +420,12 @@ export function Dashboard() {
 
   const accountsQ = useAccounts()
   const settingsQ = useSettings()
+  // Always enabled (not gated on recategorizeOpen) so the Recategorize
+  // button below can reflect a pending batch's state - AI still running, or
+  // done and awaiting commit - even before the dialog is ever opened. Same
+  // query key RecategorizeReviewDialog itself uses, so mounting it doesn't
+  // trigger a second fetch.
+  const recategorizeBatchQ = useCurrentRecategorizeBatch(true)
   // Hidden categories included (unlike rule/contact pickers) - "Others" and
   // "Other Income" are real fallback categories transactions can land in,
   // so they need to be searchable/filterable here even though they're not
@@ -684,15 +692,42 @@ export function Dashboard() {
                 </option>
               ))}
             </Select>
-            <Button
-              size="sm"
-              onClick={() => setRecategorizeOpen(true)}
-              title="Re-run categorization rules over the selected range"
-              className="flex items-center gap-1.5"
-            >
-              <RefreshCw size={14} />
-              Recategorize
-            </Button>
+            {recategorizeBatchQ.data?.ai_status === 'running' ? (
+              <Button
+                size="sm"
+                onClick={() => setRecategorizeOpen(true)}
+                title="AI is still categorizing the proposed changes - click to view progress"
+                className="flex items-center gap-1.5"
+                style={{ background: 'var(--color-ai-surface)', color: 'var(--color-ai-text)', border: 'none' }}
+              >
+                <Loader2 size={14} className="animate-spin" />
+                AI categorizing…
+                {recategorizeBatchQ.data.ai_started_at && (
+                  <ElapsedTimer startedAt={recategorizeBatchQ.data.ai_started_at} />
+                )}
+              </Button>
+            ) : recategorizeBatchQ.data ? (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setRecategorizeOpen(true)}
+                title="A recategorize run is proposed and awaiting your review"
+                className="flex items-center gap-1.5"
+              >
+                <RefreshCw size={14} />
+                Recategorize · {recategorizeBatchQ.data.changed} awaiting commit
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                onClick={() => setRecategorizeOpen(true)}
+                title="Re-run categorization rules over the selected range"
+                className="flex items-center gap-1.5"
+              >
+                <RefreshCw size={14} />
+                Recategorize
+              </Button>
+            )}
           </div>
         </div>
       </div>
