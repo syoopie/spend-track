@@ -10,6 +10,7 @@ import { DataTableHeader, dataTableGridTemplate, type DataTableColumn } from './
 import { fmtElapsed, useElapsedMs } from './ElapsedTimer'
 import { EmptyState } from './EmptyState'
 import { Modal } from './Modal'
+import { RuleFormModal } from './RuleFormModal'
 import { Select } from './Select'
 
 const AMBER_BG = 'var(--color-warning-surface)'
@@ -284,11 +285,6 @@ function ReviewRowPopover({
     : 0
   const historyMatchCountQ = useRuleMatchCount(trimmedPattern)
   const historyMatchCount = historyMatchCountQ.data?.count ?? 0
-  // +1 for this row itself, which isn't in `batchRows` filtering above and
-  // (being uncommitted) can't be in the history count either - so neither
-  // half would otherwise count the one transaction the rule is being
-  // created *from*.
-  const totalMatchCount = 1 + batchMatchCount + historyMatchCount
 
   const direction = row.amount > 0 ? 'inflow' : 'outflow'
   const categoryOptions = (categoriesQ.data ?? []).filter((c) => c.direction === direction)
@@ -327,6 +323,8 @@ function ReviewRowPopover({
     })
   }
 
+  const [ruleModalOpen, setRuleModalOpen] = useState(false)
+
   return (
     <div
       className="px-5 py-4 flex flex-col gap-3 border-b border-border"
@@ -337,7 +335,11 @@ function ReviewRowPopover({
           only exists on some rows, which used to shift the button sideways
           depending on row type. Anchoring it to this always-present header
           row keeps it in the same spot for every row, and pairs it visually
-          with the AI copy it's the direct undo/redo for. */}
+          with the AI copy it's the direct undo/redo for. The left side
+          always renders SOME caption (AI-current/AI-not-current/neither) so
+          the button never sits alone on an otherwise-empty row (8a) - a row
+          with no AI suggestion at all used to leave this whole strip looking
+          like stray UI with nothing explaining it. */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           {row.ai_suggested && current && (
@@ -350,6 +352,11 @@ function ReviewRowPopover({
             <div className="text-2xs flex items-center gap-1.5" style={{ color: 'var(--color-muted-2)' }}>
               <Sparkles size={11} className="shrink-0" />
               AI suggested "{row.ai_category}" for this transaction — you're not using that suggestion right now.
+            </div>
+          )}
+          {!row.ai_suggested && (
+            <div className="text-2xs" style={{ color: 'var(--color-muted-2)' }}>
+              Categorized by the rules engine — edit below if it's wrong.
             </div>
           )}
         </div>
@@ -375,28 +382,32 @@ function ReviewRowPopover({
           Restore Default
         </button>
       </div>
-      <div>
-        <div className="text-2xs text-muted mb-1 flex items-center gap-1.5">
-          Display name
-          <FieldStatusIcon status={fieldStatus.label} />
-        </div>
-        {/* Applies on blur/Enter, not per keystroke - unlike category/the
-            checkbox, which fire on their own discrete change events. Never
-            disabled while pending (REV-2) - the field's own status icon
-            above is the only feedback that a save is in flight. */}
-        <input
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-          onBlur={applyLabel}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
-          }}
-          placeholder={row.raw_description}
-          className="w-full box-border px-2.5 py-1.5 rounded-lg border border-border bg-input text-text text-md"
-        />
-      </div>
+      {/* Display name + category on one row, not two stacked full-width
+          blocks (8b) - same side-by-side layout TransactionEditPopover.tsx
+          already uses for the committed-transaction editor, now shared by
+          both places that edit these two fields together. */}
       <div className="flex items-end gap-3">
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
+          <div className="text-2xs text-muted mb-1 flex items-center gap-1.5">
+            Display name
+            <FieldStatusIcon status={fieldStatus.label} />
+          </div>
+          {/* Applies on blur/Enter, not per keystroke - unlike category/the
+              checkbox, which fire on their own discrete change events. Never
+              disabled while pending (REV-2) - the field's own status icon
+              above is the only feedback that a save is in flight. */}
+          <input
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            onBlur={applyLabel}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+            }}
+            placeholder={row.raw_description}
+            className="w-full box-border px-2.5 py-1.5 rounded-lg border border-border bg-input text-text text-md"
+          />
+        </div>
+        <div className="w-[220px] shrink-0">
           <div className="text-2xs text-muted mb-1 flex items-center gap-1.5">
             Assign category · {direction === 'inflow' ? 'Inflow' : 'Outflow'}
             <FieldStatusIcon status={fieldStatus.category} />
@@ -426,12 +437,12 @@ function ReviewRowPopover({
             reusable merchant keyword, so it's never rule-eligible - the only
             way to resolve it going forward is a contact mapping. Every other
             row is the reverse: no identifiable payee to attach a contact
-            to, so it gets the "Create a rule" section below instead.
+            to, so it gets the Create Rule action below instead.
             Toggling this also applies immediately (paired with whatever
             category/label are currently set), so it works whichever order
             the controls are used in. */}
         {row.is_paynow && (
-          <label className="flex items-center gap-1.5 text-xs text-text pb-2 cursor-pointer">
+          <label className="flex items-center gap-1.5 text-xs text-text pb-2 cursor-pointer shrink-0">
             <Checkbox
               checked={saveAsContact}
               onChange={(next) => {
@@ -452,57 +463,52 @@ function ReviewRowPopover({
           creating a rule that resolves every matching transaction going
           forward (including elsewhere in this same batch, via the rerun
           this triggers server-side) are two different actions with two
-          different blast radii, so they get two different confirmations. */}
+          different blast radii, so they get two different confirmations.
+          Opens the same RuleFormModal the standalone Rules page uses (8c),
+          pre-filled from this row, instead of a smaller inline form that
+          drifted from that page's actual look - the pattern/category/label
+          inputs used to live directly in this row; now they live in the
+          modal, and this row only needs a trigger button. */}
       {!row.is_paynow && (
-        <div className="flex items-end gap-3 pt-3 border-t border-border/70">
-          <div className="flex-1">
-            <div className="text-2xs text-muted mb-1">
-              Create a rule — future transactions containing this text will be categorized as{' '}
-              <span className="text-text font-medium">{category}</span>
-              {label.trim() && (
-                <>
-                  , labeled <span className="text-text font-medium">{label.trim()}</span>
-                </>
-              )}{' '}
-              automatically
-            </div>
-            <input
-              value={rulePattern}
-              onChange={(e) => setRulePattern(e.target.value)}
-              placeholder={row.raw_description}
-              className="w-full box-border px-2.5 py-1.5 rounded-lg border border-border bg-input text-text text-xs font-mono"
-            />
-            {/* Live match count (REV-5) - lets a user see, before creating
-                the rule, whether the pattern they typed is a reusable
-                merchant keyword or something so specific it'll only ever
-                match this one transaction. The batch half is instant
-                (already in memory); the history half trails the debounce
-                by one round trip. */}
-            {trimmedPattern && (
-              <div className="text-2xs text-muted-2 mt-1">
-                Matches {batchMatchCount} other transaction{batchMatchCount === 1 ? '' : 's'} in this batch
-                {historyMatchCountQ.isFetching ? (
-                  ', checking history…'
-                ) : (
-                  <>, {historyMatchCount} in history</>
-                )}
-              </div>
-            )}
+        <div className="flex items-center justify-between gap-3 pt-3 border-t border-border/70">
+          <div className="text-2xs text-muted">
+            Turn this into a rule so matching transactions categorize themselves next time.
           </div>
           <button
-            onClick={() => onCreateRule(rulePattern.trim(), category, label.trim() || null)}
-            disabled={createRulePending || !rulePattern.trim() || totalMatchCount <= 1}
-            title={
-              rulePattern.trim() && totalMatchCount <= 1
-                ? "This pattern doesn't match anything else - it would only ever apply to this one transaction"
-                : undefined
-            }
-            className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold px-3.5 py-2 rounded-lg border border-border bg-transparent text-text hover:bg-input cursor-pointer disabled:opacity-60 whitespace-nowrap"
+            onClick={() => setRuleModalOpen(true)}
+            className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold px-3.5 py-2 rounded-lg border border-border bg-transparent text-text hover:bg-input cursor-pointer whitespace-nowrap"
           >
             <ListPlus size={13} className="shrink-0" />
             Create Rule
           </button>
         </div>
+      )}
+      {ruleModalOpen && (
+        <RuleFormModal
+          mode="quick"
+          initialPattern={rulePattern}
+          initialCategory={category}
+          initialDisplayLabel={label.trim() || null}
+          onPatternChange={setRulePattern}
+          // Live match count (REV-5) - lets a user see, before creating the
+          // rule, whether the pattern is a reusable merchant keyword or
+          // something so specific it'll only ever match this one
+          // transaction. The batch half is instant (already in memory); the
+          // history half trails the debounce by one round trip.
+          patternHint={
+            trimmedPattern ? (
+              <div className="text-2xs text-muted-2 mt-1">
+                Matches {batchMatchCount} other transaction{batchMatchCount === 1 ? '' : 's'} in this batch
+                {historyMatchCountQ.isFetching ? ', checking history…' : <>, {historyMatchCount} in history</>}
+              </div>
+            ) : undefined
+          }
+          onSubmit={async (body) => {
+            await onCreateRule(body.match_pattern, body.target_category ?? category, body.display_label)
+          }}
+          saving={createRulePending}
+          onClose={() => setRuleModalOpen(false)}
+        />
       )}
     </div>
   )

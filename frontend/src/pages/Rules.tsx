@@ -4,15 +4,11 @@ import { useCategories, useCreateRule, useDeleteRule, useReorderRules, useRules,
 import { Button } from '../components/Button'
 import { Card } from '../components/Card'
 import { CategoryBadge } from '../components/CategoryBadge'
-import { categoryOptionElements } from '../components/CategoryOptions'
-import { Checkbox } from '../components/Checkbox'
 import { EmptyState, ErrorState } from '../components/EmptyState'
-import { Field, Input } from '../components/Field'
-import { Modal } from '../components/Modal'
 import { PageShell } from '../components/PageShell'
-import { Select } from '../components/Select'
+import { RuleFormModal, type RuleFormSubmitValues } from '../components/RuleFormModal'
 import { useToast } from '../components/Toast'
-import type { CategoryDirection, Rule } from '../api/types'
+import type { Rule } from '../api/types'
 
 // How long a deleted rule stays hidden-but-recoverable before the delete
 // actually reaches the backend (X-2 in UI Review.dc.html) - matches the
@@ -20,144 +16,25 @@ import type { CategoryDirection, Rule } from '../api/types'
 // stay in sync.
 const DELETE_UNDO_MS = 6000
 
-// Rough client-side preview of the backend's fallback (engine/rules.py:
-// `display_label or match_pattern.title()`) - not required to match Python's
-// str.title() byte-for-byte, since it's only ever shown as a placeholder
-// hint here, never actually sent or applied.
-function titleCase(text: string): string {
-  return text.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase())
-}
-
-function RuleFormModal({ rule, onClose }: { rule?: Rule; onClose: () => void }) {
-  const categoriesQ = useCategories()
+function RuleModal({ rule, onClose }: { rule?: Rule; onClose: () => void }) {
   const createRule = useCreateRule()
   const updateRule = useUpdateRule()
-  const [pattern, setPattern] = useState(rule?.match_pattern ?? '')
-  const [category, setCategory] = useState(rule?.target_category ?? '')
-  const [displayLabel, setDisplayLabel] = useState(rule?.display_label ?? '')
-  const [priority, setPriority] = useState<number | ''>(rule?.priority ?? '')
-  const [isExclusion, setIsExclusion] = useState(rule?.is_exclusion_rule ?? false)
-  const [exclusionReason, setExclusionReason] = useState(rule?.exclusion_reason ?? '')
-  // Only meaningful (and sent to the backend) for an exclusion rule - a
-  // category rule's direction is always just the direction of whichever
-  // category it assigns, so the backend derives that on its own rather
-  // than trusting a second, independently-editable copy of the same fact
-  // that could drift out of sync with the category picked below.
-  const [exclusionDirection, setExclusionDirection] = useState<CategoryDirection>(rule?.direction ?? 'outflow')
 
-  async function handleSave() {
-    if (!pattern.trim()) return
-    const body = {
-      match_pattern: pattern.trim(),
-      target_category: isExclusion ? null : category || categoriesQ.data?.[0]?.name || 'Others',
-      is_exclusion_rule: isExclusion,
-      exclusion_reason: isExclusion ? exclusionReason.trim() || null : null,
-      direction: isExclusion ? exclusionDirection : undefined,
-      priority: priority === '' ? null : priority,
-      display_label: isExclusion ? null : displayLabel.trim() || null,
-    }
+  async function handleSubmit(body: RuleFormSubmitValues) {
     if (rule) {
       await updateRule.mutateAsync({ id: rule.id, body })
     } else {
       await createRule.mutateAsync(body)
     }
-    onClose()
   }
 
-  const saving = createRule.isPending || updateRule.isPending
-
   return (
-    <Modal onClose={onClose} width={460} title={rule ? 'Edit Rule' : 'New Rule'}>
-      <div className="text-xs text-muted mb-4 -mt-2.5">
-        Applies to every transaction whose description contains the text below.
-      </div>
-
-      <div className="flex flex-col gap-3.5">
-        <Field label="Description contains">
-          <Input autoFocus value={pattern} onChange={(e) => setPattern(e.target.value)} placeholder="e.g. NETFLIX" />
-        </Field>
-
-        <label className="flex items-center gap-2 cursor-pointer text-md">
-          <Checkbox checked={isExclusion} onChange={setIsExclusion} />
-          Exclude these transactions instead of categorizing them
-        </label>
-
-        <div className="h-px bg-border" />
-
-        {!isExclusion && (
-          <div>
-            <div className="text-xs text-muted mb-1">Category</div>
-            <Select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full">
-              <option value="">Select category…</option>
-              {categoryOptionElements(categoriesQ.data)}
-            </Select>
-          </div>
-        )}
-
-        {!isExclusion && (
-          <Field
-            label="Display name (optional)"
-            hint='Shown instead of the raw bank description for matching transactions. Leave blank to just title-case the pattern above.'
-          >
-            <Input
-              value={displayLabel}
-              onChange={(e) => setDisplayLabel(e.target.value)}
-              placeholder={pattern.trim() ? titleCase(pattern.trim()) : 'e.g. Netflix'}
-            />
-          </Field>
-        )}
-
-        {isExclusion && (
-          <div className="flex flex-col gap-3.5">
-            <Field label="Exclusion reason">
-              <Input
-                value={exclusionReason}
-                onChange={(e) => setExclusionReason(e.target.value)}
-                placeholder="e.g. Self-transfer between own accounts"
-              />
-            </Field>
-            <div>
-              <div className="text-xs text-muted mb-1">Applies to</div>
-              <Select
-                value={exclusionDirection}
-                onChange={(e) => setExclusionDirection(e.target.value as CategoryDirection)}
-                className="w-full"
-              >
-                <option value="outflow">Outflow transactions only</option>
-                <option value="inflow">Inflow transactions only</option>
-              </Select>
-              <div className="text-2xs text-muted-2 mt-1">
-                An exclusion rule has no category to imply a direction from, so this must be picked explicitly -
-                otherwise a pattern like a self-transfer's description could exclude both legs of an unrelated
-                transaction pair.
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <div className="text-xs text-muted">Priority</div>
-            <div className="text-2xs text-muted-2">Lower numbers are evaluated first</div>
-          </div>
-          <Input
-            fullWidth={false}
-            type="number"
-            value={priority}
-            onChange={(e) => setPriority(e.target.value === '' ? '' : Number(e.target.value))}
-            placeholder="auto"
-            className="w-20 text-right"
-          />
-        </div>
-      </div>
-
-      <div className="flex justify-end gap-2.5 mt-5">
-        <Button onClick={onClose}>Cancel</Button>
-        <Button variant="primary" onClick={handleSave} disabled={saving || !pattern.trim()}>
-          {rule ? 'Save Changes' : 'Save Rule'}
-        </Button>
-      </div>
-    </Modal>
+    <RuleFormModal
+      rule={rule}
+      onSubmit={handleSubmit}
+      saving={createRule.isPending || updateRule.isPending}
+      onClose={onClose}
+    />
   )
 }
 
@@ -372,7 +249,7 @@ export function Rules() {
       </Card>
 
       {formTarget && (
-        <RuleFormModal rule={formTarget === 'new' ? undefined : formTarget} onClose={() => setFormTarget(null)} />
+        <RuleModal rule={formTarget === 'new' ? undefined : formTarget} onClose={() => setFormTarget(null)} />
       )}
     </PageShell>
   )
