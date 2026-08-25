@@ -6,6 +6,7 @@ class OCBCParser(BankParser):
     against. See dbs/__init__.py for the same rationale."""
 
     bank_name = "OCBC"
+    parsing_implemented = False
 
     def detect(self, pages: list) -> bool:
         if not pages:

@@ -37,6 +37,15 @@ class UnparseableStatementError(Exception):
 class BankParser(ABC):
     bank_name: str
 
+    #: False for a bank whose statements this app can *recognize* but not yet
+    #: read - detection is implemented so an upload gets a precise "detected,
+    #: not supported yet" message, but there's no parser behind it (see
+    #: parsing/dbs, parsing/ocbc: no sample statements to build against).
+    #: The settings API splits its bank lists on this, so every piece of UI
+    #: copy claiming which banks work follows the code rather than a
+    #: hand-maintained string that drifts the moment a parser lands.
+    parsing_implemented: bool = True
+
     @abstractmethod
     def detect(self, pages: list) -> bool:
         """Cheap anchor-text check: does this look like our bank's statement?"""

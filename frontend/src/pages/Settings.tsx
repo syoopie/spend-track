@@ -278,8 +278,18 @@ export function Settings() {
             <div className="text-md font-mono">{settingsQ.data?.transfer_scheme_name ?? '—'}</div>
           </div>
           <div>
-            <div className="text-xs text-muted">Supported banks</div>
-            <div className="text-md font-mono">{settingsQ.data?.supported_banks.join(', ') ?? '—'}</div>
+            {/* Split deliberately: a bank whose statements are recognized but
+                not yet parsed used to be listed here as "supported", which is
+                the opposite of what an upload does with it. Both lists come
+                from the parser registry, so a new parser moves a name across
+                on its own. */}
+            <div className="text-xs text-muted">Statements supported</div>
+            <div className="text-md font-mono">{settingsQ.data?.supported_banks.join(', ') || '—'}</div>
+            {(settingsQ.data?.detected_banks.length ?? 0) > 0 && (
+              <div className="text-2xs text-muted-2 mt-1">
+                {settingsQ.data?.detected_banks.join(', ')} recognized, parser not built yet
+              </div>
+            )}
           </div>
         </div>
       </Card>

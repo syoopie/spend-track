@@ -1,7 +1,7 @@
 import { ArrowDown, ArrowUp, FileUp, LayoutGrid, Pencil, Receipt, RefreshCw, SearchX } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { useAccounts, useCategories, useDashboardSummary, useMonthlyTotals, useTransactions } from '../api/hooks'
+import { useAccounts, useCategories, useDashboardSummary, useMonthlyTotals, useSettings, useTransactions } from '../api/hooks'
 import { fmtDate, fmtMonthRangeLabel, fmtMonthYearLabel, fmtPlain, fmtSigned, shiftMonth } from '../lib/format'
 import { loadDashboardFilters, saveDashboardFilters, type DashboardFilters } from '../lib/dashboardFilters'
 import { CashFlowChart, cashFlowQualifier } from '../components/CashFlowChart'
@@ -150,6 +150,17 @@ function highlightMatch(text: string, query: string): ReactNode {
   )
 }
 
+/** "a UOB" / "a UOB or DBS" / "a UOB, DBS, or OCBC" - built from the API's
+ * own list of banks that actually parse, so the first-run copy can't keep
+ * naming a bank whose parser doesn't exist yet (or drop one that just
+ * landed). */
+function bankListLabel(banks: string[]): string {
+  if (banks.length === 0) return 'a bank'
+  if (banks.length === 1) return `a ${banks[0]}`
+  if (banks.length === 2) return `a ${banks[0]} or ${banks[1]}`
+  return `a ${banks.slice(0, -1).join(', ')}, or ${banks[banks.length - 1]}`
+}
+
 export function Dashboard() {
   const { openDialog, hasPendingBatch } = useUploadDialog()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -270,6 +281,7 @@ export function Dashboard() {
   }
 
   const accountsQ = useAccounts()
+  const settingsQ = useSettings()
   // Hidden categories included (unlike rule/contact pickers) - "Others" and
   // "Other Income" are real fallback categories transactions can land in,
   // so they need to be searchable/filterable here even though they're not
@@ -425,7 +437,8 @@ export function Dashboard() {
             </div>
             <div className="text-xl font-semibold text-text mb-2.5">No statements yet</div>
             <div className="text-md text-muted mb-5.5">
-              Upload a DBS, OCBC, or UOB e-statement PDF to see your spending here — or drag one in anywhere.
+              Upload {bankListLabel(settingsQ.data?.supported_banks ?? [])} e-statement PDF to see your spending
+              here — or drag one in anywhere.
             </div>
             <Button variant="primary" onClick={openDialog} disabled={hasPendingBatch}>
               + Upload Bank Statement

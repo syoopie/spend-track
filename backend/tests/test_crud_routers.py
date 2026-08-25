@@ -442,7 +442,12 @@ def test_get_settings_reports_path_and_size(client):
     assert resp["currency_code"] == "SGD"
     assert resp["currency_symbol"] == "$"
     assert resp["transfer_scheme_name"] == "PayNow"
-    assert "UOB" in resp["supported_banks"]
+    # supported_banks is what actually parses; DBS/OCBC are recognized on
+    # upload but have no parser yet, so they belong in detected_banks - the
+    # UI's "which banks work" copy reads these two lists rather than
+    # hardcoding names that go stale the moment a parser lands.
+    assert resp["supported_banks"] == ["UOB"]
+    assert resp["detected_banks"] == ["DBS", "OCBC"]
 
 
 def test_reset_requires_delete_confirmation(client):

@@ -11,6 +11,11 @@ Non-obvious stuff learned while building this. Don't re-derive these the hard wa
 - Account statement dates have no year (`"05 May"`) — derived from the `Period: ... to ...` line. Card statement dates have no year either (`"10 JUN"`) — derived from `Statement Date`, with `year -= 1` when a transaction's month is later than the statement's month (Dec/Jan wraparound).
 - `BALANCE B/F`, `Total` (account statements) and `PREVIOUS BALANCE`, `SUB TOTAL`, `TOTAL BALANCE FOR ...` (card statements) are not transactions — they're excluded by exact-prefix text match, not by column heuristics.
 
+## Which banks are supported is data, not copy (`parsing/base.py`)
+
+- **`BankParser.parsing_implemented` is the single source of truth for "does this bank work yet".** UOB parses; `parsing/dbs/` and `parsing/ocbc/` are detection-only stubs (`parsing_implemented = False`) so an upload gets a precise "DBS detected, not supported yet" instead of a generic unrecognized-format error. `GET /api/settings` splits the two into `supported_banks` / `detected_banks`, and the UI reads those: the dashboard's first-run empty state (`bankListLabel` in `Dashboard.tsx`) and the Settings → Region card. The empty state used to hardcode "Upload a DBS, OCBC, or UOB e-statement", which claimed two banks that don't parse. Don't retype a bank list into user-facing copy — implementing a parser should flip every claim about it in one move.
+- `registry.detect_and_parse`'s fallback error only names banks that can actually parse, since a detected-but-unimplemented bank raises its own more specific error before that line is ever reached.
+
 ## Sanitized sample PDFs (`backend/scripts/generate_sample_pdfs.py`)
 
 - `PDF Examples/` is an optional, gitignored local folder for testing against your own real statements - a fresh clone has none, and the tests that use it (`test_uob_account_parser.py`/`test_uob_card_parser.py`/`test_registry_and_pdf_io.py`/`test_statements_router.py`/`test_crud_routers.py`) discover files in it by glob and skip gracefully when it's absent, rather than hardcoding a filename. `PDF Examples (Sanitized)/` is synthetic and committed; `tests/test_sanitized_sample_parsers.py` runs against it unconditionally so `uv run pytest` always exercises the parsers even without real statements.

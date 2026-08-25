@@ -11,5 +11,5 @@ def detect_and_parse(pages: list) -> ParsedStatement:
     for parser in PARSERS:
         if parser.detect(pages):
             return parser.parse(pages)
-    bank_names = ", ".join(p.bank_name for p in PARSERS)
+    bank_names = ", ".join(p.bank_name for p in PARSERS if p.parsing_implemented)
     raise UnparseableStatementError(f"Could not identify the statement's bank (expected {bank_names}).")

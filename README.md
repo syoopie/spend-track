@@ -14,7 +14,7 @@ There is no account to create, no website to log into, and nothing is uploaded. 
 
 ## What it does
 
-- **Reads UOB statements** — bank account and credit card e-statements, including password-protected ones. Upload one PDF, or a whole year's worth at once, mixing months and statement types freely. (DBS and OCBC aren't supported yet. If you try one, the app says so plainly instead of getting it wrong.)
+- **Reads UOB statements** — bank account and credit card e-statements, including password-protected ones. Upload one PDF, or a whole year's worth at once, mixing months and statement types freely. DBS and OCBC are recognized but not read yet: upload one and the app says so plainly instead of guessing. Support for them, and for other banks, is intended — see [Adding a bank](#adding-a-bank).
 - **Sorts transactions into categories automatically**, using rules you can see and edit, plus a built-in list of common Singapore merchants. Your own rules always take priority.
 - **Lets you check before anything is saved.** Every upload lands in a review screen first, with anything the app wasn't sure about — an unfamiliar PayNow transfer, say — flagged for you to decide.
 - **Doesn't double-count.** Uploading the same statement twice is safe: repeats are spotted and skipped. And if you upload both a credit card statement and the bank account that pays that card's bill, the bill payment isn't counted as extra spending on top of the purchases themselves.
@@ -86,7 +86,7 @@ If the model isn't reachable, the app tells you with a warning instead of leavin
 
 **Does it need my bank login?** No. It only reads statement PDFs you've already downloaded yourself, and never connects to your bank.
 
-**My statement won't upload.** Make sure it's the e-statement PDF downloaded from the bank, not a scan, a photo, or a printed-then-re-saved copy — the app reads the text inside the file, which those versions don't have. Also check it's UOB; other banks aren't supported yet.
+**My statement won't upload.** Make sure it's the e-statement PDF downloaded from the bank, not a scan, a photo, or a printed-then-re-saved copy — the app reads the text inside the file, which those versions don't have. Also check the bank is one that reads today — **Settings → Region** lists which banks parse and which are only recognized.
 
 **My browser didn't open.** Go to `http://localhost:5173` yourself once the terminal says both parts are up.
 
@@ -101,6 +101,12 @@ If the model isn't reachable, the app tells you with a warning instead of leavin
 **Contacts** map a PayNow identifier (phone, UEN, or account number) to a name and a default category, so transfers to people you pay regularly categorize themselves instead of sitting in "needs review":
 
 ![Contacts](docs/screenshots/contacts.jpg)
+
+## Adding a bank
+
+The goal is to read statements from any Singapore bank; UOB is simply the one there were real statements to build against. DBS and OCBC already have detection in place — the app can tell a DBS statement from an unreadable file — so what's missing for each is the parser itself, which is written against real sample statements. Everything downstream (categorization, refunds, duplicate detection, the dashboard) is bank-agnostic and needs no changes.
+
+If you have statements from a bank you'd like read, that's the blocker worth removing: open an issue, or see `backend/src/app/parsing/` for how a parser plugs in — each is one folder implementing `detect()` and `parse()`, registered in one list. **Settings → Region** always shows the live state: which banks parse, and which are recognized but waiting on a parser.
 
 ## For developers
 

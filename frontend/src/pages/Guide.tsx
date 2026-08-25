@@ -218,8 +218,10 @@ export function Guide() {
                 term: "What's supported",
                 children: (
                   <>
-                    UOB account and credit card e-statements. Other banks show an "unrecognized format" error
-                    rather than silently misparsing.
+                    UOB account and credit card e-statements parse today. DBS and OCBC statements are recognized
+                    and reported as "detected, but not supported yet" — their parsers are planned, not missing by
+                    design. Anything else is reported as an unrecognized format rather than silently misparsed.
+                    The current list is on the <strong className="text-text">Settings</strong> page, under Region.
                   </>
                 ),
               },

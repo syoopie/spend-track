@@ -337,7 +337,11 @@ class SettingsOut(BaseModel):
     currency_code: str
     currency_symbol: str
     transfer_scheme_name: str
+    #: Banks whose statements actually parse today.
     supported_banks: list[str]
+    #: Banks recognized on upload but not parsed yet - reported so the UI can
+    #: say "detected, not supported" instead of implying they work.
+    detected_banks: list[str]
     ai_enabled: bool
     ai_provider: AiProviderKind
     ollama_url: str
