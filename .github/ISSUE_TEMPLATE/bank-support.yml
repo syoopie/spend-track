@@ -8,13 +8,25 @@ body:
       value: |
         A parser is written against real statements, so the most useful thing
         you can tell us is what your statements look like — not just which
-        bank you use. **Never attach a real statement**: it has your account
-        number and transaction history in it.
+        bank you use.
+
+        **Never attach a real statement**: it has your account number and
+        transaction history in it. Attach a sanitized one instead — from a
+        clone, run:
+
+        ```
+        uv run python scripts/sanitize_statement.py statement.pdf --redact "YOUR NAME"
+        ```
+
+        That rebuilds the PDF keeping the layout and amounts and dropping the
+        identifiers, and writes a `.review.txt` listing every word that
+        survived. Read that file before attaching anything. See
+        [docs/adding-a-bank.md](https://github.com/syoopie/spend-track/blob/main/docs/adding-a-bank.md).
   - type: input
     id: bank
     attributes:
       label: Bank
-      placeholder: DBS / OCBC / Standard Chartered / …
+      placeholder: Standard Chartered / Citibank / Maybank / …
     validations:
       required: true
   - type: checkboxes
@@ -31,7 +43,7 @@ body:
       description: Nothing is uploaded anywhere — testing means running the parser on your own machine against your own files.
       options:
         - Yes, I can run a build locally and report what breaks
-        - Yes, I can share a redacted sample statement
+        - Yes, I can attach a sample sanitized with scripts/sanitize_statement.py
         - "No, I'm just registering interest"
     validations:
       required: true
