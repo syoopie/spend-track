@@ -37,7 +37,7 @@ import type { Transaction, TopEntry } from '../api/types'
 
 const PAGE_SIZE = 100
 
-type SortField = 'date' | 'amount' | 'category'
+type SortField = 'date' | 'amount'
 type SortDir = 'asc' | 'desc'
 
 // DASH-2 in UI Review.dc.html: "Top Category" used to render a category
@@ -134,7 +134,7 @@ function RankedBarRow({ entry, maxAmount }: { entry: TopEntry; maxAmount: number
 const FEED_COLUMNS: DataTableColumn<SortField>[] = [
   { key: 'date', header: 'Date', width: '76px', sortKey: 'date' },
   { key: 'description', header: 'Description', width: 'minmax(0,1fr)' },
-  { key: 'category', header: 'Category', width: '168px', sortKey: 'category' },
+  { key: 'category', header: 'Category', width: '168px' },
   { key: 'account', header: 'Account', width: '120px' },
   { key: 'amount', header: 'Amount', width: '120px', align: 'right', sortKey: 'amount' },
   { key: 'refund', header: '', width: '28px' },
@@ -487,7 +487,6 @@ export function Dashboard() {
     const dir = sort.dir === 'asc' ? 1 : -1
     list.sort((a, b) => {
       if (sort.field === 'amount') return dir * (a.amount - b.amount)
-      if (sort.field === 'category') return dir * a.category.localeCompare(b.category)
       return dir * a.transaction_date.localeCompare(b.transaction_date)
     })
     return list
