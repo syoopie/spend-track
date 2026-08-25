@@ -1244,7 +1244,14 @@ export function ReviewDialog({
         </div>
       )}
 
-      <div ref={scrollerRef} className="bg-input border border-border rounded-xl overflow-y-auto mb-5 max-h-[45vh]">
+      {/* A fixed height, not a cap (max-h) - the dialog's size should track
+          the window, not how many rows a filter/search happens to leave
+          visible. max-h-[45vh] let a short filtered result shrink the whole
+          scroller (and the dialog around it) down to fit just those few
+          rows, so picking a narrower category made the dialog visibly
+          resize. h-[45vh] always reserves the same space; a short list just
+          leaves it partly empty instead of collapsing the box around it. */}
+      <div ref={scrollerRef} className="bg-input border border-border rounded-xl overflow-y-auto mb-5 h-[45vh]">
         <DataTableHeader
           headerRef={columnHeaderRef}
           columns={ROW_COLUMNS}
