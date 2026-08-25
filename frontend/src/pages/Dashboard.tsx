@@ -1,11 +1,11 @@
-import { ArrowDown, ArrowUp, FileUp, Pencil, Receipt, RefreshCw, SearchX } from 'lucide-react'
+import { ArrowDown, ArrowUp, FileUp, LayoutGrid, Pencil, Receipt, RefreshCw, SearchX } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { useAccounts, useCategories, useDashboardSummary, useMonthlyTotals, useTransactions } from '../api/hooks'
+import { useAccounts, useCategories, useDashboardSummary, useMonthlyTotals, useSettings, useTransactions } from '../api/hooks'
 import { fmtDate, fmtMonthRangeLabel, fmtMonthYearLabel, fmtPlain, fmtSigned, shiftMonth } from '../lib/format'
 import { loadDashboardFilters, saveDashboardFilters, type DashboardFilters } from '../lib/dashboardFilters'
 import { CashFlowChart, cashFlowQualifier } from '../components/CashFlowChart'
-import { CategoryBadge } from '../components/CategoryBadge'
+import { CategoryBadge, CategoryLabel } from '../components/CategoryBadge'
 import { categoryOptionElements } from '../components/CategoryOptions'
 import { CategoryDonut } from '../components/CategoryDonut'
 import { VelocityChart } from '../components/VelocityChart'
@@ -150,6 +150,17 @@ function highlightMatch(text: string, query: string): ReactNode {
   )
 }
 
+/** "a UOB" / "a UOB or DBS" / "a UOB, DBS, or OCBC" - built from the API's
+ * own list of banks that actually parse, so the first-run copy can't keep
+ * naming a bank whose parser doesn't exist yet (or drop one that just
+ * landed). */
+function bankListLabel(banks: string[]): string {
+  if (banks.length === 0) return 'a bank'
+  if (banks.length === 1) return `a ${banks[0]}`
+  if (banks.length === 2) return `a ${banks[0]} or ${banks[1]}`
+  return `a ${banks.slice(0, -1).join(', ')}, or ${banks[banks.length - 1]}`
+}
+
 export function Dashboard() {
   const { openDialog, hasPendingBatch } = useUploadDialog()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -270,6 +281,7 @@ export function Dashboard() {
   }
 
   const accountsQ = useAccounts()
+  const settingsQ = useSettings()
   // Hidden categories included (unlike rule/contact pickers) - "Others" and
   // "Other Income" are real fallback categories transactions can land in,
   // so they need to be searchable/filterable here even though they're not
@@ -425,7 +437,8 @@ export function Dashboard() {
             </div>
             <div className="text-xl font-semibold text-text mb-2.5">No statements yet</div>
             <div className="text-md text-muted mb-5.5">
-              Upload a DBS, OCBC, or UOB e-statement PDF to see your spending here — or drag one in anywhere.
+              Upload {bankListLabel(settingsQ.data?.supported_banks ?? [])} e-statement PDF to see your spending
+              here — or drag one in anywhere.
             </div>
             <Button variant="primary" onClick={openDialog} disabled={hasPendingBatch}>
               + Upload Bank Statement
@@ -465,9 +478,18 @@ export function Dashboard() {
           className={`absolute bottom-0 left-0 right-0 h-[2px] bg-accent transition-opacity duration-200 ${isRefreshing ? 'opacity-100' : 'opacity-0'}`}
         />
         <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <div className="text-title font-bold font-display">Dashboard</div>
-            <div className="text-md text-muted mt-0.5">Post-mortem view of where the money went</div>
+          {/* Same title+icon shape PageShell renders for every other page - this
+              header stays hand-rolled only because it's sticky with its own
+              scroll-tinted background and filter row, not because it looks
+              different. Keep the two in sync. */}
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-accent/12 flex items-center justify-center shrink-0">
+              <LayoutGrid size={18} className="text-accent" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-title font-bold font-display">Dashboard</div>
+              <div className="text-md text-muted mt-0.5">Post-mortem view of where the money went</div>
+            </div>
           </div>
           <div className="flex gap-2.5 items-center">
             <DateRangePicker
@@ -660,7 +682,9 @@ export function Dashboard() {
                 onClick={() => updateCategoryFilter('')}
                 className="inline-flex items-center gap-1.5 text-2xs px-2.5 py-1 rounded-full bg-input border border-border text-text hover:border-accent cursor-pointer"
               >
-                Category: {categoryFilter} <span aria-hidden>×</span>
+                Category:
+                <CategoryLabel category={categoryFilter} categories={categoriesQ.data} size={11} tinted />
+                <span aria-hidden>×</span>
               </button>
             )}
             {searchText && (

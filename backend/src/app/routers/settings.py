@@ -32,7 +32,8 @@ def _localization_fields() -> dict:
         "currency_code": ACTIVE_COUNTRY.currency_code,
         "currency_symbol": ACTIVE_COUNTRY.currency_symbol,
         "transfer_scheme_name": ACTIVE_COUNTRY.transfer_scheme_name,
-        "supported_banks": [p.bank_name for p in ACTIVE_COUNTRY.bank_parsers],
+        "supported_banks": [p.bank_name for p in ACTIVE_COUNTRY.bank_parsers if p.parsing_implemented],
+        "detected_banks": [p.bank_name for p in ACTIVE_COUNTRY.bank_parsers if not p.parsing_implemented],
     }
 
 

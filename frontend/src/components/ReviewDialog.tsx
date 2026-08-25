@@ -2,9 +2,9 @@ import { Check, ChevronRight, Inbox, ListPlus, Loader2, RotateCcw, Sparkles, Und
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useCategories, useRuleMatchCount } from '../api/hooks'
 import type { AiJobStatus, Category, RuleRerunRowSnapshot } from '../api/types'
-import { categoryIcon } from '../lib/categoryColor'
 import { fmtDate, fmtSigned } from '../lib/format'
 import { CategoryBadge } from './CategoryBadge'
+import { categoryOptionElements } from './CategoryOptions'
 import { Checkbox } from './Checkbox'
 import { DataTableHeader, dataTableGridTemplate, type DataTableColumn } from './DataTable'
 import { EmptyState } from './EmptyState'
@@ -418,17 +418,7 @@ function ReviewRowPopover({
             }}
             className="w-full"
           >
-            {categoryOptions.map((c) => {
-              const Icon = categoryIcon(categoriesQ.data, c.name)
-              return (
-                <option key={c.id} value={c.name}>
-                  <span className="inline-flex items-center gap-1.5">
-                    <Icon size={12} className="shrink-0" />
-                    {c.name}
-                  </span>
-                </option>
-              )
-            })}
+            {categoryOptionElements(categoriesQ.data, categoryOptions)}
           </Select>
         </div>
         {/* A PayNow line's "match text" is a free-text payee name, not a
@@ -1214,11 +1204,9 @@ export function ReviewDialog({
             className="w-[190px]"
           >
             <option value="">Set category to…</option>
-            {(categoriesQ.data ?? []).map((c) => (
-              <option key={c.id} value={c.name}>
-                {c.name}
-              </option>
-            ))}
+            {/* A bulk selection can span both directions, so this gets the
+                full grouped list rather than one direction's subset. */}
+            {categoryOptionElements(categoriesQ.data)}
           </Select>
           {orderedRows.some((r) => selectedKeys.has(r.key) && r.ai_suggested && !aiIsCurrent(r)) && (
             <button

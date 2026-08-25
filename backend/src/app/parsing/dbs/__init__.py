@@ -8,6 +8,7 @@ class DBSParser(BankParser):
     unrecognized-format one; parsing itself is a drop-in for later."""
 
     bank_name = "DBS"
+    parsing_implemented = False
 
     def detect(self, pages: list) -> bool:
         if not pages:

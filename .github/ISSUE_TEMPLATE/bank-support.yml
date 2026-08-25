@@ -1,0 +1,42 @@
+name: Bank support request
+description: Ask for statements from a bank that isn't read yet
+title: "Support <BANK> statements"
+labels: ["bank-support"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A parser is written against real statements, so the most useful thing
+        you can tell us is what your statements look like — not just which
+        bank you use. **Never attach a real statement**: it has your account
+        number and transaction history in it.
+  - type: input
+    id: bank
+    attributes:
+      label: Bank
+      placeholder: DBS / OCBC / Standard Chartered / …
+    validations:
+      required: true
+  - type: checkboxes
+    id: statement-types
+    attributes:
+      label: Which statements
+      options:
+        - label: Bank account (savings / current)
+        - label: Credit card
+  - type: dropdown
+    id: samples
+    attributes:
+      label: Can you help test?
+      description: Nothing is uploaded anywhere — testing means running the parser on your own machine against your own files.
+      options:
+        - Yes, I can run a build locally and report what breaks
+        - Yes, I can share a redacted sample statement
+        - "No, I'm just registering interest"
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else
+      description: e.g. the statement is password-protected, or downloaded from a particular part of the bank's site.

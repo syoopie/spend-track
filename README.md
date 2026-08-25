@@ -1,28 +1,47 @@
+<div align="center">
+
 # SG Expenditure Tracker
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+**Turn your Singapore bank statements into a spending dashboard — on your own computer, with nothing sent anywhere.**
 
-A local-only personal finance tool for Singapore bank statements. Upload a PDF, get every transaction auto-categorized, refunds automatically netted against their originals, and a post-mortem spending dashboard — without a single byte leaving your machine.
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
+[![Runs locally](https://img.shields.io/badge/data-100%25%20local-brightgreen?style=flat-square)](#your-data-stays-on-your-computer)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-3776ab?style=flat-square&logo=python&logoColor=white)](backend/pyproject.toml)
+[![React 19](https://img.shields.io/badge/react-19-61dafb?style=flat-square&logo=react&logoColor=white)](frontend/package.json)
+[![Banks: UOB](https://img.shields.io/badge/statements-UOB-e35fd0?style=flat-square)](#adding-a-bank)
 
-![Dashboard](docs/screenshots/dashboard.jpg)
+</div>
+
+Give it a statement PDF you downloaded from your bank, and it reads every transaction, sorts them into categories, cancels out refunds against the purchases they reverse, and shows you where your money actually went.
+
+![The dashboard: inflow, outflow and net expenditure for the selected months, a cash flow chart, a category breakdown donut, and the searchable transaction feed](docs/screenshots/dashboard.jpg)
+
+## Your data stays on your computer
+
+There is no account to create, no website to log into, and nothing is uploaded. Your transactions live in a single file on your own disk, and the app never talks to your bank — it only reads PDFs you already have. The one exception is the optional AI feature described further down, which stays off unless you switch it on yourself.
 
 ## What it does
 
-- **Upload** UOB account and credit card e-statement PDFs (password-protected ones too) — one at a time or several at once, mixing months and statement types freely. DBS and OCBC are recognized and cleanly reported as "not yet supported" rather than a generic parse error — the per-bank parser registry (`backend/src/app/parsing/`) is built to take them (and other banks) as drop-in additions.
-- **Review before committing.** Every parsed transaction is staged first, pre-categorized, with anything ambiguous (like an unmapped PayNow transfer) flagged for a quick manual call.
-- **Categorize automatically**, via a priority-ordered rules engine: your own rules first, then a large built-in word bank of common SG merchants, then contact-based PayNow matching. Nothing you do is ever silently overridden — you can always see, and re-run, exactly why a transaction landed where it did.
-- **Catch duplicates and refunds.** Re-uploading an overlapping statement is safe — duplicate transactions are detected and skipped. Refunds are paired against their original purchase automatically (merchant-name matching, not just amount-matching, to avoid false positives).
-- **Avoid double-counting.** If you upload both a credit card statement and the linked bank account's statement, the GIRO payment settling the card bill is recognized and excluded — the spending is already counted on the card's own statement.
-- **Visualize it**: cash flow, category breakdown, spend velocity (this period's pace vs. the last), top merchants, and top PayNow contacts, all filterable by date range and account.
-- **Optionally hand the leftovers to AI.** Whatever the rules engine still can't resolve after an upload or a recategorize run — no rule match, no contact match, not a PayNow marker — is sent to an LLM automatically in the background, which suggests a category, a clean display label, and a rule pattern for you to accept or reject. Opt-in and off by default; see [AI-assisted categorization](#ai-assisted-categorization) below.
+- **Reads UOB statements** — bank account and credit card e-statements, including password-protected ones. Upload one PDF, or a whole year's worth at once, mixing months and statement types freely. DBS and OCBC are recognized but not read yet: upload one and the app says so plainly instead of guessing. Support for them, and for other banks, is intended — see [Adding a bank](#adding-a-bank).
+- **Sorts transactions into categories automatically**, using rules you can see and edit, plus a built-in list of common Singapore merchants. Your own rules always take priority.
+- **Lets you check before anything is saved.** Every upload lands in a review screen first, with anything the app wasn't sure about — an unfamiliar PayNow transfer, say — flagged for you to decide.
+- **Doesn't double-count.** Uploading the same statement twice is safe: repeats are spotted and skipped. And if you upload both a credit card statement and the bank account that pays that card's bill, the bill payment isn't counted as extra spending on top of the purchases themselves.
+- **Nets off refunds** against the original purchase, matching on the merchant name as well as the amount, so two unrelated transactions don't get paired by accident.
+- **Names the people you pay.** Save a PayNow number or UEN as a contact once, and future transfers to them are labelled and categorized on their own.
+- **Shows you the picture:** money in and out, spending by category, whether you're spending faster than last month, your top merchants and your most-paid PayNow contacts — all filterable by date range and account.
 
-Everything is stored in a single SQLite file on disk. There's no account system, no server to talk to, and no telemetry by default — see [AI-assisted categorization](#ai-assisted-categorization) for the one opt-in feature that can change that, and [design decisions](#design-decisions) for what the rest of that trade-off actually means in the code.
+## Getting started
 
-## Install & Run
+### Install these two things first (one time only)
 
-Requires [`uv`](https://docs.astral.sh/uv/) (Python 3.12 package/env manager) and Node.js 18+. If you don't have real UOB statements handy, the repo ships sanitized synthetic ones you can try immediately — see below.
+- **[uv](https://docs.astral.sh/uv/)** — runs the part of the app that reads your statements
+- **[Node.js](https://nodejs.org/)**, version 18 or newer — runs the part you look at
 
-### One command (Windows)
+Both have ordinary installers and need no configuration.
+
+### Then start the app
+
+**Windows**
 
 ```
 git clone https://github.com/syoopie/spend-track.git
@@ -30,7 +49,9 @@ cd spend-track
 scripts\start.bat
 ```
 
-### One command (macOS / Linux)
+If you'd rather not use `git`: open the [project page](https://github.com/syoopie/spend-track), click the green **Code** button → **Download ZIP**, unzip it anywhere, then double-click `scripts\start.bat` inside the unzipped folder.
+
+**macOS / Linux**
 
 ```bash
 git clone https://github.com/syoopie/spend-track.git
@@ -38,81 +59,97 @@ cd spend-track
 ./scripts/start.sh
 ```
 
-Either script installs dependencies on first run, launches the backend and frontend, waits for both to come up, and opens your browser. Safe to re-run — it detects servers that are already up and won't start duplicates. Ctrl+C stops whatever it started.
+The first run takes a few minutes while it downloads what it needs; after that it starts in seconds. The script launches everything, waits for it to be ready, and opens the app in your browser at `http://localhost:5173`. Press `Ctrl+C` in that terminal window to stop it. Re-running the script is safe — it notices what's already running instead of starting a second copy.
 
-### Manual (any OS)
+### Try it before using your own statements
 
-Two dev servers, run in separate terminals.
+You don't need real statements to look around. The folder `PDF Examples (Sanitized)/UOB/` contains six months of made-up statements for a fictional customer — upload them exactly as you would your own. They're processed by the same code as a genuine statement, so what you see is the real behaviour, just with invented numbers. When you're done, **Settings** has options to clear everything out.
 
-**Backend** (from `backend/`):
+### The everyday routine
+
+1. **Upload** one or more statement PDFs (button in the sidebar, or drag them onto the window).
+2. **Review** how each transaction was categorized, and fix anything that looks off.
+3. **Commit** — the transactions join your history.
+4. **Explore** the dashboard, filtered by whatever date range and account you care about.
+
+The app has a built-in **User Guide** in the sidebar that walks through each screen in more detail.
+
+## Optional: let AI sort out the leftovers
+
+**Off by default.** If you turn it on under **Settings**, then after each upload the transactions the rules couldn't figure out get sent to an AI model, which suggests a category, a tidy merchant name, and a rule you could save for next time. Nothing is applied behind your back — the suggestions simply show up pre-filled in the review screen for you to accept, edit, or reject. You can close the review screen and come back later; the suggestions will be waiting. If a pass is taking too long, a **Terminate** button appears after 15 seconds and leaves everything exactly as the rules left it.
+
+You choose which model it talks to:
+
+- **Local (Ollama)** — the default, and the only option where nothing leaves your computer. It uses a model you're running yourself.
+- **OpenAI-compatible** — OpenAI, OpenRouter, Groq, together.ai, or anything else speaking the same format.
+- **Anthropic (Claude)**.
+
+Picking either of the last two means your transaction descriptions and amounts are sent to that company, which is a real privacy trade-off — so the Settings page won't let you save it until you tick a box confirming you understand. The sidebar indicator and the in-app guide always reflect what's actually switched on. Any API key you enter is stored in a local settings file and is never shown back to you in full.
+
+If the model isn't reachable, the app tells you with a warning instead of leaving an upload stuck.
+
+## Questions
+
+**Where is my data kept?** In a single database file at `~/.sg-expenditure-tracker/data.db`. **Settings → Change Database Path** lets you move it — pointing it at a Dropbox or OneDrive folder is an easy way to get backups and access from another computer.
+
+**Does it need my bank login?** No. It only reads statement PDFs you've already downloaded yourself, and never connects to your bank.
+
+**My statement won't upload.** Make sure it's the e-statement PDF downloaded from the bank, not a scan, a photo, or a printed-then-re-saved copy — the app reads the text inside the file, which those versions don't have. Also check the bank is one that reads today — **Settings → Region** lists which banks parse and which are only recognized.
+
+**My browser didn't open.** Go to `http://localhost:5173` yourself once the terminal says both parts are up.
+
+**I want to start over.** Settings has buttons to delete your transactions, rules, or contacts individually, or everything at once.
+
+## A closer look
+
+| Rules — your own categorization logic, top to bottom | Default Rules — the built-in merchant list, read-only |
+|---|---|
+| ![The Rules page: a drag-to-reorder list of user rules, each with its match text, target category and priority](docs/screenshots/rules.jpg) | ![The Default Rules page: the built-in merchant word bank, grouped by category and read-only](docs/screenshots/default-rules.jpg) |
+
+**Contacts** map a PayNow identifier (phone, UEN, or account number) to a name and a default category, so transfers to people you pay regularly categorize themselves instead of sitting in "needs review":
+
+![The Contacts page: each contact with its linked PayNow identifiers, default category and historical spend](docs/screenshots/contacts.jpg)
+
+## Adding a bank
+
+The goal is to read statements from any Singapore bank; UOB is simply the one there were real statements to build against. DBS and OCBC already have detection in place — the app can tell a DBS statement from an unreadable file — so what's missing for each is the parser itself, which is written against real sample statements. Everything downstream (categorization, refunds, duplicate detection, the dashboard) is bank-agnostic and needs no changes.
+
+If you have statements from a bank you'd like read, that's the blocker worth removing: [open a bank support request](https://github.com/syoopie/spend-track/issues/new?template=bank-support.yml) (don't attach a real statement — it has your account number in it), or see `backend/src/app/parsing/` for how a parser plugs in — each is one folder implementing `detect()` and `parse()`, registered in one list. **Settings → Region** always shows the live state: which banks parse, and which are recognized but waiting on a parser.
+
+## For developers
+
+<details>
+<summary>Running the two dev servers by hand, tests, and project layout</summary>
+
+### Manual run
+
+**Backend** (from `backend/`) — serves the API on `http://127.0.0.1:8000`:
 
 ```bash
 uv sync
 uv run uvicorn app.main:app --reload
 ```
 
-Serves the API on `http://127.0.0.1:8000`. The SQLite database defaults to `~/.sg-expenditure-tracker/data.db` (override with the `SG_TRACKER_DB_PATH` env var — handy for pointing a second instance at a scratch database).
+The SQLite database defaults to `~/.sg-expenditure-tracker/data.db`; `SG_TRACKER_DB_PATH` overrides it, which is handy for pointing a second instance at a scratch database.
 
-**Frontend** (from `frontend/`):
+**Frontend** (from `frontend/`) — serves the UI on `http://localhost:5173` and proxies `/api/*` to the backend:
 
 ```bash
 npm install
 npm run dev
 ```
 
-Serves the UI on `http://localhost:5173` and proxies `/api/*` requests to the backend.
-
-### Trying it without a real statement
-
-Open the app and upload any PDF from `PDF Examples (Sanitized)/UOB/` — six months (Jan–Jun 2024) of synthetic account and card statements for one fictional "SAMPLE CUSTOMER", with realistic-looking transactions across every category. They're generated by `backend/scripts/generate_sample_pdfs.py` at the exact column positions the real parser expects, so they parse through the same code path as a genuine statement — this isn't a mocked demo mode, it's the real thing pointed at fake data.
-
-### Running the tests
+### Tests
 
 ```bash
 cd backend && uv run pytest
 ```
 
-Parser regression tests run against every committed sanitized sample PDF, plus full API integration tests via FastAPI's `TestClient` — all pass on a fresh clone with no setup beyond `uv sync`. A handful of additional tests run only if you've dropped your own real UOB statements into a local, gitignored `PDF Examples/UOB/` folder (cross-validated against each statement's own printed totals) — they're skipped, not failed, when that folder doesn't exist. The frontend has no automated test suite yet — verified manually in-browser, with `npx tsc -b` and `npm run build` for type/build checks.
-
-## AI-assisted categorization
-
-Off by default. Turn it on in **Settings → AI** and every future upload or recategorize run automatically sends whatever the rules engine couldn't resolve — no rule match, no contact match, and not a PayNow marker (those keep their existing manual-review path unchanged) — to an LLM in the background. It comes back with a suggested category, a clean merchant label stripped of bank-statement noise, and a candidate rule pattern; nothing is applied silently, it just shows up pre-filled in the staging review screen for you to accept, edit, or reject like any other row. Closing the review dialog doesn't cancel the job — reopen it later and the suggestions are there.
-
-The categorization call itself has no timeout — a large batch against a local model can legitimately take a while, and there's no benefit to an arbitrary cutoff silently falling back to rules-only. Instead, the review dialog shows how long the current pass has been running and, after 15 seconds, offers a Terminate button that stops it (best-effort — closes the underlying connection) and leaves everything AI hadn't already resolved exactly as the rules engine left it.
-
-**Three provider options, one shared code path** (`backend/src/app/engine/ai_providers/`):
-
-- **Local (Ollama)** — the default. Points at a model you're already running yourself (`ollama serve`); nothing leaves the device, consistent with the rest of the app.
-- **OpenAI-compatible** — one adapter for OpenAI, OpenRouter, Groq, together.ai, a self-hosted LiteLLM proxy, or anything else speaking the same chat-completions API, via a configurable base URL.
-- **Anthropic (Claude)** — its own adapter, since the Messages API shape differs enough to warrant one.
-
-Reachability is checked before every real use (app load, viewing the AI settings, and right before each categorization pass) so a down model degrades to a clear warning banner instead of a stuck upload. Choosing anything other than Ollama is a real privacy trade-off — transaction descriptions and amounts leave the device — so the Settings page gates it behind an explicit "I understand transaction data will leave this device" checkbox, and the sidebar's local-only indicator and the in-app Guide both reflect the actual current state rather than always claiming local-only. API keys are write-only through the API (only `sk-…last4` is ever echoed back) and stored in the same local `config.json` the database path already lives in.
-
-## Design Decisions
-
-A few choices in here aren't obvious from reading the code cold, so they're written down.
-
-**Everything local, on purpose.** This isn't "local-first with a cloud option later" — there is no server component beyond the FastAPI process running on your own machine, no auth, no accounts. The trade-off: no multi-device sync, no backup beyond whatever you set up yourself for the SQLite file (`Settings → Change Database Path` at least lets you point it at a synced folder). For a tool that ingests full bank statements, that trade felt like the right default rather than a limitation to work around.
-
-**PDF parsing is whitespace clustering, not table extraction.** UOB's statements have no table gridlines, so the usual "detect table structure" approach in PDF libraries doesn't apply. Instead, words are clustered into physical lines by vertical proximity, then bucketed into columns by hardcoded x-ranges calibrated against real statements. This is more fragile to a genuine layout change from the bank than table detection would be, but it's the only approach that actually works against a gridline-free layout — and it's covered by both real-statement regression tests and the synthetic fixtures, so a future layout change would fail loudly rather than silently misparse.
-
-**Rules beat merchant knowledge beat contacts, in a specific order.** Categorization checks, in sequence: your own rules (by priority), then a card-bill-payment heuristic (see below), then contact-identifier matches, then a large built-in merchant/keyword word bank, then a PayNow-marker fallback that flags for manual review rather than guessing. User rules always win over the built-in bank — they're seeded at a priority number far below any rule you'd realistically create by hand, so there's no scenario where the built-in knowledge silently overrides a choice you made.
-
-**The built-in rule bank is reconciled, not seeded once.** Early on, default rules were inserted once at first startup and never touched again — which meant a rule added to the codebase in a later update would never reach a database that already existed. It's now fully deleted and re-inserted from the source list on every startup, which is what lets the rule bank keep growing over time without a migration script for every addition.
-
-**Card-bill double-counting is a heuristic, gated conservatively.** A transaction that looks like "pay my own credit card bill" is only ever excluded if a credit card account is actually known — either already committed, or parsed earlier in the same multi-file upload. If you've never uploaded a card statement, that GIRO payment is left as real, visible outflow, because for all the app knows, it might be the only record of that money leaving. The alternative (a static text-pattern rule) would either hide real spending for card-less users or require cross-account context a plain rule can't express — so it's a small piece of code in the categorization engine instead of a data-driven rule.
-
-**Refund pairing isn't amount-only.** Naively matching any two transactions of equal-and-opposite amount produces false positives constantly (two unrelated transactions happening to net to zero is common). Pairing also requires merchant-name similarity after stripping suffix noise like "REFUND" or "REVERSAL".
-
-**Staging is in-memory, not a database table.** A batch of parsed-but-not-yet-committed transactions lives in a process-local store, not SQLite. Pre-commit review is inherently transient — you either commit it or you don't — so persisting it durably would add a table, a cleanup story for abandoned batches, and migration surface for a feature that shouldn't outlive the review page anyway. The real trade-off: a batch is lost if the server restarts mid-review. Acceptable for a local, single-user tool; worth knowing if you're wondering why a page refresh mid-review can lose your progress.
-
-**Schema migrations are column-existence checks, not a version-gated migration runner.** `PRAGMA user_version` is bumped for humans reading the schema's history, but nothing branches on its value — every migration function checks whether its own column already exists before adding it, so re-running the full migration set on an up-to-date database is always a safe no-op. Simpler than a real migration framework, and sufficient for a schema that only ever grows additively.
-
-**AI categorization runs as a background job, never inline in the upload request.** A model call can take a while; blocking the upload response on it would mean a slow or unreachable model holds the UI hostage. Instead the upload/recategorize response returns immediately and the AI pass updates an `ai_status` field the frontend polls, so the review screen is usable (and closable) the whole time regardless of how long the model takes or whether it's reachable at all. It's also called with `temperature: 0` — categorization is a classification task, not a creative one, and a live evaluation harness against a local model (`backend/scripts/eval_ai_categorization.py`) showed the default nonzero sampling temperature was a bigger source of wrong answers than the prompt wording itself.
+Parser regression tests run against every committed sanitized sample PDF, alongside full API integration tests via FastAPI's `TestClient` — all pass on a fresh clone with no setup beyond `uv sync`. A few extra tests run only if you've dropped your own real UOB statements into a local, gitignored `PDF Examples/UOB/` folder (they cross-validate against each statement's own printed totals) and are skipped, not failed, when it doesn't exist. The synthetic samples are generated by `backend/scripts/generate_sample_pdfs.py` at the exact column positions the real parser expects, so they exercise the genuine parsing path. The frontend has no automated test suite yet — verified manually in-browser, with `npx tsc -b` and `npm run build` for type and build checks.
 
 ### Stack
 
-- **Backend**: Python 3.12, FastAPI, SQLite (stdlib `sqlite3`, no ORM), `pdfplumber` for PDF parsing, `pypdf` for encrypted-PDF handling, `httpx` for the AI provider calls. Managed with `uv`.
+- **Backend**: Python 3.12, FastAPI, SQLite (stdlib `sqlite3`, no ORM), `pdfplumber` for PDF parsing, `pypdf` for encrypted PDFs, `httpx` for AI provider calls. Managed with `uv`.
 - **Frontend**: React + TypeScript, Vite, Tailwind CSS v4, TanStack Query, React Router. No charting library — every chart is hand-rolled SVG.
 
 ### Layout
@@ -130,18 +167,14 @@ frontend/src/
   api/           fetch client + typed React Query hooks
   pages/         one file per screen
   components/    shared UI (charts, modals, sidebar)
-docs/            original design docs + screenshots (see below)
+docs/            original design docs + screenshots
 scripts/         start.bat / start.sh / start.ps1
 ```
 
-`docs/technical-spec.md` and `docs/ux-spec.md` are the original design docs written before implementation started — kept for the decisions they capture; where the app has since diverged on purpose, that's documented in `CLAUDE.md` rather than rewritten back into history. `PDF Examples (Sanitized)/UOB/` are the synthetic statements mentioned above — safe to commit, and what a fresh clone actually has to test against. `PDF Examples/UOB/` is an optional local folder (gitignored, never committed) where you can drop your own real UOB statements to test against genuine data.
+### Where the reasoning lives
 
-## A closer look
+`CLAUDE.md` documents the non-obvious implementation decisions — why PDF parsing clusters whitespace instead of extracting tables, the categorization precedence order, why staging is in-memory, how the default rule bank is reconciled on every startup, and the known traps in each area.
 
-| Rules — your own categorization logic, evaluated top to bottom | Default Rules — the built-in word bank, read-only |
-|---|---|
-| ![Rules](docs/screenshots/rules.jpg) | ![Default Rules](docs/screenshots/default-rules.jpg) |
+`docs/technical-spec.md` and `docs/ux-spec.md` are the original design docs, written before implementation; where the app has since diverged on purpose, that's recorded in `CLAUDE.md` rather than rewritten back into the specs.
 
-**Contacts** map a PayNow identifier (phone, UEN, or account number) to a name and default category, so transfers to people you pay regularly categorize themselves instead of sitting in "needs review":
-
-![Contacts](docs/screenshots/contacts.jpg)
+</details>

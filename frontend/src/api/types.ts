@@ -330,7 +330,10 @@ export interface Settings extends AiSettingsFields {
   currency_code: string
   currency_symbol: string
   transfer_scheme_name: string
+  /** Banks whose statements actually parse today. */
   supported_banks: string[]
+  /** Banks recognized on upload but not parsed yet. */
+  detected_banks: string[]
 }
 
 export interface DeleteScopeResult {

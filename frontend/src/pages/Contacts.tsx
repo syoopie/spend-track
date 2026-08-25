@@ -109,6 +109,7 @@ export function Contacts() {
     <PageShell
       title="Contacts & PayNow Directory"
       subtitle="Map phone numbers and UENs to people, so transfers categorize themselves"
+      icon={Users}
       actions={
         <>
           <input
