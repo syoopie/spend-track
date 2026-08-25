@@ -70,18 +70,33 @@ jobs:
             *)       ./dist/SpendTrack & ;;
           esac
           pid=$!
+          fail() { echo "FAILED: $1"; kill $pid 2>/dev/null || true; exit 1; }
+
           for _ in $(seq 1 30); do
-            if curl -sf http://127.0.0.1:8123/api/health > /dev/null; then
-              echo "API is up"
-              curl -sf http://127.0.0.1:8123/ | grep -qi "<!doctype html" && echo "UI is served"
-              kill $pid 2>/dev/null || true
-              exit 0
-            fi
+            curl -sf http://127.0.0.1:8123/api/health > /dev/null && break
             sleep 1
-          done
-          echo "The packaged app never became reachable"
+          done || true
+          curl -sf http://127.0.0.1:8123/api/health > /dev/null || fail "the packaged app never became reachable"
+          echo "API is up"
+
+          # Each of these checks something only the bundle can get wrong, and
+          # each has to be able to fail the job - an informational echo would
+          # let a build that serves no UI at all upload happily.
+          curl -sf http://127.0.0.1:8123/ | grep -qi "<!doctype html" || fail "/ did not serve the UI shell"
+          echo "UI shell is served"
+
+          asset=$(curl -sf http://127.0.0.1:8123/ | grep -o '/assets/[^"]*\.js' | head -1)
+          [ -n "$asset" ] || fail "the UI shell references no JS bundle"
+          curl -sf "http://127.0.0.1:8123$asset" > /dev/null || fail "$asset is missing from the bundle"
+          echo "JS bundle is served ($asset)"
+
+          curl -sf http://127.0.0.1:8123/rules | grep -qi "<!doctype html" || fail "deep link /rules did not fall back to the shell"
+          echo "Client-side routes resolve"
+
+          curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8123/api/nope | grep -q 404 || fail "an unmatched /api path did not 404"
+          echo "Unmatched API paths still 404"
+
           kill $pid 2>/dev/null || true
-          exit 1
 
       - name: Zip the macOS app bundle
         # A .app is a directory; upload-artifact would flatten it and lose
