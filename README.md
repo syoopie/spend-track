@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/logo.svg" width="72" height="72" alt="">
+
 # SpendTrack
 
 **Turn bank statement PDFs into a spending dashboard — on your own computer, with nothing sent anywhere.**
