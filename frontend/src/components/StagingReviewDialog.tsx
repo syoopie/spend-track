@@ -99,6 +99,17 @@ export function StagingReviewDialog({ onClose }: { onClose: () => void }) {
     onClose()
   }
 
+  // Every row was a duplicate - there is nothing to review and nothing a
+  // commit could ever write. Leaving this batch pending would just block
+  // the next upload for no reason, so any way of leaving the dialog
+  // (×, Escape, backdrop click - all funnel through Modal's one onClose)
+  // discards it automatically instead of requiring an explicit Discard
+  // click; the button itself becomes "Cancel" to match what it now does,
+  // and Commit has nothing to offer so it's dropped rather than shown
+  // disabled.
+  const isEmpty = visibleRows.length === 0
+  const handleClose = isEmpty ? handleDiscard : onClose
+
   const rows: ReviewRow[] = visibleRows.map((r) => ({
     key: r.key,
     transaction_date: r.transaction_date,
@@ -149,7 +160,7 @@ export function StagingReviewDialog({ onClose }: { onClose: () => void }) {
           {filenameSummary} — parsed, awaiting commit
         </span>
       }
-      onClose={onClose}
+      onClose={handleClose}
       statCards={statCards}
       aiStatus={batch.ai_status}
       aiWarning={batch.ai_warning}
@@ -186,16 +197,18 @@ export function StagingReviewDialog({ onClose }: { onClose: () => void }) {
             </div>
           )}
           <Button variant="danger-outline" onClick={handleDiscard} disabled={actions.discardPending}>
-            Discard Batch
+            {isEmpty ? 'Cancel' : 'Discard Batch'}
           </Button>
-          <Button
-            variant="primary"
-            onClick={handleCommit}
-            disabled={actions.commitPending || visibleRows.length === 0 || batch.ai_status === 'running'}
-            title={batch.ai_status === 'running' ? 'Wait for AI categorization to finish, or close this dialog' : undefined}
-          >
-            Commit {visibleRows.length} Transaction{visibleRows.length === 1 ? '' : 's'}
-          </Button>
+          {!isEmpty && (
+            <Button
+              variant="primary"
+              onClick={handleCommit}
+              disabled={actions.commitPending || batch.ai_status === 'running'}
+              title={batch.ai_status === 'running' ? 'Wait for AI categorization to finish, or close this dialog' : undefined}
+            >
+              Commit {visibleRows.length} Transaction{visibleRows.length === 1 ? '' : 's'}
+            </Button>
+          )}
         </>
       }
     />
