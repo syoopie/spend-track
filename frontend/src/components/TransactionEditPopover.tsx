@@ -63,23 +63,25 @@ export function TransactionEditPopover({
           </Select>
         </div>
       </div>
-      <label className="flex items-center gap-2 text-xs text-text cursor-pointer">
-        <Checkbox checked={isExcluded} onChange={setIsExcluded} />
-        Exclude from totals
-      </label>
-      {isExcluded && (
-        <input
-          value={exclusionReason}
-          onChange={(e) => setExclusionReason(e.target.value)}
-          placeholder="Exclusion reason (e.g. self-transfer)"
-          className="w-full box-border text-md px-2.5 py-1.5 rounded-md border border-border bg-card text-text"
-        />
-      )}
-      <div className="flex justify-end gap-2.5">
-        <Button size="sm" onClick={onClose}>Cancel</Button>
-        <Button variant="primary" size="sm" onClick={handleSave} disabled={updateTx.isPending}>
-          {updateTx.isPending ? 'Saving…' : 'Save'}
-        </Button>
+      <div className="flex items-center gap-3">
+        <label className="flex items-center gap-2 text-xs text-text cursor-pointer shrink-0">
+          <Checkbox checked={isExcluded} onChange={setIsExcluded} />
+          Exclude from totals
+        </label>
+        {isExcluded && (
+          <input
+            value={exclusionReason}
+            onChange={(e) => setExclusionReason(e.target.value)}
+            placeholder="Exclusion reason (e.g. self-transfer)"
+            className="flex-1 min-w-0 box-border text-md px-2.5 py-1.5 rounded-md border border-border bg-card text-text"
+          />
+        )}
+        <div className="flex justify-end gap-2.5 ml-auto shrink-0">
+          <Button size="sm" onClick={onClose}>Cancel</Button>
+          <Button variant="primary" size="sm" onClick={handleSave} disabled={updateTx.isPending}>
+            {updateTx.isPending ? 'Saving…' : 'Save'}
+          </Button>
+        </div>
       </div>
     </div>
   )
