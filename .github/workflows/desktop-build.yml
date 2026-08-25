@@ -6,15 +6,18 @@ name: Desktop build
 #
 # Pushing a tag like v0.1.0 also publishes them as a GitHub Release, which
 # is the link the README's "Download" section points at.
+#
+# Deliberately not run on pull requests: three runners spending a minute
+# each on every PR is a lot of machine time for a build whose output nobody
+# downloads. The safety net is that `release` needs `build`, so a packaging
+# break fails the release run rather than shipping - and the serving layer
+# the build depends on is covered by tests/test_webui_serving.py, which
+# runs with the ordinary suite. Run this by hand from the Actions tab
+# (optionally naming a tag to publish) when packaging changes.
 
 on:
   push:
     tags: ["v*"]
-  pull_request:
-    paths:
-      - "backend/**"
-      - "frontend/**"
-      - ".github/workflows/desktop-build.yml"
   workflow_dispatch:
     inputs:
       release_tag:
