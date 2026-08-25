@@ -37,6 +37,18 @@ def _pdf_with_text(*lines: str) -> bytes:
     return buf.getvalue()
 
 
+def _multipage_pdf(*pages: list[str]) -> bytes:
+    """A PDF with one page per argument, each carrying the lines given."""
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf)
+    for lines in pages:
+        for i, line in enumerate(lines):
+            c.drawString(72, 750 - i * 16, line)
+        c.showPage()
+    c.save()
+    return buf.getvalue()
+
+
 def _parse_bytes(data: bytes, parsers=None):
     with pdfplumber.open(io.BytesIO(data)) as pdf:
         return detect_and_parse(pdf.pages, parsers=parsers)
@@ -78,6 +90,32 @@ def test_unimplemented_bank_is_detected_and_named_in_the_error():
     message = str(excinfo.value)
     assert "STUBBANK" in message
     assert "not yet implemented" in message
+
+
+@pytest.mark.parametrize(
+    "anchor",
+    [
+        "United Overseas Bank Limited",
+        "Email customer.service@uobgroup.com",
+        "Email card.centre@uobgroup.com",
+    ],
+)
+def test_uob_is_detected_from_any_of_its_anchors(anchor):
+    """UOB renders account and credit card statements through different
+    pipelines, and not every variant leads with the full legal name. Matching
+    only on that would report a readable statement as an unknown format."""
+    with pytest.raises(UnparseableStatementError) as excinfo:
+        _parse_bytes(_pdf_with_text(anchor, "some other page text"))
+    # Detected as UOB, then rejected for its subtype - not "unrecognized bank".
+    assert "not its subtype" in str(excinfo.value)
+
+
+def test_uob_is_detected_when_the_anchor_is_on_the_second_page():
+    """Some statements lead with a cover sheet, putting the identifying text
+    on the page after the one a first-page-only check would look at."""
+    with pytest.raises(UnparseableStatementError) as excinfo:
+        _parse_bytes(_multipage_pdf(["Statement cover page"], ["United Overseas Bank Limited"]))
+    assert "not its subtype" in str(excinfo.value)
 
 
 def test_unrecognized_pdf_error_names_only_banks_that_parse():
