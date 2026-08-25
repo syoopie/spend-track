@@ -18,8 +18,15 @@ export const Input = forwardRef<
     <input
       ref={ref}
       className={`${fullWidth ? 'w-full' : ''} box-border px-3 py-2.5 rounded-lg border border-border bg-input text-text text-md
-        focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2
+        focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:-outline-offset-2
         ${mono ? 'font-mono' : ''} ${className}`}
+      // -outline-offset-2 (inset, not the default outward-bleeding outline) -
+      // an input this close to full width inside a Card/Modal/table cell has
+      // no spare horizontal room for a 2px outline to bleed OUTSIDE its own
+      // border box into, so the left/right edges of the ring were getting
+      // silently clipped by whatever ancestor actually owns that padding.
+      // Matches the inset convention ReviewDialog.tsx/Dashboard.tsx's
+      // full-bleed row focus rings already use for the identical reason.
       {...rest}
     />
   )

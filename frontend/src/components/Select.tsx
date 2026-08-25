@@ -166,9 +166,11 @@ export function Select({
         onKeyDown={handleKeyDown}
         aria-haspopup="listbox"
         aria-expanded={open}
+        // Inset outline offset, not the default outward-bleeding one - see
+        // Field.tsx's Input for why (same fix, same reasoning).
         className={`w-full flex items-center gap-1.5 text-left appearance-none ${padding} ${bgClass} rounded-lg border border-border text-text cursor-pointer
           transition-colors hover:border-accent
-          focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2
+          focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:-outline-offset-2
           disabled:opacity-50 disabled:cursor-not-allowed`}
       >
         <span className="truncate min-w-0">{selected?.label ?? value}</span>
