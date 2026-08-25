@@ -653,9 +653,17 @@ const ReviewRowItem = memo(function ReviewRowItem({
             onMoveFocus(index, e.key === 'ArrowDown' ? 1 : -1)
           }
         }}
-        className="grid items-center px-5 py-2.5 text-md border-b border-border/70 cursor-pointer
-          hover:ring-1 hover:ring-inset hover:ring-accent/40 focus-visible:outline focus-visible:outline-2
-          focus-visible:-outline-offset-2 focus-visible:outline-accent"
+        className={`grid items-center px-5 py-2.5 text-md border-b border-border/70 cursor-pointer
+          focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent
+          ${
+            // A persistent accent ring, not just the hover one - the chevron
+            // rotation and background swap alone were easy to miss (and the
+            // background swap disappears entirely on an AI/amber-tinted row,
+            // since rowBg always wins over it), so a currently-open row had
+            // no reliable "this is the one I'm editing" cue while scrolling
+            // a long batch. Independent of rowBg for exactly that reason.
+            isOpen ? 'ring-2 ring-inset ring-accent' : 'hover:ring-1 hover:ring-inset hover:ring-accent/40'
+          }`}
         style={{ gridTemplateColumns: ROW_GRID_TEMPLATE, background: rowBg ?? (isOpen ? 'var(--color-input)' : undefined) }}
       >
         {/* stopPropagation keeps this click from also opening the row below;
