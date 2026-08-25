@@ -20,6 +20,7 @@ def make_batch():
             StagingRow(
                 index=0,
                 account_number="770-331-567-8",
+                source_filename="statement.pdf",
                 transaction_date="2026-05-05",
                 raw_description="Grab",
                 matched_label="Grab",

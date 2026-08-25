@@ -56,6 +56,11 @@ CREATE TABLE IF NOT EXISTS transactions (
     contact_id INTEGER,
     is_excluded BOOLEAN DEFAULT 0,
     exclusion_reason TEXT,
+    -- The PDF this transaction was extracted from - NULL for anything
+    -- committed before this column existed. Lets "delete everything from
+    -- this upload" (routers/transactions.py's /by-file endpoint) undo a bad
+    -- upload without touching unrelated transactions.
+    source_filename TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE,
     FOREIGN KEY(contact_id) REFERENCES contacts(id) ON DELETE SET NULL

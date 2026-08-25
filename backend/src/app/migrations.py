@@ -119,6 +119,7 @@ def migrate_schema(conn: sqlite3.Connection) -> bool:
     _add_column_if_missing(conn, "categories", "is_hidden", "is_hidden BOOLEAN DEFAULT 0")
     _add_column_if_missing(conn, "accounts", "is_card", "is_card BOOLEAN DEFAULT 0")
     _add_column_if_missing(conn, "categories", "direction", "direction TEXT NOT NULL DEFAULT 'outflow'")
+    _add_column_if_missing(conn, "transactions", "source_filename", "source_filename TEXT")
     return _add_column_if_missing(conn, "rules", "direction", "direction TEXT NOT NULL DEFAULT 'outflow'")
 
 

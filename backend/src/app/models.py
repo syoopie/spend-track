@@ -173,6 +173,7 @@ class TransactionOut(BaseModel):
     is_excluded: bool
     exclusion_reason: str | None
     has_refund_link: bool
+    source_filename: str | None
 
 
 class TransactionUpdateRequest(BaseModel):
@@ -399,6 +400,16 @@ class ResetRequest(BaseModel):
 
 class DeleteScopeResult(BaseModel):
     deleted_count: int
+
+
+class SourceFileSummary(BaseModel):
+    """One entry per distinct uploaded PDF that has committed transactions -
+    powers Settings' "delete everything from this upload" list. Transactions
+    committed before source_filename existed (see migrations.py) have none
+    and are simply omitted from this list - there's no file left to name."""
+
+    filename: str
+    transaction_count: int
 
 
 class PathCheckRequest(BaseModel):

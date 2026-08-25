@@ -50,8 +50,8 @@ export const api = {
       body: JSON.stringify(body),
     }).then((r) => handle<T>(r))
   },
-  delete<T>(path: string): Promise<T> {
-    return fetch(`/api${path}`, { method: 'DELETE' }).then((r) => handle<T>(r))
+  delete<T>(path: string, params?: Record<string, string | number | boolean | undefined | null>): Promise<T> {
+    return fetch(`/api${path}${qs(params)}`, { method: 'DELETE' }).then((r) => handle<T>(r))
   },
   upload<T>(path: string, file: File, extra?: Record<string, string>): Promise<T> {
     const form = new FormData()

@@ -142,6 +142,12 @@ export interface Transaction {
   is_excluded: boolean
   exclusion_reason: string | null
   has_refund_link: boolean
+  source_filename: string | null
+}
+
+export interface SourceFileSummary {
+  filename: string
+  transaction_count: number
 }
 
 export interface TransactionUpdateRequest {

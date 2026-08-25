@@ -1,4 +1,4 @@
-import { Download, Loader2, Settings as SettingsIcon } from 'lucide-react'
+import { Download, FileX2, Loader2, Settings as SettingsIcon, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -7,10 +7,12 @@ import {
   useDeleteAllContacts,
   useDeleteAllRules,
   useDeleteAllTransactions,
+  useDeleteTransactionsByFile,
   useRelocateDb,
   useResetDb,
   useRules,
   useSettings,
+  useSourceFiles,
   useTransactions,
 } from '../api/hooks'
 import { AiSection } from '../components/AiSection'
@@ -188,6 +190,50 @@ function SimpleConfirmModal({
   )
 }
 
+// Single-confirm, no typed-DELETE step - same reasoning as
+// SimpleConfirmModal above: undoing this is a normal, everyday action
+// (re-upload the exact same PDF), not a reason to make it as hard to
+// trigger as Delete All Transactions or Nuclear Reset.
+function DeleteFileModal({
+  filename,
+  count,
+  onClose,
+}: {
+  filename: string
+  count: number
+  onClose: () => void
+}) {
+  const deleteByFile = useDeleteTransactionsByFile()
+
+  async function handleConfirm() {
+    try {
+      await deleteByFile.mutateAsync(filename)
+      onClose()
+    } catch {
+      // swallow - deleteByFile.isError below renders the failure, modal stays open so the user can retry
+    }
+  }
+
+  return (
+    <Modal onClose={onClose} width={440} title={<span className="text-danger-text">Delete Uploaded File</span>}>
+      <div className="text-md text-muted leading-relaxed mb-4.5">
+        This permanently deletes the {count} transaction{count === 1 ? '' : 's'} committed from{' '}
+        <strong className="font-mono text-text break-all">{filename}</strong>. Re-upload the same PDF to bring them
+        back.
+      </div>
+      {deleteByFile.isError && (
+        <div className="text-xs text-danger-text mb-3">Could not complete the deletion. Please try again.</div>
+      )}
+      <div className="flex justify-end gap-2.5">
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="danger" onClick={handleConfirm} disabled={deleteByFile.isPending}>
+          Delete Transactions
+        </Button>
+      </div>
+    </Modal>
+  )
+}
+
 function NuclearResetModal({ onClose }: { onClose: () => void }) {
   const reset = useResetDb()
   const navigate = useNavigate()
@@ -232,10 +278,12 @@ export function Settings() {
   const [relocateOpen, setRelocateOpen] = useState(false)
   const [resetOpen, setResetOpen] = useState(false)
   const [deleteScope, setDeleteScope] = useState<DeleteScope>(null)
+  const [deleteFileTarget, setDeleteFileTarget] = useState<{ filename: string; count: number } | null>(null)
 
   const deleteRules = useDeleteAllRules()
   const deleteContacts = useDeleteAllContacts()
   const deleteTransactions = useDeleteAllTransactions()
+  const sourceFilesQ = useSourceFiles()
 
   // Live counts for the Danger Zone (SET-3) - "This deletes 23 rules" beats
   // an undifferentiated "This permanently deletes every rule" regardless of
@@ -334,6 +382,41 @@ export function Settings() {
         </div>
       </Card>
 
+      {(sourceFilesQ.data?.length ?? 0) > 0 && (
+        <Card className="mb-4">
+          <div className="text-md font-semibold font-display mb-1">Uploaded Files</div>
+          <div className="text-xs text-muted mb-3.5">
+            Every PDF that has committed transactions. Delete one to undo a bad upload — re-uploading the same file
+            brings its transactions back.
+          </div>
+          <div className="flex flex-col gap-2">
+            {(sourceFilesQ.data ?? []).map((f) => (
+              <div
+                key={f.filename}
+                className="flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-lg border border-border bg-input"
+              >
+                <div className="min-w-0 flex items-center gap-2">
+                  <FileX2 size={14} className="text-muted-2 shrink-0" />
+                  <span className="text-md font-mono truncate" title={f.filename}>
+                    {f.filename}
+                  </span>
+                  <span className="text-xs text-muted-2 shrink-0">
+                    · {f.transaction_count} transaction{f.transaction_count === 1 ? '' : 's'}
+                  </span>
+                </div>
+                <button
+                  onClick={() => setDeleteFileTarget({ filename: f.filename, count: f.transaction_count })}
+                  title={`Delete transactions from ${f.filename}`}
+                  className="shrink-0 border-none bg-transparent cursor-pointer text-muted-2 hover:text-danger-text p-1"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
       <Card style={{ border: '1px solid var(--color-danger-surface-border)' }}>
         <div className="text-md font-semibold font-display mb-1.5 text-danger-text">Danger Zone</div>
         <div className="text-md text-muted mb-3.5 leading-relaxed">
@@ -361,6 +444,13 @@ export function Settings() {
         <RelocateModal dbSize={dbSize} currentPath={settingsQ.data?.db_path ?? ''} onClose={() => setRelocateOpen(false)} />
       )}
       {resetOpen && <NuclearResetModal onClose={() => setResetOpen(false)} />}
+      {deleteFileTarget && (
+        <DeleteFileModal
+          filename={deleteFileTarget.filename}
+          count={deleteFileTarget.count}
+          onClose={() => setDeleteFileTarget(null)}
+        />
+      )}
       {deleteScope === 'rules' && (
         <SimpleConfirmModal
           title="Delete All Rules"

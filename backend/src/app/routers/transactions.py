@@ -16,6 +16,7 @@ from app.models import (
     BatchRowOut,
     BatchRowUpdateRequest,
     BatchRuleUndoRequest,
+    DeleteScopeResult,
     RecategorizeBatchOut,
     RecategorizeCommitResult,
     RecategorizeRequest,
@@ -23,6 +24,7 @@ from app.models import (
     RefundPairingOut,
     RuleQuickCreateRequest,
     RuleRerunRowSnapshot,
+    SourceFileSummary,
     TransactionOut,
     TransactionUpdateRequest,
 )
@@ -100,6 +102,7 @@ def _row_to_out(row: sqlite3.Row, paired_ids: set[int]) -> TransactionOut:
         is_excluded=bool(row["is_excluded"]),
         exclusion_reason=row["exclusion_reason"],
         has_refund_link=row["id"] in paired_ids,
+        source_filename=row["source_filename"],
     )
 
 
@@ -137,6 +140,38 @@ def list_transactions(
         ).fetchall()
         paired_ids = _paired_ids(conn)
         return [_row_to_out(r, paired_ids) for r in rows]
+
+
+@router.get("/source-files", response_model=list[SourceFileSummary])
+def list_source_files():
+    """Powers Settings' "delete everything from this upload" list - see
+    DELETE /by-file below. Registered ahead of the /{transaction_id} routes
+    so its literal path always wins."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT source_filename, COUNT(*) AS count FROM transactions "
+            "WHERE source_filename IS NOT NULL GROUP BY source_filename ORDER BY source_filename"
+        ).fetchall()
+        return [SourceFileSummary(filename=r["source_filename"], transaction_count=r["count"]) for r in rows]
+
+
+@router.delete("/by-file", response_model=DeleteScopeResult)
+def delete_transactions_by_file(filename: str):
+    """Undoes a single bad upload - every committed transaction that came
+    from this exact PDF, gone. Refund pairings referencing a deleted
+    transaction cascade automatically (schema.sql's ON DELETE CASCADE,
+    db.py enables PRAGMA foreign_keys)."""
+    with get_conn() as conn:
+        cur = conn.execute("DELETE FROM transactions WHERE source_filename = ?", (filename,))
+        return DeleteScopeResult(deleted_count=cur.rowcount)
+
+
+@router.delete("/{transaction_id}", status_code=204)
+def delete_transaction(transaction_id: int):
+    with get_conn() as conn:
+        cur = conn.execute("DELETE FROM transactions WHERE id = ?", (transaction_id,))
+        if cur.rowcount == 0:
+            raise api_error(404, "TRANSACTION_NOT_FOUND", "No transaction with that id.")
 
 
 @router.post("/recategorize", response_model=RecategorizeBatchOut)

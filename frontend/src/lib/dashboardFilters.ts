@@ -1,3 +1,5 @@
+export type DirectionFilter = 'inflow' | 'outflow'
+
 export interface DashboardFilters {
   range?: { from: string; to: string }
   accountId?: string
@@ -5,6 +7,7 @@ export interface DashboardFilters {
   searchText?: string
   categoryFilter?: string
   excludedVisible?: boolean
+  direction?: DirectionFilter
 }
 
 const STORAGE_KEY = 'sg-tracker-dashboard-filters'
@@ -23,7 +26,9 @@ export function loadDashboardFilters(): DashboardFilters {
     const searchText = typeof parsed.searchText === 'string' ? parsed.searchText : undefined
     const categoryFilter = typeof parsed.categoryFilter === 'string' ? parsed.categoryFilter : undefined
     const excludedVisible = typeof parsed.excludedVisible === 'boolean' ? parsed.excludedVisible : undefined
-    return { range, accountId, showFullName, searchText, categoryFilter, excludedVisible }
+    const direction =
+      parsed.direction === 'inflow' || parsed.direction === 'outflow' ? (parsed.direction as DirectionFilter) : undefined
+    return { range, accountId, showFullName, searchText, categoryFilter, excludedVisible, direction }
   } catch {
     return {}
   }

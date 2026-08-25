@@ -30,6 +30,7 @@ import type {
   RuleRerunRowSnapshot,
   RuleUpdateRequest,
   Settings,
+  SourceFileSummary,
   StagingBatch,
   StagingRuleCreateResult,
   Transaction,
@@ -82,6 +83,41 @@ export function useUpdateTransaction() {
       toast.success('Transaction updated.')
     },
     onError: (err) => toast.error(errMsg(err, "Couldn't update the transaction.")),
+  })
+}
+
+export function useDeleteTransaction() {
+  const qc = useQueryClient()
+  const toast = useToast()
+  return useMutation({
+    // No success toast - callers (Dashboard.tsx) show their own optimistic
+    // "Transaction deleted - Undo" toast before this even fires, same
+    // pattern as useDeleteRule.
+    mutationFn: (id: number) => api.delete(`/transactions/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['transactions'] })
+      qc.invalidateQueries({ queryKey: ['dashboard-summary'] })
+    },
+    onError: (err) => toast.error(errMsg(err, "Couldn't delete the transaction.")),
+  })
+}
+
+export function useSourceFiles() {
+  return useQuery({ queryKey: ['source-files'], queryFn: () => api.get<SourceFileSummary[]>('/transactions/source-files') })
+}
+
+export function useDeleteTransactionsByFile() {
+  const qc = useQueryClient()
+  const toast = useToast()
+  return useMutation({
+    mutationFn: (filename: string) => api.delete<DeleteScopeResult>('/transactions/by-file', { filename }),
+    onSuccess: (data, filename) => {
+      qc.invalidateQueries({ queryKey: ['transactions'] })
+      qc.invalidateQueries({ queryKey: ['dashboard-summary'] })
+      qc.invalidateQueries({ queryKey: ['source-files'] })
+      toast.success(`Deleted ${data.deleted_count} transaction${data.deleted_count === 1 ? '' : 's'} from "${filename}".`)
+    },
+    onError: (err) => toast.error(errMsg(err, "Couldn't delete those transactions.")),
   })
 }
 

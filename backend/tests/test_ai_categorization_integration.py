@@ -156,6 +156,7 @@ def test_cancelled_job_runner_does_not_overwrite_cancelled_status(monkeypatch):
     row = StagingRow(
         index=0,
         account_number="123",
+        source_filename="f.pdf",
         transaction_date="2024-01-01",
         raw_description="X",
         matched_label=None,
@@ -536,13 +537,13 @@ def test_staging_apply_ai_suggestions_skips_manually_edited_rows():
     from app.engine.staging_store import StagingBatch, StagingRow, get_store
 
     edited_row = StagingRow(
-        index=0, account_number="acc", transaction_date="2024-01-01", raw_description="X", matched_label=None,
+        index=0, account_number="acc", source_filename="f.pdf", transaction_date="2024-01-01", raw_description="X", matched_label=None,
         amount=-5.0, fingerprint="fp0", category="Others", subcategory=None, is_excluded=False,
         exclusion_reason=None, contact_id=None, needs_review=False, is_duplicate=False,
         original_category="Others", original_label=None, manually_edited=True,
     )
     untouched_row = StagingRow(
-        index=1, account_number="acc", transaction_date="2024-01-01", raw_description="Y", matched_label=None,
+        index=1, account_number="acc", source_filename="f.pdf", transaction_date="2024-01-01", raw_description="Y", matched_label=None,
         amount=-5.0, fingerprint="fp1", category="Others", subcategory=None, is_excluded=False,
         exclusion_reason=None, contact_id=None, needs_review=False, is_duplicate=False,
         original_category="Others", original_label=None,

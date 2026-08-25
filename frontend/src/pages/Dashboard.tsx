@@ -1,9 +1,18 @@
-import { ArrowDown, ArrowUp, FileUp, LayoutGrid, Pencil, Receipt, RefreshCw, SearchX } from 'lucide-react'
+import { ArrowDown, ArrowUp, FileUp, LayoutGrid, Pencil, Receipt, RefreshCw, SearchX, SlidersHorizontal, Trash2 } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { useAccounts, useCategories, useDashboardSummary, useMonthlyTotals, useSettings, useTransactions } from '../api/hooks'
+import {
+  useAccounts,
+  useCategories,
+  useDashboardSummary,
+  useDeleteTransaction,
+  useMonthlyTotals,
+  useSettings,
+  useTransactions,
+} from '../api/hooks'
+import { useToast } from '../components/Toast'
 import { fmtDate, fmtMonthRangeLabel, fmtMonthYearLabel, fmtPlain, fmtSigned, shiftMonth } from '../lib/format'
-import { loadDashboardFilters, saveDashboardFilters, type DashboardFilters } from '../lib/dashboardFilters'
+import { loadDashboardFilters, saveDashboardFilters, type DashboardFilters, type DirectionFilter } from '../lib/dashboardFilters'
 import { CashFlowChart, cashFlowQualifier } from '../components/CashFlowChart'
 import { CategoryBadge, CategoryLabel } from '../components/CategoryBadge'
 import { categoryOptionElements } from '../components/CategoryOptions'
@@ -127,7 +136,7 @@ const FEED_COLUMNS: DataTableColumn<SortField>[] = [
   { key: 'account', header: 'Account', width: '120px' },
   { key: 'amount', header: 'Amount', width: '120px', align: 'right', sortKey: 'amount' },
   { key: 'refund', header: '', width: '28px' },
-  { key: 'edit', header: '', width: '28px' },
+  { key: 'edit', header: '', width: '52px' },
 ]
 const FEED_GRID_TEMPLATE = dataTableGridTemplate(FEED_COLUMNS)
 
@@ -161,6 +170,110 @@ function bankListLabel(banks: string[]): string {
   return `a ${banks.slice(0, -1).join(', ')}, or ${banks[banks.length - 1]}`
 }
 
+// Undo window for a feed row's delete action - mirrors Rules.tsx's
+// DELETE_UNDO_MS (row hidden immediately, real DELETE deferred so a
+// misclick is recoverable). Kept as its own copy rather than a shared
+// constant since the two screens have no other coupling.
+const DELETE_UNDO_MS = 6000
+
+// A three-way All/In/Out segmented control, not a third <Select> - it's the
+// filter the user reaches for most often alongside search/category, so it
+// stays a single click rather than a dropdown open+pick.
+function DirectionToggle({
+  value,
+  onChange,
+}: {
+  value: DirectionFilter | undefined
+  onChange: (next: DirectionFilter | undefined) => void
+}) {
+  const options: { key: DirectionFilter | undefined; label: string }[] = [
+    { key: undefined, label: 'All' },
+    { key: 'inflow', label: 'In' },
+    { key: 'outflow', label: 'Out' },
+  ]
+  return (
+    <div className="flex items-center rounded-lg border border-border bg-input p-0.5 text-xs shrink-0">
+      {options.map((o) => (
+        <button
+          key={o.label}
+          type="button"
+          onClick={() => onChange(o.key)}
+          className={`px-2.5 py-1 rounded-md cursor-pointer border-none font-medium ${
+            value === o.key ? 'bg-accent text-accent-fg' : 'bg-transparent text-muted hover:text-text'
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// Houses the feed's lower-frequency display toggles (Show excluded / Show
+// full name) behind one button instead of two always-visible checkboxes -
+// added once the direction toggle (above) needed the same row and left no
+// room to keep everything inline without wrapping to a second line on an
+// ordinary window width. Same outside-click-to-close popover idiom as
+// DateRangePicker.tsx.
+function MoreFiltersMenu({
+  excludedVisible,
+  onExcludedVisibleChange,
+  showFullName,
+  onShowFullNameChange,
+}: {
+  excludedVisible: boolean
+  onExcludedVisibleChange: (v: boolean) => void
+  showFullName: boolean
+  onShowFullNameChange: (v: boolean) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const activeCount = (excludedVisible ? 0 : 1) + (showFullName ? 1 : 0)
+
+  useEffect(() => {
+    if (!open) return
+    function onClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    window.addEventListener('mousedown', onClickOutside)
+    return () => window.removeEventListener('mousedown', onClickOutside)
+  }, [open])
+
+  return (
+    <div className="relative shrink-0" ref={containerRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        title="More filters"
+        className="flex items-center gap-1.5 text-xs px-2.5 py-2 rounded-lg border border-border bg-input text-muted hover:text-text cursor-pointer"
+      >
+        <SlidersHorizontal size={13} />
+        Filters
+        {activeCount > 0 && (
+          <span className="w-4 h-4 rounded-full bg-accent text-accent-fg text-[10px] font-semibold flex items-center justify-center">
+            {activeCount}
+          </span>
+        )}
+      </button>
+      {open && (
+        <div className="absolute right-0 top-[calc(100%+6px)] z-40 bg-card border border-border rounded-xl p-3.5 shadow-xl w-[220px] flex flex-col gap-2.5">
+          <label className="flex items-center gap-2 text-xs text-text cursor-pointer">
+            <Checkbox checked={excludedVisible} onChange={onExcludedVisibleChange} />
+            Show excluded
+          </label>
+          <label
+            className="flex items-center gap-2 text-xs text-text cursor-pointer"
+            title="Display name is the cleaned-up label (rule/contact/AI); full name is the raw text from the bank statement"
+          >
+            <Checkbox checked={showFullName} onChange={onShowFullNameChange} />
+            Show full name
+          </label>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function Dashboard() {
   const { openDialog, hasPendingBatch } = useUploadDialog()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -190,8 +303,24 @@ export function Dashboard() {
   const [categoryFilter, setCategoryFilter] = useState(
     () => searchParams.get('category') ?? storedFilters.categoryFilter ?? '',
   )
+  const [direction, setDirection] = useState<DirectionFilter | undefined>(() => {
+    const v = searchParams.get('dir')
+    return v === 'inflow' || v === 'outflow' ? v : storedFilters.direction
+  })
   const [refundTxId, setRefundTxId] = useState<number | null>(null)
   const [editingTxId, setEditingTxId] = useState<number | null>(null)
+  const toast = useToast()
+  const deleteTransaction = useDeleteTransaction()
+  // Optimistically-hidden rows whose real DELETE is still deferred behind
+  // the undo toast - same pattern as Rules.tsx's pendingDeleteIds.
+  const [pendingDeleteIds, setPendingDeleteIds] = useState<Set<number>>(new Set())
+  const deleteTimers = useRef(new Map<number, ReturnType<typeof setTimeout>>())
+  useEffect(() => {
+    const timers = deleteTimers
+    return () => {
+      for (const t of timers.current.values()) clearTimeout(t)
+    }
+  }, [])
   const [recategorizeOpen, setRecategorizeOpen] = useState(false)
   const [chartsTab, setChartsTab] = useState<'cashflow' | 'velocity'>('cashflow')
   const [breakdownTab, setBreakdownTab] = useState<'category' | 'merchants' | 'paynow'>('category')
@@ -219,6 +348,7 @@ export function Dashboard() {
       searchText,
       categoryFilter,
       excludedVisible,
+      direction,
       ...overrides,
     }
     saveDashboardFilters(next)
@@ -232,6 +362,7 @@ export function Dashboard() {
     if (next.searchText) params.set('q', next.searchText)
     if (next.excludedVisible === false) params.set('excluded', '0')
     if (next.showFullName) params.set('full', '1')
+    if (next.direction) params.set('dir', next.direction)
     setSearchParams(params, { replace: true })
   }
 
@@ -263,6 +394,11 @@ export function Dashboard() {
   function updateExcludedVisible(next: boolean) {
     setExcludedVisible(next)
     persist({ excludedVisible: next })
+  }
+
+  function updateDirection(next: DirectionFilter | undefined) {
+    setDirection(next)
+    persist({ direction: next })
   }
 
   function toggleSort(field: SortField) {
@@ -311,8 +447,8 @@ export function Dashboard() {
   })
 
   const visibleTransactions = useMemo(
-    () => (txQ.data ?? []).filter((t) => excludedVisible || !t.is_excluded),
-    [txQ.data, excludedVisible],
+    () => (txQ.data ?? []).filter((t) => (excludedVisible || !t.is_excluded) && !pendingDeleteIds.has(t.id)),
+    [txQ.data, excludedVisible, pendingDeleteIds],
   )
   // DASH-7: the outflow metric card always excludes (it comes straight from
   // the server, which never counts excluded rows), while "Show excluded"
@@ -326,6 +462,8 @@ export function Dashboard() {
     const q = debouncedSearch.trim().toLowerCase()
     return visibleTransactions.filter((t) => {
       if (categoryFilter && t.category !== categoryFilter) return false
+      if (direction === 'inflow' && t.amount <= 0) return false
+      if (direction === 'outflow' && t.amount > 0) return false
       if (q) {
         const haystack = `${t.matched_label ?? ''} ${t.raw_description} ${t.category} ${t.bank_name} ${
           t.account_number_masked
@@ -334,7 +472,7 @@ export function Dashboard() {
       }
       return true
     })
-  }, [visibleTransactions, debouncedSearch, categoryFilter])
+  }, [visibleTransactions, debouncedSearch, categoryFilter, direction])
 
   const sortedTransactions = useMemo(() => {
     const list = [...filteredTransactions]
@@ -352,7 +490,7 @@ export function Dashboard() {
   // silently show more rows than a "Load more" click ever asked for.
   useEffect(() => {
     setVisibleCount(PAGE_SIZE)
-  }, [debouncedSearch, categoryFilter, excludedVisible, range, accountId, sort])
+  }, [debouncedSearch, categoryFilter, direction, excludedVisible, range, accountId, sort])
 
   const pagedTransactions = sortedTransactions.slice(0, visibleCount)
 
@@ -468,6 +606,42 @@ export function Dashboard() {
     setEditingTxId((prev) => (prev === tx.id ? null : tx.id))
   }
 
+  // Removes the row immediately and shows an undo toast; the real DELETE
+  // only fires once the undo window passes - see Rules.tsx's identical
+  // handleDelete, which this mirrors.
+  function handleDeleteTransaction(tx: Transaction) {
+    if (editingTxId === tx.id) setEditingTxId(null)
+    setPendingDeleteIds((prev) => new Set(prev).add(tx.id))
+    const timer = setTimeout(() => {
+      deleteTimers.current.delete(tx.id)
+      deleteTransaction.mutate(tx.id, {
+        onError: () => {
+          setPendingDeleteIds((prev) => {
+            const next = new Set(prev)
+            next.delete(tx.id)
+            return next
+          })
+        },
+      })
+    }, DELETE_UNDO_MS)
+    deleteTimers.current.set(tx.id, timer)
+    toast.success(`Transaction deleted — "${tx.matched_label ?? tx.raw_description}"`, {
+      durationMs: DELETE_UNDO_MS,
+      action: {
+        label: 'Undo',
+        onClick: () => {
+          clearTimeout(deleteTimers.current.get(tx.id))
+          deleteTimers.current.delete(tx.id)
+          setPendingDeleteIds((prev) => {
+            const next = new Set(prev)
+            next.delete(tx.id)
+            return next
+          })
+        },
+      },
+    })
+  }
+
   // A background refetch (filter changed, or a stale query refetched on
   // remount) while data from a previous fetch is still on screen - distinct
   // from the true first-ever load below, which has nothing to show yet.
@@ -574,7 +748,12 @@ export function Dashboard() {
 
       {/* Charts row */}
       <div className="grid grid-cols-2 gap-3.5 mb-5">
-        <Card>
+        {/* min-h matches the breakdown card alongside it (DASH-4) - without
+            it, this card's height tracked whichever tab's content was
+            taller (CashFlowChart's fixed-height bars vs VelocityChart's
+            fixed-height svg + a legend row that can wrap), so switching
+            tabs visibly resized the card. */}
+        <Card className="min-h-[268px]">
           <Tabs
             tabs={[
               { key: 'cashflow', label: 'Cash Flow' },
@@ -663,24 +842,21 @@ export function Dashboard() {
               <option value="">All Categories</option>
               {categoryOptionElements(categoriesQ.data)}
             </Select>
-            <label className="flex items-center gap-1.5 text-xs text-muted cursor-pointer whitespace-nowrap">
-              <Checkbox checked={excludedVisible} onChange={updateExcludedVisible} />
-              Show excluded
-            </label>
-            <label
-              className="flex items-center gap-1.5 text-xs text-muted cursor-pointer whitespace-nowrap"
-              title="Display name is the cleaned-up label (rule/contact/AI); full name is the raw text from the bank statement"
-            >
-              <Checkbox checked={showFullName} onChange={updateShowFullName} />
-              Show full name
-            </label>
+            <DirectionToggle value={direction} onChange={updateDirection} />
+            <MoreFiltersMenu
+              excludedVisible={excludedVisible}
+              onExcludedVisibleChange={updateExcludedVisible}
+              showFullName={showFullName}
+              onShowFullNameChange={updateShowFullName}
+            />
           </div>
         </div>
 
-        {/* Active-filter chips - category and search are otherwise invisible
-            once set (the category select can be scrolled out of view, and a
-            donut-slice click sets it with no on-screen trace at all). */}
-        {(categoryFilter || searchText) && (
+        {/* Active-filter chips - category/search/direction are otherwise
+            invisible once set (the category select can be scrolled out of
+            view, and a donut-slice click sets it with no on-screen trace at
+            all). */}
+        {(categoryFilter || searchText || direction) && (
           <div className="flex items-center gap-2 px-5 py-2 border-b border-divider flex-wrap">
             {categoryFilter && (
               <button
@@ -692,6 +868,14 @@ export function Dashboard() {
                 <span aria-hidden>×</span>
               </button>
             )}
+            {direction && (
+              <button
+                onClick={() => updateDirection(undefined)}
+                className="inline-flex items-center gap-1.5 text-2xs px-2.5 py-1 rounded-full bg-input border border-border text-text hover:border-accent cursor-pointer"
+              >
+                {direction === 'inflow' ? 'Inflow only' : 'Outflow only'} <span aria-hidden>×</span>
+              </button>
+            )}
             {searchText && (
               <button
                 onClick={() => updateSearchText('')}
@@ -700,10 +884,11 @@ export function Dashboard() {
                 Search: "{searchText}" <span aria-hidden>×</span>
               </button>
             )}
-            {categoryFilter && searchText && (
+            {(categoryFilter ? 1 : 0) + (direction ? 1 : 0) + (searchText ? 1 : 0) > 1 && (
               <button
                 onClick={() => {
                   updateCategoryFilter('')
+                  updateDirection(undefined)
                   updateSearchText('')
                 }}
                 className="text-2xs text-muted-2 hover:text-text underline cursor-pointer bg-transparent border-none p-0"
@@ -731,21 +916,26 @@ export function Dashboard() {
           {txQ.isError && <ErrorState description="Couldn't load transactions for this range." onRetry={() => txQ.refetch()} />}
           {txQ.isSuccess && filteredTransactions.length === 0 && (
             <EmptyState
-              icon={searchText || categoryFilter ? SearchX : Receipt}
-              title={searchText || categoryFilter ? 'No transactions match your filters' : 'No transactions for this range yet'}
+              icon={searchText || categoryFilter || direction ? SearchX : Receipt}
+              title={
+                searchText || categoryFilter || direction
+                  ? 'No transactions match your filters'
+                  : 'No transactions for this range yet'
+              }
               description={
-                searchText || categoryFilter
-                  ? 'Try a different search term or category.'
+                searchText || categoryFilter || direction
+                  ? 'Try a different search term, category, or direction.'
                   : 'Pick a different date range, or upload a statement to get started.'
               }
               action={
-                searchText || categoryFilter ? (
+                searchText || categoryFilter || direction ? (
                   <Button
                     variant="secondary"
                     size="sm"
                     onClick={() => {
                       updateSearchText('')
                       updateCategoryFilter('')
+                      updateDirection(undefined)
                     }}
                   >
                     Clear filters
@@ -833,7 +1023,7 @@ export function Dashboard() {
                         </button>
                       )}
                     </div>
-                    <div className="text-center">
+                    <div className="flex items-center justify-center gap-2.5">
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
@@ -843,6 +1033,16 @@ export function Dashboard() {
                         className="border-none bg-transparent cursor-pointer text-muted-2 hover:text-text opacity-40 group-hover:opacity-100 group-focus-within:opacity-100"
                       >
                         <Pencil size={14} />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleDeleteTransaction(tx)
+                        }}
+                        title="Delete transaction"
+                        className="border-none bg-transparent cursor-pointer text-muted-2 hover:text-danger-text opacity-40 group-hover:opacity-100 group-focus-within:opacity-100"
+                      >
+                        <Trash2 size={14} />
                       </button>
                     </div>
                   </div>

@@ -163,7 +163,7 @@ async def upload_statement(
         seen_fingerprints: set[str] = set()
         row_index = 0
 
-        for _filename, parsed in parsed_files:
+        for filename, parsed in parsed_files:
             for parsed_account in parsed.accounts:
                 key = (parsed_account.bank_name, parsed_account.account_number)
                 if key not in account_ids_by_key:
@@ -203,6 +203,7 @@ async def upload_statement(
                         StagingRow(
                             index=row_index,
                             account_number=parsed_account.account_number,
+                            source_filename=filename,
                             transaction_date=tx.transaction_date,
                             raw_description=tx.raw_description,
                             matched_label=cat.matched_label,
@@ -384,7 +385,7 @@ def commit_staging_batch(batch_id: str):
             conn.execute(
                 "INSERT INTO transactions (fingerprint, account_id, transaction_date, raw_description, "
                 "cleaned_description, matched_label, amount, category, subcategory, contact_id, is_excluded, "
-                "exclusion_reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "exclusion_reason, source_filename) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     row.fingerprint,
                     account_id,
@@ -398,6 +399,7 @@ def commit_staging_batch(batch_id: str):
                     row.contact_id,
                     row.is_excluded,
                     row.exclusion_reason,
+                    row.source_filename,
                 ),
             )
             transactions_committed += 1

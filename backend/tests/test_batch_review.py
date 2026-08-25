@@ -36,6 +36,7 @@ def make_staging_row(index: int, raw_description: str = "GRAB RIDE", amount: flo
     fields = dict(
         index=index,
         account_number="1234567890",
+        source_filename="f.pdf",
         transaction_date="2024-01-01",
         raw_description=raw_description,
         matched_label=None,

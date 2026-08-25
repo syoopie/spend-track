@@ -148,6 +148,84 @@ def test_update_missing_transaction_404s(client):
     assert resp.json()["detail"]["code"] == "TRANSACTION_NOT_FOUND"
 
 
+def test_delete_transaction_removes_it(client):
+    _upload_and_commit(client)
+    txs = client.get("/api/transactions").json()
+    victim = txs[0]
+
+    resp = client.delete(f"/api/transactions/{victim['id']}")
+    assert resp.status_code == 204
+
+    remaining = client.get("/api/transactions").json()
+    assert all(t["id"] != victim["id"] for t in remaining)
+    assert len(remaining) == len(txs) - 1
+
+
+def test_delete_missing_transaction_404s(client):
+    resp = client.delete("/api/transactions/999999")
+    assert resp.status_code == 404
+    assert resp.json()["detail"]["code"] == "TRANSACTION_NOT_FOUND"
+
+
+# --- source files (delete everything from one uploaded PDF) ---------------
+#
+# Uses the committed, sanitized sample PDFs (not the optional real-statement
+# folder _upload_and_commit relies on) so these run on a fresh clone too -
+# what's under test here is the source_filename plumbing, not parsing.
+
+_SANITIZED_FEB = "../PDF Examples (Sanitized)/UOB/Account Statements/SampleAccountStatement_Feb2024.pdf"
+_SANITIZED_MAR = "../PDF Examples (Sanitized)/UOB/Account Statements/SampleAccountStatement_Mar2024.pdf"
+
+
+def _upload_two_sanitized_files_and_commit(client):
+    with open(_SANITIZED_FEB, "rb") as f1, open(_SANITIZED_MAR, "rb") as f2:
+        resp = client.post(
+            "/api/statements/upload",
+            files=[
+                ("files", ("feb.pdf", f1, "application/pdf")),
+                ("files", ("mar.pdf", f2, "application/pdf")),
+            ],
+        )
+    body = resp.json()
+    commit = client.post(f"/api/statements/staging/{body['batch_id']}/commit").json()
+    return body, commit
+
+
+def test_source_files_lists_each_upload_with_its_transaction_count(client):
+    body, commit = _upload_two_sanitized_files_and_commit(client)
+    files = {f["filename"]: f["transaction_count"] for f in client.get("/api/transactions/source-files").json()}
+    assert set(files) == {"feb.pdf", "mar.pdf"}
+    assert sum(files.values()) == commit["transactions_committed"]
+
+
+def test_source_files_empty_when_nothing_committed(client):
+    assert client.get("/api/transactions/source-files").json() == []
+
+
+def test_delete_transactions_by_file_removes_only_that_files_rows(client):
+    body, commit = _upload_two_sanitized_files_and_commit(client)
+    files = {f["filename"]: f["transaction_count"] for f in client.get("/api/transactions/source-files").json()}
+
+    resp = client.delete("/api/transactions/by-file", params={"filename": "feb.pdf"})
+    assert resp.status_code == 200
+    assert resp.json()["deleted_count"] == files["feb.pdf"]
+
+    remaining = client.get("/api/transactions").json()
+    assert len(remaining) == files["mar.pdf"]
+    assert all(t["source_filename"] == "mar.pdf" for t in remaining)
+
+    remaining_files = client.get("/api/transactions/source-files").json()
+    assert [f["filename"] for f in remaining_files] == ["mar.pdf"]
+
+
+def test_delete_transactions_by_unknown_file_is_a_harmless_noop(client):
+    _upload_two_sanitized_files_and_commit(client)
+    resp = client.delete("/api/transactions/by-file", params={"filename": "does-not-exist.pdf"})
+    assert resp.status_code == 200
+    assert resp.json()["deleted_count"] == 0
+    assert len(client.get("/api/transactions").json()) > 0
+
+
 def test_recategorize_stages_a_batch_and_only_writes_on_commit(client):
     """Recategorize is treated the same as an upload: the POST proposes
     results into a pending, reviewable batch - it must not touch the DB

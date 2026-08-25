@@ -39,6 +39,7 @@ class StagingAccount:
 class StagingRow:
     index: int
     account_number: str  # correlates to a StagingAccount.account_number in this batch
+    source_filename: str
     transaction_date: str
     raw_description: str
     matched_label: str | None
