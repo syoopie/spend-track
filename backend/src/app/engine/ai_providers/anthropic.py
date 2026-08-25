@@ -25,7 +25,9 @@ from app.engine.ai_providers.prompts import build_prompt
 
 API_VERSION = "2023-06-01"
 HEALTH_TIMEOUT = 8.0
-CATEGORIZE_TIMEOUT = 90.0
+# See ollama.py's identical constant - no timeout on the categorize call
+# itself, a real Cancel action replaces it.
+CATEGORIZE_TIMEOUT = None
 
 
 class AnthropicProvider:

@@ -14,7 +14,13 @@ from app.engine.ai_providers.base import (
 from app.engine.ai_providers.prompts import build_prompt
 
 HEALTH_TIMEOUT = 3.0
-CATEGORIZE_TIMEOUT = 90.0
+# No timeout on the actual categorization call - a local model working
+# through a large batch can legitimately take minutes, and an arbitrary
+# cutoff used to kill that run and silently fall back to rules-only with no
+# way to just... wait longer. The frontend now shows how long it's been
+# running and offers a real Cancel action (see routers/statements.py's
+# ai/cancel endpoint) instead.
+CATEGORIZE_TIMEOUT = None
 
 
 class OllamaProvider:

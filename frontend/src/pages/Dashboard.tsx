@@ -12,7 +12,7 @@ import { VelocityChart } from '../components/VelocityChart'
 import { RefundDrawer } from '../components/RefundDrawer'
 import { Button } from '../components/Button'
 import { Card } from '../components/Card'
-import { DataTableHeader, dataTableGridClass, type DataTableColumn } from '../components/DataTable'
+import { DataTableHeader, dataTableGridTemplate, type DataTableColumn } from '../components/DataTable'
 import { DateRangePicker } from '../components/DateRangePicker'
 import { EmptyState, ErrorState } from '../components/EmptyState'
 import { Input } from '../components/Field'
@@ -129,7 +129,7 @@ const FEED_COLUMNS: DataTableColumn<SortField>[] = [
   { key: 'refund', header: '', width: '28px' },
   { key: 'edit', header: '', width: '28px' },
 ]
-const FEED_COLS = dataTableGridClass(FEED_COLUMNS)
+const FEED_GRID_TEMPLATE = dataTableGridTemplate(FEED_COLUMNS)
 
 // Wraps the first case-insensitive occurrence of `query` in `text` with a
 // highlight span - only ever called with the debounced query, and silently
@@ -693,7 +693,7 @@ export function Dashboard() {
           <DataTableHeader
             headerRef={columnHeaderRef}
             columns={FEED_COLUMNS}
-            gridClassName={FEED_COLS}
+            gridTemplate={FEED_GRID_TEMPLATE}
             sort={sort}
             onSort={toggleSort}
             className="px-5 py-2.5 border-b border-divider sticky top-0 z-10 bg-card text-2xs text-muted-2 uppercase tracking-wide"
@@ -756,8 +756,8 @@ export function Dashboard() {
                         openEditor(tx)
                       }
                     }}
-                    className={`grid ${FEED_COLS} items-center px-5 py-3 text-md border-b border-divider group cursor-pointer hover:bg-input/50 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent`}
-                    style={{ opacity: tx.is_excluded ? 0.5 : 1 }}
+                    className="grid items-center px-5 py-3 text-md border-b border-divider group cursor-pointer hover:bg-input/50 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
+                    style={{ gridTemplateColumns: FEED_GRID_TEMPLATE, opacity: tx.is_excluded ? 0.5 : 1 }}
                   >
                     <div className="text-muted font-mono text-xs">{fmtDate(tx.transaction_date, { withYear: spansMultipleYears })}</div>
                     <div className="min-w-0 pr-2">

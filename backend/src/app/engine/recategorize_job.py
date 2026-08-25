@@ -19,6 +19,7 @@ real benefit.
 
 import uuid
 from dataclasses import dataclass, field
+from datetime import datetime
 
 from app.engine.pending_batch import PendingBatchStore
 
@@ -66,9 +67,11 @@ class RecategorizeBatch:
     scanned: int
     changed: int
     rows: list[RecategorizeRow] = field(default_factory=list)
-    ai_status: str = "disabled"  # "disabled" | "running" | "done" | "failed"
+    ai_status: str = "disabled"  # "disabled" | "running" | "done" | "failed" | "cancelled"
     ai_warning: str | None = None
     ai_model: str | None = None
+    # See staging_store.py::StagingBatch's identical field.
+    ai_started_at: datetime | None = None
     batch_id: str = field(default_factory=lambda: uuid.uuid4().hex)
     # See staging_store.py::StagingBatch's identical field.
     has_card_account: bool = False

@@ -6,7 +6,7 @@ import { categoryIcon } from '../lib/categoryColor'
 import { fmtDate, fmtSigned } from '../lib/format'
 import { CategoryBadge } from './CategoryBadge'
 import { Checkbox } from './Checkbox'
-import { DataTableHeader, dataTableGridClass, type DataTableColumn } from './DataTable'
+import { DataTableHeader, dataTableGridTemplate, type DataTableColumn } from './DataTable'
 import { EmptyState } from './EmptyState'
 import { Modal } from './Modal'
 import { Select } from './Select'
@@ -35,7 +35,7 @@ const ROW_COLUMNS: DataTableColumn[] = [
   { key: 'category', header: 'Category', width: '180px' },
   { key: 'amount', header: 'Amount', width: '110px', align: 'right' },
 ]
-const ROW_GRID_COLS = dataTableGridClass(ROW_COLUMNS)
+const ROW_GRID_TEMPLATE = dataTableGridTemplate(ROW_COLUMNS)
 
 // Shared shape both the staging batch's rows and the recategorize batch's
 // rows get mapped into, so the row list/popover only need to be written
@@ -605,10 +605,10 @@ const ReviewRowItem = memo(function ReviewRowItem({
             onMoveFocus(index, e.key === 'ArrowDown' ? 1 : -1)
           }
         }}
-        className={`grid ${ROW_GRID_COLS} items-center px-5 py-2.5 text-md border-b border-border/70 cursor-pointer
+        className="grid items-center px-5 py-2.5 text-md border-b border-border/70 cursor-pointer
           hover:ring-1 hover:ring-inset hover:ring-accent/40 focus-visible:outline focus-visible:outline-2
-          focus-visible:-outline-offset-2 focus-visible:outline-accent`}
-        style={{ background: rowBg ?? (isOpen ? 'var(--color-input)' : undefined) }}
+          focus-visible:-outline-offset-2 focus-visible:outline-accent"
+        style={{ gridTemplateColumns: ROW_GRID_TEMPLATE, background: rowBg ?? (isOpen ? 'var(--color-input)' : undefined) }}
       >
         {/* stopPropagation keeps this click from also opening the row below;
             unlike the old version, this deliberately does NOT preventDefault
@@ -701,6 +701,60 @@ const ReviewRowItem = memo(function ReviewRowItem({
   )
 })
 
+// How long an AI pass has to run before Terminate appears - long enough
+// that a normal-sized batch never even shows it (most finish well before
+// this), short enough that a genuinely stuck or very slow run doesn't leave
+// the user without an escape hatch for long. The categorize call itself has
+// no timeout of its own anymore (see ai_providers/ollama.py's
+// CATEGORIZE_TIMEOUT comment) - this button is what replaces it.
+const CANCEL_OFFER_MS = 15_000
+
+function fmtElapsed(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000))
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${minutes}:${String(seconds).padStart(2, '0')}`
+}
+
+// Ticks its own elapsed-time display off a fixed startedAt anchor (a
+// setInterval re-rendering this one small component, not the whole dialog)
+// rather than polling the server for it - the batch query already refreshes
+// every 1.5s while running (see useCurrentStagingBatch), which is plenty to
+// catch aiStatus leaving "running", but far too coarse for a readable
+// second-by-second clock.
+function AiRunningTimer({
+  startedAt,
+  onCancel,
+  cancelPending,
+}: {
+  startedAt: string
+  onCancel: () => void
+  cancelPending: boolean
+}) {
+  const startMs = useMemo(() => new Date(startedAt).getTime(), [startedAt])
+  const [elapsedMs, setElapsedMs] = useState(() => Date.now() - startMs)
+  useEffect(() => {
+    setElapsedMs(Date.now() - startMs)
+    const t = setInterval(() => setElapsedMs(Date.now() - startMs), 1000)
+    return () => clearInterval(t)
+  }, [startMs])
+
+  return (
+    <span className="inline-flex items-center gap-2 shrink-0">
+      <span className="font-mono">{fmtElapsed(elapsedMs)}</span>
+      {elapsedMs >= CANCEL_OFFER_MS && (
+        <button
+          onClick={onCancel}
+          disabled={cancelPending}
+          className="text-2xs font-semibold px-2 py-0.5 rounded-full border border-current bg-transparent cursor-pointer disabled:opacity-60"
+        >
+          {cancelPending ? 'Terminating…' : 'Terminate'}
+        </button>
+      )}
+    </span>
+  )
+}
+
 export function ReviewDialog({
   title,
   subtitle,
@@ -709,6 +763,9 @@ export function ReviewDialog({
   aiStatus,
   aiWarning,
   aiModel,
+  aiStartedAt,
+  onCancelAi,
+  cancelAiPending,
   rows,
   onApplyRow,
   onCreateRule,
@@ -728,6 +785,13 @@ export function ReviewDialog({
   aiStatus: AiJobStatus
   aiWarning: string | null
   aiModel: string | null
+  // ISO timestamp the current AI pass started, or null when none is running
+  // - drives the running-time indicator and Terminate action below (the
+  // categorize call itself now has no server-side timeout, see
+  // ai_providers/ollama.py's CATEGORIZE_TIMEOUT comment).
+  aiStartedAt: string | null
+  onCancelAi: () => Promise<void>
+  cancelAiPending: boolean
   rows: ReviewRow[]
   onApplyRow: (row: ReviewRow, body: ApplyRowBody) => Promise<void>
   onCreateRule: (
@@ -959,13 +1023,16 @@ export function ReviewDialog({
                     ? { background: 'var(--color-danger-badge-bg)', color: 'var(--color-danger-badge-fg)' }
                     : aiStatus === 'done'
                       ? { background: SUCCESS_BG, color: SUCCESS_FG }
-                      : { background: AI_BADGE_BG, color: AI_BADGE_FG }
+                      : aiStatus === 'cancelled'
+                        ? { background: 'var(--color-input)', color: 'var(--color-muted-2)' }
+                        : { background: AI_BADGE_BG, color: AI_BADGE_FG }
                 }
               >
                 {aiStatus === 'running' && <Loader2 size={10} className="animate-spin shrink-0" />}
                 {aiStatus === 'running' && 'AI categorizing…'}
                 {aiStatus === 'done' && 'AI categorization complete'}
                 {aiStatus === 'failed' && 'AI categorization failed'}
+                {aiStatus === 'cancelled' && 'AI categorization cancelled'}
               </span>
             )}
             {/* Bulk-accepts every not-yet-applied AI suggestion in one
@@ -1004,11 +1071,14 @@ export function ReviewDialog({
           style={{ background: AI_BG, color: AI_BADGE_FG }}
         >
           <Loader2 size={14} className="animate-spin shrink-0" />
-          AI is categorizing leftover transactions with {aiModel}… you can keep working, or close this and check
-          back later.
+          <span className="flex-1">
+            AI is categorizing leftover transactions with {aiModel}… you can keep working, or close this and check
+            back later.
+          </span>
+          {aiStartedAt && <AiRunningTimer startedAt={aiStartedAt} onCancel={onCancelAi} cancelPending={cancelAiPending} />}
         </div>
       )}
-      {aiStatus === 'failed' && aiWarning && (
+      {(aiStatus === 'failed' || aiStatus === 'cancelled') && aiWarning && (
         <div
           className="rounded-2lg px-4 py-2.5 mb-4 text-xs"
           style={{ background: 'var(--color-warning-surface)', color: 'var(--color-warning-text)' }}
@@ -1178,8 +1248,16 @@ export function ReviewDialog({
         <DataTableHeader
           headerRef={columnHeaderRef}
           columns={ROW_COLUMNS}
-          gridClassName={ROW_GRID_COLS}
-          className="px-5 py-2.5 text-2xs text-muted-2 uppercase tracking-wide border-b border-border/70 sticky top-0 bg-input"
+          gridTemplate={ROW_GRID_TEMPLATE}
+          // z-10 is load-bearing, not decorative: a sticky element with no
+          // explicit z-index has stacking level "auto" and paints in DOM
+          // order like anything else, so later siblings in this scroller -
+          // the AI-pending banner, its Sparkles/skeleton-shimmer rows - would
+          // scroll up and paint OVER this header instead of staying under it
+          // once AI categorization is actually running with real pending
+          // rows (see Dashboard.tsx's feed header, which already carries the
+          // same z-10 for the identical reason).
+          className="px-5 py-2.5 text-2xs text-muted-2 uppercase tracking-wide border-b border-border/70 sticky top-0 z-10 bg-input"
         />
         {rows.length === 0 && <EmptyState icon={Inbox} title={emptyMessage} />}
         {rows.length > 0 && visibleRows.length === 0 && (
@@ -1200,8 +1278,11 @@ export function ReviewDialog({
             style={{ background: AI_BG, color: AI_BADGE_FG }}
           >
             <Loader2 size={12} className="animate-spin shrink-0" />
-            AI is categorizing these {aiPendingRows.length} transaction{aiPendingRows.length === 1 ? '' : 's'} with{' '}
-            {aiModel}… you can keep working, or close this and check back later.
+            <span className="flex-1">
+              AI is categorizing these {aiPendingRows.length} transaction{aiPendingRows.length === 1 ? '' : 's'} with{' '}
+              {aiModel}… you can keep working, or close this and check back later.
+            </span>
+            {aiStartedAt && <AiRunningTimer startedAt={aiStartedAt} onCancel={onCancelAi} cancelPending={cancelAiPending} />}
           </div>
         )}
         {orderedRows.map((row, i) => (

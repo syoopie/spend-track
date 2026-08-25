@@ -68,7 +68,7 @@ class AiProvider(Protocol):
 
 
 @contextmanager
-def cancellable_client(timeout: float, cancel_key: str | None) -> Iterator[httpx.Client]:
+def cancellable_client(timeout: float | None, cancel_key: str | None) -> Iterator[httpx.Client]:
     """A Client every provider's categorize() POST goes through instead of a
     bare module-level httpx.post - registered under cancel_key (typically
     the staging batch id) for the duration of the call so

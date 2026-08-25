@@ -124,6 +124,9 @@ export function RecategorizeReviewDialog({
       aiStatus={batch.ai_status}
       aiWarning={batch.ai_warning}
       aiModel={batch.ai_model}
+      aiStartedAt={batch.ai_started_at}
+      onCancelAi={() => actions.cancelAi(batch.batch_id)}
+      cancelAiPending={actions.cancelAiPending}
       rows={rows}
       onApplyRow={(row, body) => actions.applyRow(row.key, body)}
       onCreateRule={(_row, matchPattern, targetCategory, displayLabel) =>

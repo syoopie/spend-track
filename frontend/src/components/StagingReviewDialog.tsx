@@ -4,7 +4,10 @@ import { ErrorState } from './EmptyState'
 import { Modal } from './Modal'
 import { ReviewDialog, type ReviewRow, type ReviewStatCard } from './ReviewDialog'
 
-const SKELETON_ROW_COLS = 'grid-cols-[80px_1fr_180px_110px]'
+// A plain style value, not a Tailwind grid-cols-[...] class - see
+// DataTable.tsx's dataTableGridTemplate for why a class built from this
+// wouldn't actually have any CSS behind it.
+const SKELETON_ROW_TEMPLATE = '80px 1fr 180px 110px'
 
 // Three stat-card placeholders and eight shimmer rows at roughly the real
 // row height, so the dialog doesn't visibly resize once data arrives -
@@ -37,14 +40,21 @@ function StagingReviewSkeleton({ onClose }: { onClose: () => void }) {
         ))}
       </div>
       <div className="bg-input border border-border rounded-xl overflow-hidden mb-5">
-        <div className={`grid ${SKELETON_ROW_COLS} px-5 py-2.5 text-2xs text-muted-2 uppercase tracking-wide border-b border-border/70`}>
+        <div
+          className="grid px-5 py-2.5 text-2xs text-muted-2 uppercase tracking-wide border-b border-border/70"
+          style={{ gridTemplateColumns: SKELETON_ROW_TEMPLATE }}
+        >
           <div>Date</div>
           <div>Description</div>
           <div>Category</div>
           <div className="text-right">Amount</div>
         </div>
         {Array.from({ length: 8 }).map((_, i) => (
-          <div key={i} className={`grid ${SKELETON_ROW_COLS} items-center px-5 py-2.5 border-b border-border/70`}>
+          <div
+            key={i}
+            className="grid items-center px-5 py-2.5 border-b border-border/70"
+            style={{ gridTemplateColumns: SKELETON_ROW_TEMPLATE }}
+          >
             <div className="h-[13px] w-10 bg-border rounded animate-pulse" />
             <div className="h-[13px] bg-border rounded animate-pulse" style={{ width: `${55 + ((i * 13) % 30)}%` }} />
             <div className="h-[20px] w-24 bg-border rounded-full animate-pulse" />
@@ -144,6 +154,9 @@ export function StagingReviewDialog({ onClose }: { onClose: () => void }) {
       aiStatus={batch.ai_status}
       aiWarning={batch.ai_warning}
       aiModel={batch.ai_model}
+      aiStartedAt={batch.ai_started_at}
+      onCancelAi={() => actions.cancelAi(batch.batch_id)}
+      cancelAiPending={actions.cancelAiPending}
       rows={rows}
       onApplyRow={(row, body) => actions.applyRow(row.key, body)}
       onCreateRule={(_row, matchPattern, targetCategory, displayLabel) =>

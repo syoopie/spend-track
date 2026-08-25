@@ -4,8 +4,8 @@ import type { ReactNode } from 'react'
 // X-6 in UI Review.dc.html: every grid list in the app (the transaction
 // feed, Contacts, the review dialogs) hand-rolled its own column-width
 // string and header row. This centralizes just the column *template* (one
-// array drives both the header and, via dataTableGridClass, the row grid a
-// caller renders) plus real ARIA table semantics for the header.
+// array drives both the header and, via dataTableGridTemplate, the row grid
+// a caller renders) plus real ARIA table semantics for the header.
 //
 // Deliberately NOT a data-driven `render(row) => ReactNode` table that also
 // owns row rendering: the feed and the review dialogs' rows are each a
@@ -15,7 +15,7 @@ import type { ReactNode } from 'react'
 // Forcing role="row"/role="gridcell" onto an element that's already
 // role="button" would misdescribe what it actually is, not fix an
 // accessibility gap. Those callers use DataTableHeader for a real
-// role="row"/role="columnheader" header and dataTableGridClass for the
+// role="row"/role="columnheader" header and dataTableGridTemplate for the
 // shared column template, and keep their own row markup exactly as before.
 // Contacts' rows are plain (only the trailing edit button is interactive),
 // a genuine fit for full row/gridcell semantics too - see its own usage.
@@ -30,8 +30,23 @@ export interface DataTableColumn<F extends string = never> {
   sortKey?: F
 }
 
-export function dataTableGridClass(columns: DataTableColumn<string>[]): string {
-  return `grid-cols-[${columns.map((c) => c.width).join('_')}]`
+// Returns the raw `grid-template-columns` value for an inline style, NOT a
+// Tailwind class - a `grid-cols-[...]` class built from this string used to
+// be handed to `className` instead, but Tailwind's scanner only recognizes
+// arbitrary-value classes that appear as a literal, complete substring
+// somewhere in the source text it scans; one assembled at runtime from an
+// array (like this) never does, so `grid-cols-[...]` had no matching CSS
+// rule at all. It silently "worked" through most of one long dev session
+// only because Tailwind's dev-mode output is additive and an earlier,
+// literal version of the same string (before this got extracted into a
+// shared column-template array) was still sitting in the generated
+// stylesheet from before that change - restarting the dev server (a fresh
+// scan, nothing left over) or a real production build (which always scans
+// fresh) exposed every column collapsing to a single stacked line. `style`
+// has no such constraint since it's just a DOM property, not a class Tailwind
+// needs to have pre-generated.
+export function dataTableGridTemplate(columns: DataTableColumn<string>[]): string {
+  return columns.map((c) => c.width).join(' ')
 }
 
 function SortHeaderButton<F extends string>({
@@ -66,21 +81,21 @@ function SortHeaderButton<F extends string>({
 
 export function DataTableHeader<F extends string>({
   columns,
-  gridClassName,
+  gridTemplate,
   className = '',
   sort,
   onSort,
   headerRef,
 }: {
   columns: DataTableColumn<F>[]
-  gridClassName: string
+  gridTemplate: string
   className?: string
   sort?: { field: F; dir: 'asc' | 'desc' }
   onSort?: (field: F) => void
   headerRef?: React.Ref<HTMLDivElement>
 }) {
   return (
-    <div ref={headerRef} role="row" className={`grid ${gridClassName} ${className}`}>
+    <div ref={headerRef} role="row" className={`grid ${className}`} style={{ gridTemplateColumns: gridTemplate }}>
       {columns.map((col) => (
         <div
           key={col.key}
@@ -109,16 +124,16 @@ export function DataTableHeader<F extends string>({
 // role of its own - wraps children (one per column, caller's own order) in
 // role="row"/role="gridcell" using the same column template as the header.
 export function DataTableRow({
-  gridClassName,
+  gridTemplate,
   className = '',
   children,
 }: {
-  gridClassName: string
+  gridTemplate: string
   className?: string
   children: ReactNode
 }) {
   return (
-    <div role="row" className={`grid ${gridClassName} ${className}`}>
+    <div role="row" className={`grid ${className}`} style={{ gridTemplateColumns: gridTemplate }}>
       {children}
     </div>
   )

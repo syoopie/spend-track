@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, BackgroundTasks, File, Form, UploadFile
 
 from app import contact_directory, repo, rule_catalog
@@ -81,6 +83,7 @@ def _batch_to_response(batch: StagingBatch) -> StagingBatchOut:
         ai_status=batch.ai_status,
         ai_warning=batch.ai_warning,
         ai_model=batch.ai_model,
+        ai_started_at=batch.ai_started_at,
         ai_suggested_count=sum(1 for r in batch.rows if r.ai_suggested),
     )
 
@@ -244,6 +247,7 @@ async def upload_statement(
     if ai_settings["ai_enabled"] and candidates:
         batch.ai_status = "running"
         batch.ai_model = active_model_name(ai_settings)
+        batch.ai_started_at = datetime.now(timezone.utc)
         background_tasks.add_task(
             batch_review.run_ai_job,
             get_store(),
@@ -273,6 +277,30 @@ def get_staging_batch(batch_id: str):
         batch = get_store().get(batch_id)
     except KeyError:
         raise api_error(404, "STAGING_BATCH_NOT_FOUND", "No staging batch with that id.")
+    return _batch_to_response(batch)
+
+
+@router.post("/staging/{batch_id}/ai/cancel", response_model=StagingBatchOut)
+def cancel_staging_ai_job(batch_id: str):
+    """The Terminate action offered once the running-time indicator has been
+    up a while (see ReviewDialog.tsx) - now that the categorize call itself
+    has no timeout, this is the only way out of a run that's taking too
+    long. Sets ai_status to a distinct "cancelled" state (not "failed" -
+    the batch itself is fine, the user just chose to stop waiting) and
+    best-effort interrupts the in-flight HTTP call; job_runner.py's re-fetch
+    checks are what actually stop a call that wasn't interrupted from
+    overwriting this once it eventually returns. A no-op (just returns the
+    batch as-is) if nothing is running, so a doubled/late click can't do
+    anything odd."""
+    try:
+        batch = get_store().get(batch_id)
+    except KeyError:
+        raise api_error(404, "STAGING_BATCH_NOT_FOUND", "No staging batch with that id.")
+    if batch.ai_status == "running":
+        batch.ai_status = "cancelled"
+        batch.ai_warning = "AI categorization was cancelled."
+        batch.ai_started_at = None
+        ai_cancellation.cancel(batch_id)
     return _batch_to_response(batch)
 
 

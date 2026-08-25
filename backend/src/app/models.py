@@ -63,6 +63,7 @@ class StagingBatchOut(BaseModel):
     ai_status: str
     ai_warning: str | None
     ai_model: str | None
+    ai_started_at: datetime | None
     ai_suggested_count: int
 
 
@@ -205,6 +206,7 @@ class RecategorizeBatchOut(BaseModel):
     ai_status: str
     ai_warning: str | None
     ai_model: str | None
+    ai_started_at: datetime | None
     ai_suggested_count: int
 
 

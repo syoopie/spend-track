@@ -12,7 +12,7 @@ import { Button } from '../components/Button'
 import { Card } from '../components/Card'
 import { CategoryBadge } from '../components/CategoryBadge'
 import { categoryOptionElements } from '../components/CategoryOptions'
-import { DataTableCell, DataTableHeader, DataTableRow, dataTableGridClass, type DataTableColumn } from '../components/DataTable'
+import { DataTableCell, DataTableHeader, DataTableRow, dataTableGridTemplate, type DataTableColumn } from '../components/DataTable'
 import { EmptyState, ErrorState } from '../components/EmptyState'
 import { Field, Input } from '../components/Field'
 import { Modal } from '../components/Modal'
@@ -95,7 +95,7 @@ const CONTACT_COLUMNS: DataTableColumn[] = [
   { key: 'spend', header: 'Historical Spend', width: '140px', align: 'right' },
   { key: 'actions', header: '', width: '36px' },
 ]
-const CONTACT_GRID = dataTableGridClass(CONTACT_COLUMNS)
+const CONTACT_GRID_TEMPLATE = dataTableGridTemplate(CONTACT_COLUMNS)
 
 export function Contacts() {
   const contactsQ = useContacts()
@@ -134,7 +134,7 @@ export function Contacts() {
       <Card padding="" className="overflow-hidden" role="grid" aria-label="Contacts">
         <DataTableHeader
           columns={CONTACT_COLUMNS}
-          gridClassName={CONTACT_GRID}
+          gridTemplate={CONTACT_GRID_TEMPLATE}
           className="px-5 py-2.5 text-2xs text-muted-2 uppercase tracking-wide border-b border-divider"
         />
         {contactsQ.isLoading && <div className="p-5 text-muted text-sm">Loading…</div>}
@@ -154,7 +154,7 @@ export function Contacts() {
           />
         )}
         {(contactsQ.data ?? []).map((c) => (
-          <DataTableRow key={c.id} gridClassName={CONTACT_GRID} className="items-center px-5 py-3.5 text-md border-b border-divider">
+          <DataTableRow key={c.id} gridTemplate={CONTACT_GRID_TEMPLATE} className="items-center px-5 py-3.5 text-md border-b border-divider">
             <DataTableCell className="font-semibold">{c.name}</DataTableCell>
             <DataTableCell>
               <div className="flex gap-1.5 flex-wrap">

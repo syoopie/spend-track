@@ -21,7 +21,9 @@ from app.engine.ai_providers.base import (
 from app.engine.ai_providers.prompts import build_prompt
 
 HEALTH_TIMEOUT = 5.0
-CATEGORIZE_TIMEOUT = 90.0
+# See ollama.py's identical constant - no timeout on the categorize call
+# itself, a real Cancel action replaces it.
+CATEGORIZE_TIMEOUT = None
 
 
 class OpenAiCompatibleProvider:

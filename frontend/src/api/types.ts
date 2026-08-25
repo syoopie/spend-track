@@ -35,7 +35,7 @@ export interface BatchRow {
   ai_rule_pattern: string | null
 }
 
-export type AiJobStatus = 'disabled' | 'running' | 'done' | 'failed'
+export type AiJobStatus = 'disabled' | 'running' | 'done' | 'failed' | 'cancelled'
 
 export interface StagingBatch {
   batch_id: string
@@ -51,6 +51,7 @@ export interface StagingBatch {
   ai_status: AiJobStatus
   ai_warning: string | null
   ai_model: string | null
+  ai_started_at: string | null
   ai_suggested_count: number
 }
 
@@ -169,6 +170,7 @@ export interface RecategorizeBatch {
   ai_status: AiJobStatus
   ai_warning: string | null
   ai_model: string | null
+  ai_started_at: string | null
   ai_suggested_count: number
 }
 

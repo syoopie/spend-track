@@ -102,12 +102,19 @@ class StagingBatch:
     # happened, not just that one is pending.
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     # "disabled" (AI off), "running" (background categorization in flight),
-    # "done", "failed" (unreachable/errored - see ai_warning). Set once right
-    # after the batch is created in upload_statement() and mutated in place
-    # by the background task - see routers/statements.py.
+    # "done", "failed" (unreachable/errored - see ai_warning), "cancelled"
+    # (the user hit Terminate - see routers/statements.py's ai/cancel
+    # endpoint). Set once right after the batch is created in
+    # upload_statement() and mutated in place by the background task - see
+    # routers/statements.py.
     ai_status: str = "disabled"
     ai_warning: str | None = None
     ai_model: str | None = None
+    # Set alongside ai_status="running", cleared on any terminal status -
+    # lets the frontend show how long the current AI pass has been running
+    # (and, past some threshold, offer to cancel it) without needing its own
+    # clock synchronized to the server's.
+    ai_started_at: datetime | None = None
     # Whether any card account was known at parse time - see engine/rules.py
     # categorize()'s has_card_account parameter. Stored on the batch (one
     # value for the whole upload) so engine/rule_rerun.py can re-call

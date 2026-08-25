@@ -320,6 +320,19 @@ function useDiscardPendingBatch(kind: BatchKind) {
   })
 }
 
+function useCancelAiJob(kind: BatchKind) {
+  const qc = useQueryClient()
+  const toast = useToast()
+  return useMutation({
+    mutationFn: (batchId: string) => api.post<StagingBatch | RecategorizeBatch>(`${batchUrl(kind, batchId)}/ai/cancel`),
+    onSuccess: (data) => {
+      qc.setQueryData([batchQueryKey(kind), 'current'], data)
+      toast.success('AI categorization cancelled.')
+    },
+    onError: (err) => toast.error(errMsg(err, "Couldn't cancel AI categorization.")),
+  })
+}
+
 export interface BatchActions {
   // No applyPending here - editing a row is optimistic now (REV-2 in
   // UI Review.dc.html), and each ReviewRowPopover field tracks its own
@@ -338,6 +351,8 @@ export interface BatchActions {
   commitPending: boolean
   discard: (batchId: string) => Promise<void>
   discardPending: boolean
+  cancelAi: (batchId: string) => Promise<void>
+  cancelAiPending: boolean
 }
 
 // The one bundle of apply/createRule/undoRule/commit/discard callbacks plus
@@ -349,6 +364,7 @@ export function useBatchActions(kind: BatchKind, batchId: string): BatchActions 
   const undoRule = useUndoRuleFromBatch(kind, batchId)
   const commit = useCommitPendingBatch(kind)
   const discard = useDiscardPendingBatch(kind)
+  const cancelAi = useCancelAiJob(kind)
 
   return {
     applyRow: (key, body) => updateRow.mutateAsync({ key, body }).then(() => {}),
@@ -361,6 +377,8 @@ export function useBatchActions(kind: BatchKind, batchId: string): BatchActions 
     commitPending: commit.isPending,
     discard: (id) => discard.mutateAsync(id).then(() => {}),
     discardPending: discard.isPending,
+    cancelAi: (id) => cancelAi.mutateAsync(id).then(() => {}),
+    cancelAiPending: cancelAi.isPending,
   }
 }
 

@@ -1,4 +1,5 @@
 import sqlite3
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Query
 
@@ -69,6 +70,7 @@ def _batch_to_out(batch: recategorize_job.RecategorizeBatch) -> RecategorizeBatc
         ai_status=batch.ai_status,
         ai_warning=batch.ai_warning,
         ai_model=batch.ai_model,
+        ai_started_at=batch.ai_started_at,
         ai_suggested_count=sum(1 for r in batch.rows if r.ai_suggested),
     )
 
@@ -248,9 +250,11 @@ def recategorize_transactions(body: RecategorizeRequest, background_tasks: Backg
     if ai_settings["ai_enabled"] and ai_candidates:
         ai_status = "running"
         ai_model = active_model_name(ai_settings)
+        ai_started_at = datetime.now(timezone.utc)
     else:
         ai_status = "done" if ai_settings["ai_enabled"] else "disabled"
         ai_model = None
+        ai_started_at = None
 
     batch = recategorize_job.RecategorizeBatch(
         date_from=body.date_from,
@@ -261,6 +265,7 @@ def recategorize_transactions(body: RecategorizeRequest, background_tasks: Backg
         rows=rows_out,
         ai_status=ai_status,
         ai_model=ai_model,
+        ai_started_at=ai_started_at,
         has_card_account=has_card_account,
     )
     try:
@@ -290,6 +295,21 @@ def get_current_recategorize_batch():
     batch = recategorize_job.current()
     if batch is None:
         raise api_error(404, "NO_RECATEGORIZE_BATCH", "No recategorize batch is currently pending.")
+    return _batch_to_out(batch)
+
+
+@router.post("/recategorize/{batch_id}/ai/cancel", response_model=RecategorizeBatchOut)
+def cancel_recategorize_ai_job(batch_id: str):
+    """See statements.py::cancel_staging_ai_job - identical contract, mirrored
+    for the recategorize batch's own AI pass."""
+    batch = recategorize_job.get_by_id(batch_id)
+    if batch is None:
+        raise api_error(404, "RECATEGORIZE_BATCH_NOT_FOUND", "No recategorize batch with that id.")
+    if batch.ai_status == "running":
+        batch.ai_status = "cancelled"
+        batch.ai_warning = "AI categorization was cancelled."
+        batch.ai_started_at = None
+        ai_cancellation.cancel(batch_id)
     return _batch_to_out(batch)
 
 
