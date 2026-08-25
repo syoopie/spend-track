@@ -5,6 +5,10 @@ these fixtures are safe to commit and always available, so this suite runs
 on every clone without needing real bank statements.
 """
 
+import glob
+import os
+import re
+
 import pdfplumber
 import pytest
 
@@ -13,6 +17,18 @@ from app.parsing.uob import account_statement as astmt
 from app.parsing.uob import card_statement as cstmt
 
 SAMPLE_DIR = "../PDF Examples (Sanitized)/UOB"
+
+
+def _printed_totals(path: str) -> dict[str, float]:
+    """The withdrawals/deposits figures the statement itself prints on its
+    `Total` row - the parser's own output is checked against these rather
+    than against numbers copied out of the generator, so the two can't drift
+    together."""
+    with pdfplumber.open(path) as pdf:
+        text = "\n".join(page.extract_text() or "" for page in pdf.pages)
+    line = next(ln for ln in text.splitlines() if ln.strip().startswith("Total"))
+    amounts = [float(a.replace(",", "")) for a in re.findall(r"[\d,]+\.\d{2}", line)]
+    return {"withdrawals": amounts[0], "deposits": amounts[1]}
 
 
 def _parse_account(filename):
@@ -137,3 +153,37 @@ def test_card_statement_multi_card_attributes_transactions_to_the_right_card():
     assert card2.account_type == "UOB SAMPLE TRAVEL CARD"
     assert len(card2.transactions) == 3
     assert card2.transactions[1].amount == 200.00  # the PAYMT THRU E-BANK credit
+
+
+# --- every month in the folder, not just the hand-picked fixtures ---------
+# The tests above pin specific values in the Jan-Jun statements. These two
+# walk whatever is actually in the folder, so a month added to the generator
+# later (for a fuller demo dataset, say) is covered the day it lands instead
+# of only when someone remembers to write a test for it.
+
+ACCOUNT_STATEMENTS = sorted(glob.glob(f"{SAMPLE_DIR}/Account Statements/*.pdf"))
+CARD_STATEMENTS = sorted(glob.glob(f"{SAMPLE_DIR}/Card Statements/*.pdf"))
+
+
+@pytest.mark.parametrize("path", ACCOUNT_STATEMENTS, ids=lambda p: os.path.basename(p))
+def test_every_account_statement_reconciles_against_its_own_printed_total(path):
+    with pdfplumber.open(path) as pdf:
+        result = astmt.parse(pdf.pages)
+    acc = result.accounts[0]
+    assert acc.transactions, "a statement with no parsed transactions is a parser failure, not an empty month"
+
+    printed = _printed_totals(path)
+    withdrawals = round(sum(-t.amount for t in acc.transactions if t.amount < 0), 2)
+    deposits = round(sum(t.amount for t in acc.transactions if t.amount > 0), 2)
+    assert withdrawals == printed["withdrawals"]
+    assert deposits == printed["deposits"]
+
+
+@pytest.mark.parametrize("path", CARD_STATEMENTS, ids=lambda p: os.path.basename(p))
+def test_every_card_statement_parses_at_least_one_card_with_transactions(path):
+    with pdfplumber.open(path) as pdf:
+        result = cstmt.parse(pdf.pages)
+    assert result.accounts
+    for acc in result.accounts:
+        assert acc.transactions
+        assert acc.account_number.startswith("0000-")  # placeholder card numbers only

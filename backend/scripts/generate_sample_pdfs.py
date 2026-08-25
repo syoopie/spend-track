@@ -322,6 +322,80 @@ def _opening_balance_for_closing(txns: list[AccountTxn], target_closing: float) 
     return round(target_closing - net, 2)
 
 
+# --------------------------------------------------------------------------
+# Row builders for the Jul-Dec months
+# --------------------------------------------------------------------------
+# The Jan-Jun statements below are written out longhand and must stay exactly
+# as they are - tests/test_sanitized_sample_parsers.py asserts their totals
+# and transaction counts by name. The six months added after them exist to
+# make the dataset look like a real year in the UI (a full cash-flow chart, a
+# donut with every category in it, a ranked merchant list), and repeating the
+# same four-line description shapes ~130 more times by hand would bury that
+# intent in boilerplate. Merchant strings are chosen to hit patterns in
+# engine/default_rules.py, so the demo data categorizes itself the way a real
+# statement would; every name, number and counterparty is still a placeholder.
+
+
+def nets(date: str, merchant: str, seq: int, amount: float) -> AccountTxn:
+    """A NETS card purchase, the most common shape in a real statement."""
+    return AccountTxn(date, ["NETS Debit-Consumer", f"{merchant} {seq:08d}", "xxxxxx0000"], withdrawal=amount)
+
+
+def direct(date: str, merchant: str, amount: float) -> AccountTxn:
+    """A merchant that posts as a single description line (online/recurring)."""
+    return AccountTxn(date, [merchant], withdrawal=amount)
+
+
+def paynow_out(date: str, seq: int, payee: str, amount: float, via: str = "Mobile") -> AccountTxn:
+    return AccountTxn(date, ["PAYNOW-FAST", f"PIB{seq:016d}", payee, f"OTHR Transfer - {via}"], withdrawal=amount)
+
+
+def paynow_in(date: str, seq: int, payer: str, amount: float) -> AccountTxn:
+    return AccountTxn(date, ["PAYNOW-FAST", f"PIB{seq:016d}", payer, "OTHR Transfer - Mobile"], deposit=amount)
+
+
+def salary(date: str, amount: float = 3200.00) -> AccountTxn:
+    return AccountTxn(
+        date, ["Inward CR - GIRO", "SALA Salary Payment", "SAMPLE EMPLOYER PTE LTD", "SALARY"], deposit=amount
+    )
+
+
+def card_bill(date: str, amount: float) -> AccountTxn:
+    """Paying off the sample credit card - the transaction the card-payment
+    heuristic excludes once the matching card statement is also loaded."""
+    return AccountTxn(date, ["Bill Payment", "mBK-UOB Cards", "0000111122223333"], withdrawal=amount)
+
+
+def giro_out(date: str, ref_code: str, payee: str, particulars: str, amount: float) -> AccountTxn:
+    return AccountTxn(date, ["Inward Dr Giro Othr", ref_code, payee, particulars], withdrawal=amount)
+
+
+def interest(date: str, amount: float) -> AccountTxn:
+    return AccountTxn(date, ["Interest Credit"], deposit=amount)
+
+
+def self_transfer(date: str, amount: float) -> AccountTxn:
+    """Money moved to the customer's own savings account - not spending. The
+    app has no way to know that from the text alone, which is exactly what an
+    exclusion rule is for; the demo dataset carries a few so that feature has
+    something real to act on."""
+    return AccountTxn(date, ["Funds Transfer", "TO SAMPLE SAVINGS ACCOUNT", "SELF TRANSFER"], withdrawal=amount)
+
+
+def dividend(date: str, counterparty: str, amount: float) -> AccountTxn:
+    return AccountTxn(date, ["Inward CR - GIRO", "DIVIDEND", counterparty], deposit=amount)
+
+
+def purchase(post: str, trans: str, merchant: str, amount: float, seq: int) -> CardTxn:
+    """A card charge. `amount` is given positive here and stored negative,
+    matching CardTxn's convention (negative = charge)."""
+    return CardTxn(post, trans, [f"{merchant} SINGAPORE", ref(seq)], amount=-amount)
+
+
+def card_payment(date: str, amount: float) -> CardTxn:
+    return CardTxn(date, date, ["PAYMT THRU E-BANK/HOMEB/CYBERB (SAMPLE)"], amount=amount)
+
+
 def main():
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -465,7 +539,7 @@ def main():
         AccountTxn("26 Jun", ["HOME-FIX SINGAPORE"], withdrawal=45.60),
         AccountTxn("30 Jun", ["Interest Credit"], deposit=2.10),
     ]
-    generate_account_statement(
+    _, jun_closing = generate_account_statement(
         "SampleAccountStatement_Jun2024.pdf",
         "01 Jun 2024 to 30 Jun 2024",
         "01 Jun",
@@ -474,6 +548,207 @@ def main():
         opening_balance=may_closing,
         txns=txns5,
     )
+
+
+    # ---- Account statements 6-11: Jul-Dec 2024 -------------------------
+    # Denser months, built from the row helpers above. Jan-Jun are the
+    # parser's regression fixtures and stay exactly as they are; these six
+    # exist so a fresh clone that uploads the whole folder gets a year of
+    # history with every category populated, instead of a dashboard with
+    # three bars on it.
+    months: list[tuple[str, str, str, list[AccountTxn]]] = [
+        (
+            "SampleAccountStatement_Jul2024.pdf",
+            "01 Jul 2024 to 31 Jul 2024",
+            "01 Jul",
+            [
+                nets("02 Jul", "NTUC FAIRPRICE", 20, 52.30),
+                card_bill("03 Jul", 210.00),
+                direct("04 Jul", "SINGTEL MOBILE SINGAPORE", 42.90),
+                paynow_out("05 Jul", 101, "SAMPLE PAYEE A", 30.00),
+                nets("06 Jul", "TOAST BOX", 21, 8.40),
+                giro_out("08 Jul", "E18127522511", "Income Insurance Lim", "1812752270", 210.50),
+                direct("09 Jul", "GOLDEN VILLAGE VIVOCITY", 28.00),
+                paynow_out("10 Jul", 102, "SAMPLE TUITION CENTRE", 180.00, via="UEN"),
+                direct("11 Jul", "SP GROUP", 138.20),
+                nets("12 Jul", "DON DON DONKI", 22, 44.60),
+                salary("15 Jul"),
+                self_transfer("14 Jul", 800.00),
+                direct("16 Jul", "SPOTIFY SINGAPORE", 11.98),
+                paynow_out("17 Jul", 103, "INTERACTIVE BR SG- R", 600.00),
+                direct("18 Jul", "UNIQLO SINGAPORE", 79.90),
+                nets("19 Jul", "GUARDIAN PHARMACY", 23, 18.75),
+                paynow_out("21 Jul", 104, "SAMPLE PAYEE B", 18.50),
+                direct("23 Jul", "ACTIVESG SPORTS HUB", 24.00),
+                direct("25 Jul", "TOWN COUNCIL CONSERVANCY", 76.50),
+                paynow_in("26 Jul", 105, "SAMPLE PAYEE D", 45.00),
+                nets("28 Jul", "SHENG SIONG", 24, 38.90),
+                direct("30 Jul", "COURSERA SINGAPORE", 52.00),
+                interest("31 Jul", 2.34),
+            ],
+        ),
+        (
+            "SampleAccountStatement_Aug2024.pdf",
+            "01 Aug 2024 to 31 Aug 2024",
+            "01 Aug",
+            [
+                nets("01 Aug", "COLD STORAGE", 25, 61.40),
+                card_bill("03 Aug", 268.40),
+                direct("04 Aug", "SAMPLE ONLINE STORE", 128.00),
+                paynow_out("05 Aug", 106, "SAMPLE BADMINTON CLUB", 60.00, via="UEN"),
+                direct("06 Aug", "GRABCAR SINGAPORE", 21.60),
+                nets("07 Aug", "KOI THE", 26, 6.20),
+                giro_out("08 Aug", "E18127522512", "Income Insurance Lim", "1812752271", 210.50),
+                AccountTxn("10 Aug", ["SAMPLE ONLINE STORE REFUND"], deposit=128.00),
+                direct("12 Aug", "NETFLIX.COM", 19.98),
+                paynow_out("13 Aug", 107, "SAMPLE PAYEE C", 95.00, via="UEN"),
+                salary("15 Aug"),
+                direct("16 Aug", "RAFFLES MEDICAL CLINIC", 96.00),
+                nets("17 Aug", "NTUC FAIRPRICE", 27, 47.15),
+                paynow_out("19 Aug", 108, "INTERACTIVE BR SG- R", 450.00),
+                direct("20 Aug", "SP GROUP", 151.30),
+                direct("22 Aug", "IKEA SINGAPORE", 112.40),
+                paynow_out("23 Aug", 109, "SAMPLE PAYEE B", 18.50),
+                nets("25 Aug", "WATSONS", 28, 26.80),
+                direct("27 Aug", "SINGTEL MOBILE SINGAPORE", 42.90),
+                paynow_out("29 Aug", 110, "SAMPLE TUITION CENTRE", 180.00, via="UEN"),
+                interest("31 Aug", 2.51),
+            ],
+        ),
+        (
+            "SampleAccountStatement_Sep2024.pdf",
+            "01 Sep 2024 to 30 Sep 2024",
+            "01 Sep",
+            [
+                nets("02 Sep", "SHENG SIONG", 29, 43.20),
+                card_bill("03 Sep", 302.10),
+                direct("04 Sep", "TOWN COUNCIL CONSERVANCY", 76.50),
+                paynow_out("05 Sep", 111, "SAMPLE PAYEE A", 30.00),
+                direct("06 Sep", "ANYTIME FITNESS SINGAPORE", 120.00),
+                nets("07 Sep", "DOMINOS PIZZA", 30, 27.90),
+                giro_out("09 Sep", "E18127522513", "Income Insurance Lim", "1812752272", 210.50),
+                direct("10 Sep", "SPECSAVERS SINGAPORE", 268.00),
+                paynow_out("11 Sep", 112, "SAMPLE RENOVATION LLP", 850.00, via="UEN"),
+                direct("12 Sep", "SP GROUP", 142.80),
+                salary("13 Sep"),
+                self_transfer("14 Sep", 800.00),
+                dividend("16 Sep", "SAMPLE REIT DISTRIBUTION", 86.40),
+                direct("17 Sep", "SPOTIFY SINGAPORE", 11.98),
+                nets("18 Sep", "DON DON DONKI", 31, 52.70),
+                paynow_out("19 Sep", 113, "SAMPLE PAYEE B", 18.50),
+                direct("21 Sep", "SHOPEE *ORDER SINGAPORE", 64.30),
+                direct("23 Sep", "SINGTEL MOBILE SINGAPORE", 42.90),
+                nets("24 Sep", "HAIR SALON STUDIO", 32, 45.00),
+                paynow_out("26 Sep", 114, "SAMPLE TUITION CENTRE", 180.00, via="UEN"),
+                direct("27 Sep", "GRABCAR SINGAPORE", 18.40),
+                paynow_in("28 Sep", 115, "SAMPLE PAYEE E", 120.00),
+                interest("30 Sep", 2.68),
+            ],
+        ),
+        (
+            "SampleAccountStatement_Oct2024.pdf",
+            "01 Oct 2024 to 31 Oct 2024",
+            "01 Oct",
+            [
+                nets("01 Oct", "NTUC FAIRPRICE", 33, 58.90),
+                card_bill("03 Oct", 241.75),
+                direct("04 Oct", "SP GROUP", 133.40),
+                paynow_out("05 Oct", 116, "SAMPLE BADMINTON CLUB", 60.00, via="UEN"),
+                nets("06 Oct", "LUCKIN COFFEE", 34, 7.60),
+                giro_out("08 Oct", "E18127522514", "Income Insurance Lim", "1812752273", 210.50),
+                direct("09 Oct", "DECATHLON SINGAPORE", 88.00),
+                paynow_out("10 Oct", 117, "SAMPLE PAYEE C", 120.00, via="UEN"),
+                direct("11 Oct", "SISTIC SINGAPORE", 96.00),
+                salary("15 Oct"),
+                direct("16 Oct", "UNITY PHARMACY SINGAPORE", 32.40),
+                nets("17 Oct", "COLD STORAGE", 35, 49.80),
+                paynow_out("18 Oct", 118, "INTERACTIVE BR SG- R", 500.00),
+                direct("19 Oct", "TOWN COUNCIL CONSERVANCY", 76.50),
+                direct("21 Oct", "LAZADA SINGAPORE", 73.20),
+                paynow_out("22 Oct", 119, "SAMPLE PAYEE B", 18.50),
+                direct("24 Oct", "SINGTEL MOBILE SINGAPORE", 42.90),
+                nets("25 Oct", "SEPHORA", 36, 84.00),
+                AccountTxn("27 Oct", ["Inward DR - GIRO", "TAXS S0000000D", "IRAS", "Income Tax"], withdrawal=180.00),
+                paynow_out("29 Oct", 120, "SAMPLE TUITION CENTRE", 180.00, via="UEN"),
+                interest("31 Oct", 2.72),
+            ],
+        ),
+        (
+            "SampleAccountStatement_Nov2024.pdf",
+            "01 Nov 2024 to 30 Nov 2024",
+            "01 Nov",
+            [
+                nets("02 Nov", "SHENG SIONG", 37, 46.30),
+                card_bill("04 Nov", 289.60),
+                direct("05 Nov", "SP GROUP", 147.90),
+                paynow_out("06 Nov", 121, "SAMPLE PAYEE A", 30.00),
+                nets("07 Nov", "TOAST BOX", 38, 9.20),
+                giro_out("08 Nov", "E18127522515", "Income Insurance Lim", "1812752274", 210.50),
+                direct("09 Nov", "SAMPLE AIRLINE BOOKING", 620.00),
+                paynow_out("11 Nov", 122, "SAMPLE PAYEE D", 75.00),
+                direct("12 Nov", "GOLDEN VILLAGE VIVOCITY", 34.00),
+                salary("15 Nov"),
+                self_transfer("14 Nov", 800.00),
+                direct("16 Nov", "SPOTIFY SINGAPORE", 11.98),
+                nets("17 Nov", "NTUC FAIRPRICE", 39, 63.40),
+                paynow_out("18 Nov", 123, "INTERACTIVE BR SG- R", 550.00),
+                direct("19 Nov", "HOME-FIX SINGAPORE", 58.20),
+                direct("20 Nov", "TOWN COUNCIL CONSERVANCY", 76.50),
+                nets("21 Nov", "KINOKUNIYA", 40, 62.00),
+                paynow_out("22 Nov", 124, "SAMPLE PAYEE B", 18.50),
+                direct("24 Nov", "SINGTEL MOBILE SINGAPORE", 42.90),
+                direct("26 Nov", "POLYCLINIC SINGAPORE", 28.00),
+                paynow_out("27 Nov", 125, "SAMPLE TUITION CENTRE", 180.00, via="UEN"),
+                nets("29 Nov", "DON DON DONKI", 41, 41.10),
+                interest("30 Nov", 2.85),
+            ],
+        ),
+        (
+            "SampleAccountStatement_Dec2024.pdf",
+            "01 Dec 2024 to 31 Dec 2024",
+            "01 Dec",
+            [
+                nets("02 Dec", "COLD STORAGE", 42, 71.20),
+                card_bill("03 Dec", 316.40),
+                direct("04 Dec", "SP GROUP", 156.70),
+                paynow_out("05 Dec", 126, "SAMPLE PAYEE C", 140.00, via="UEN"),
+                direct("06 Dec", "SAMPLE ONLINE STORE", 96.50),
+                nets("07 Dec", "CHAGEE", 43, 8.80),
+                giro_out("09 Dec", "E18127522516", "Income Insurance Lim", "1812752275", 210.50),
+                AccountTxn("10 Dec", ["SAMPLE ONLINE STORE REFUND"], deposit=96.50),
+                direct("11 Dec", "TAKASHIMAYA SINGAPORE", 184.00),
+                salary("13 Dec"),
+                AccountTxn(
+                    "13 Dec",
+                    ["Inward CR - GIRO", "SALA Salary Payment", "SAMPLE EMPLOYER PTE LTD", "ANNUAL BONUS"],
+                    deposit=4800.00,
+                ),
+                paynow_out("16 Dec", 127, "SAMPLE PAYEE A", 60.00),
+                direct("17 Dec", "SINGTEL MOBILE SINGAPORE", 42.90),
+                nets("18 Dec", "NTUC FAIRPRICE", 44, 88.60),
+                paynow_out("19 Dec", 128, "INTERACTIVE BR SG- R", 1200.00),
+                direct("20 Dec", "TOWN COUNCIL CONSERVANCY", 76.50),
+                direct("21 Dec", "SENTOSA SINGAPORE", 118.00),
+                paynow_out("22 Dec", 129, "SAMPLE PAYEE B", 18.50),
+                nets("23 Dec", "GUARDIAN PHARMACY", 45, 24.90),
+                direct("27 Dec", "GRABCAR SINGAPORE", 26.80),
+                paynow_out("28 Dec", 130, "SAMPLE RENOVATION LLP", 420.00, via="UEN"),
+                interest("31 Dec", 3.06),
+            ],
+        ),
+    ]
+
+    running_open = jun_closing
+    for filename, period_label, period_start, month_txns in months:
+        _, running_open = generate_account_statement(
+            filename,
+            period_label,
+            period_start,
+            "One Account",
+            "000-111-222-3",
+            opening_balance=running_open,
+            txns=month_txns,
+        )
 
     # ---- Card statement 0: single card, Jan 2024 (first statement of the
     # card's history in this dataset - no PAYMT credit yet) ----
@@ -596,6 +871,140 @@ def main():
         txns=card5_txns,
     )
     generate_card_statement("SampleCardStatement_Jun2024.pdf", "20 JUN 2024", "12 JUL 2024", [card5])
+
+
+    # ---- Card statements 6-11: Jul-Dec 2024 ----------------------------
+    # Each PAYMT credit matches that month's "Bill Payment mBK-UOB Cards"
+    # row in the account statement above, so loading both halves of the year
+    # exercises the card-bill exclusion on every month rather than one.
+    card_months: list[tuple[str, str, str, float, float, list[CardTxn]]] = [
+        (
+            "SampleCardStatement_Jul2024.pdf", "20 JUL 2024", "12 AUG 2024", 210.00, 45.00,
+            [
+                card_payment("03 JUL", 210.00),
+                purchase("05 JUL", "04 JUL", "BUS/MRT 000000020", 2.50, 31),
+                purchase("07 JUL", "06 JUL", "FOUR LEAVES", 9.80, 32),
+                purchase("09 JUL", "08 JUL", "GRABCAR", 14.60, 33),
+                purchase("11 JUL", "10 JUL", "DAISO", 12.00, 34),
+                purchase("13 JUL", "12 JUL", "NETFLIX.COM", 19.98, 35),
+                purchase("15 JUL", "14 JUL", "DOMINOS PIZZA", 31.40, 36),
+                purchase("17 JUL", "16 JUL", "MUJI", 46.90, 37),
+                purchase("19 JUL", "18 JUL", "BUS/MRT 000000021", 2.20, 38),
+                purchase("21 JUL", "20 JUL", "GUARDIAN", 21.30, 39),
+                purchase("23 JUL", "22 JUL", "KOI THE", 6.20, 40),
+                purchase("25 JUL", "24 JUL", "SHELL", 68.00, 41),
+                purchase("27 JUL", "26 JUL", "CHALLENGER", 89.00, 42),
+            ],
+        ),
+        (
+            "SampleCardStatement_Aug2024.pdf", "20 AUG 2024", "12 SEP 2024", 268.40, 60.00,
+            [
+                card_payment("03 AUG", 268.40),
+                purchase("04 AUG", "03 AUG", "BUS/MRT 000000022", 2.50, 43),
+                purchase("06 AUG", "05 AUG", "LUCKIN COFFEE", 5.40, 44),
+                purchase("08 AUG", "07 AUG", "COMFORTDELGRO", 22.80, 45),
+                purchase("10 AUG", "09 AUG", "UNIQLO", 59.90, 46),
+                purchase("12 AUG", "11 AUG", "SPOTIFY", 11.98, 47),
+                purchase("14 AUG", "13 AUG", "SUPERGREEN", 16.50, 48),
+                purchase("16 AUG", "15 AUG", "REDMART", 78.40, 49),
+                purchase("18 AUG", "17 AUG", "GOLDEN VILLAGE", 26.00, 50),
+                purchase("20 AUG", "19 AUG", "BUS/MRT 000000023", 2.20, 51),
+                purchase("22 AUG", "21 AUG", "THE BODY SHOP", 44.00, 52),
+                purchase("24 AUG", "23 AUG", "STEAM GAMES", 34.90, 53),
+                purchase("26 AUG", "25 AUG", "KAJIKEN", 18.60, 54),
+                purchase("28 AUG", "27 AUG", "CALTEX", 72.00, 55),
+            ],
+        ),
+        (
+            "SampleCardStatement_Sep2024.pdf", "20 SEP 2024", "12 OCT 2024", 302.10, 55.00,
+            [
+                card_payment("03 SEP", 302.10),
+                purchase("05 SEP", "04 SEP", "BUS/MRT 000000024", 2.50, 56),
+                purchase("07 SEP", "06 SEP", "TOAST BOX", 7.80, 57),
+                purchase("09 SEP", "08 SEP", "GRABCAR", 19.40, 58),
+                purchase("11 SEP", "10 SEP", "APPLE.COM/BILL", 12.98, 59),
+                purchase("13 SEP", "12 SEP", "DON DON DONKI", 54.20, 60),
+                purchase("15 SEP", "14 SEP", "SHAW THEATRE", 28.00, 61),
+                purchase("17 SEP", "16 SEP", "ZARA", 118.00, 62),
+                purchase("19 SEP", "18 SEP", "BUS/MRT 000000025", 2.20, 63),
+                purchase("21 SEP", "20 SEP", "WATSONS", 32.60, 64),
+                purchase("23 SEP", "22 SEP", "CHAGEE", 8.40, 65),
+                purchase("25 SEP", "24 SEP", "CLIMB CENTRAL", 38.00, 66),
+                purchase("27 SEP", "26 SEP", "ESSO", 65.50, 67),
+            ],
+        ),
+        (
+            "SampleCardStatement_Oct2024.pdf", "20 OCT 2024", "12 NOV 2024", 241.75, 48.00,
+            [
+                card_payment("03 OCT", 241.75),
+                purchase("05 OCT", "04 OCT", "BUS/MRT 000000026", 2.50, 68),
+                purchase("07 OCT", "06 OCT", "YAMAZAKI", 11.20, 69),
+                purchase("09 OCT", "08 OCT", "CDG ZIG", 24.30, 70),
+                purchase("11 OCT", "10 OCT", "YOUTUBE PREMIUM", 11.98, 71),
+                purchase("13 OCT", "12 OCT", "FAIRPRICE FINEST", 62.80, 72),
+                purchase("15 OCT", "14 OCT", "UNIVERSAL STUDIOS", 84.00, 73),
+                purchase("17 OCT", "16 OCT", "MARKS & SPENCER", 96.40, 74),
+                purchase("19 OCT", "18 OCT", "BUS/MRT 000000027", 2.20, 75),
+                purchase("21 OCT", "20 OCT", "INNISFREE", 38.90, 76),
+                purchase("23 OCT", "22 OCT", "BIRDS OF PARADISE", 9.60, 77),
+                purchase("25 OCT", "24 OCT", "POPULAR BOOKSTORE", 42.00, 78),
+                purchase("27 OCT", "26 OCT", "SHELL", 70.20, 79),
+                purchase("29 OCT", "28 OCT", "DENTAL SURGERY", 180.00, 80),
+            ],
+        ),
+        (
+            "SampleCardStatement_Nov2024.pdf", "20 NOV 2024", "12 DEC 2024", 289.60, 52.00,
+            [
+                card_payment("04 NOV", 289.60),
+                purchase("06 NOV", "05 NOV", "BUS/MRT 000000028", 2.50, 81),
+                purchase("08 NOV", "07 NOV", "LUCKIN COFFEE", 5.40, 82),
+                purchase("10 NOV", "09 NOV", "GRABCAR", 17.80, 83),
+                purchase("12 NOV", "11 NOV", "SPOTIFY", 11.98, 84),
+                purchase("14 NOV", "13 NOV", "SHENG SIONG", 48.60, 85),
+                purchase("16 NOV", "15 NOV", "SISTIC", 68.00, 86),
+                purchase("18 NOV", "17 NOV", "TAOBAO", 54.20, 87),
+                purchase("20 NOV", "19 NOV", "BUS/MRT 000000029", 2.20, 88),
+                purchase("22 NOV", "21 NOV", "SASA", 29.90, 89),
+                purchase("24 NOV", "23 NOV", "MAIXIANG", 14.80, 90),
+                purchase("26 NOV", "25 NOV", "ACTIVESG", 18.00, 91),
+                purchase("28 NOV", "27 NOV", "CALTEX", 74.60, 92),
+            ],
+        ),
+        (
+            "SampleCardStatement_Dec2024.pdf", "20 DEC 2024", "12 JAN 2025", 316.40, 64.00,
+            [
+                card_payment("03 DEC", 316.40),
+                purchase("05 DEC", "04 DEC", "BUS/MRT 000000030", 2.50, 93),
+                purchase("07 DEC", "06 DEC", "FOUR LEAVES", 10.40, 94),
+                purchase("09 DEC", "08 DEC", "COMFORTDELGRO", 26.40, 95),
+                purchase("11 DEC", "10 DEC", "DISNEY+", 13.98, 96),
+                purchase("13 DEC", "12 DEC", "COLD STORAGE", 92.30, 97),
+                purchase("15 DEC", "14 DEC", "TAKASHIMAYA", 156.00, 98),
+                purchase("17 DEC", "16 DEC", "SEA AQUARIUM", 88.00, 99),
+                purchase("19 DEC", "18 DEC", "BUS/MRT 000000031", 2.20, 100),
+                purchase("21 DEC", "20 DEC", "KIEHL'S", 76.00, 101),
+                purchase("23 DEC", "22 DEC", "CHOC A BLOC", 22.40, 102),
+                purchase("26 DEC", "25 DEC", "GOLDEN VILLAGE", 32.00, 103),
+                purchase("28 DEC", "27 DEC", "SHELL", 69.40, 104),
+            ],
+        ),
+    ]
+
+    for filename, statement_date, due_date, _bill_paid, previous_balance, txns in card_months:
+        generate_card_statement(
+            filename,
+            statement_date,
+            due_date,
+            [
+                Card(
+                    name="UOB SAMPLE CARD",
+                    number="0000-1111-2222-3333",
+                    holder="SAMPLE CUSTOMER",
+                    previous_balance=previous_balance,
+                    txns=txns,
+                )
+            ],
+        )
 
     print("Generated sample PDFs in", OUT_DIR)
 
