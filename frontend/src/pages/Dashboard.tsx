@@ -5,7 +5,7 @@ import { useAccounts, useCategories, useDashboardSummary, useMonthlyTotals, useT
 import { fmtDate, fmtMonthRangeLabel, fmtMonthYearLabel, fmtPlain, fmtSigned, shiftMonth } from '../lib/format'
 import { loadDashboardFilters, saveDashboardFilters, type DashboardFilters } from '../lib/dashboardFilters'
 import { CashFlowChart, cashFlowQualifier } from '../components/CashFlowChart'
-import { CategoryBadge } from '../components/CategoryBadge'
+import { CategoryBadge, CategoryLabel } from '../components/CategoryBadge'
 import { categoryOptionElements } from '../components/CategoryOptions'
 import { CategoryDonut } from '../components/CategoryDonut'
 import { VelocityChart } from '../components/VelocityChart'
@@ -669,7 +669,9 @@ export function Dashboard() {
                 onClick={() => updateCategoryFilter('')}
                 className="inline-flex items-center gap-1.5 text-2xs px-2.5 py-1 rounded-full bg-input border border-border text-text hover:border-accent cursor-pointer"
               >
-                Category: {categoryFilter} <span aria-hidden>×</span>
+                Category:
+                <CategoryLabel category={categoryFilter} categories={categoriesQ.data} size={11} tinted />
+                <span aria-hidden>×</span>
               </button>
             )}
             {searchText && (

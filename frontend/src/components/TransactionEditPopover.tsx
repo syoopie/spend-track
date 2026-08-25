@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useCategories, useUpdateTransaction } from '../api/hooks'
 import type { Transaction } from '../api/types'
-import { categoryIcon } from '../lib/categoryColor'
 import { Button } from './Button'
+import { categoryOption, categoryOptionElements } from './CategoryOptions'
 import { Checkbox } from './Checkbox'
 import { Select } from './Select'
 
@@ -58,18 +58,8 @@ export function TransactionEditPopover({
         <div className="w-[220px]">
           <div className="text-2xs text-muted mb-1">Category · {direction === 'inflow' ? 'Inflow' : 'Outflow'}</div>
           <Select uiSize="sm" bg="card" value={category} onChange={(e) => setCategory(e.target.value)} className="w-full">
-            {!currentCategoryKnown && <option value={category}>{category}</option>}
-            {categoryOptions.map((c) => {
-              const Icon = categoryIcon(categoryOptions, c.name)
-              return (
-                <option key={c.id} value={c.name}>
-                  <span className="inline-flex items-center gap-1.5">
-                    <Icon size={12} className="shrink-0" />
-                    {c.name}
-                  </span>
-                </option>
-              )
-            })}
+            {!currentCategoryKnown && categoryOption(categoriesQ.data, category)}
+            {categoryOptionElements(categoriesQ.data, categoryOptions)}
           </Select>
         </div>
       </div>
