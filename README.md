@@ -1,12 +1,20 @@
+<div align="center">
+
 # SG Expenditure Tracker
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+**Turn your Singapore bank statements into a spending dashboard — on your own computer, with nothing sent anywhere.**
 
-Turn your Singapore bank statements into a spending dashboard — on your own computer, with nothing sent anywhere.
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
+[![Runs locally](https://img.shields.io/badge/data-100%25%20local-brightgreen?style=flat-square)](#your-data-stays-on-your-computer)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-3776ab?style=flat-square&logo=python&logoColor=white)](backend/pyproject.toml)
+[![React 19](https://img.shields.io/badge/react-19-61dafb?style=flat-square&logo=react&logoColor=white)](frontend/package.json)
+[![Banks: UOB](https://img.shields.io/badge/statements-UOB-e35fd0?style=flat-square)](#adding-a-bank)
+
+</div>
 
 Give it a statement PDF you downloaded from your bank, and it reads every transaction, sorts them into categories, cancels out refunds against the purchases they reverse, and shows you where your money actually went.
 
-![Dashboard](docs/screenshots/dashboard.jpg)
+![The dashboard: inflow, outflow and net expenditure for the selected months, a cash flow chart, a category breakdown donut, and the searchable transaction feed](docs/screenshots/dashboard.jpg)
 
 ## Your data stays on your computer
 
@@ -96,17 +104,17 @@ If the model isn't reachable, the app tells you with a warning instead of leavin
 
 | Rules — your own categorization logic, top to bottom | Default Rules — the built-in merchant list, read-only |
 |---|---|
-| ![Rules](docs/screenshots/rules.jpg) | ![Default Rules](docs/screenshots/default-rules.jpg) |
+| ![The Rules page: a drag-to-reorder list of user rules, each with its match text, target category and priority](docs/screenshots/rules.jpg) | ![The Default Rules page: the built-in merchant word bank, grouped by category and read-only](docs/screenshots/default-rules.jpg) |
 
 **Contacts** map a PayNow identifier (phone, UEN, or account number) to a name and a default category, so transfers to people you pay regularly categorize themselves instead of sitting in "needs review":
 
-![Contacts](docs/screenshots/contacts.jpg)
+![The Contacts page: each contact with its linked PayNow identifiers, default category and historical spend](docs/screenshots/contacts.jpg)
 
 ## Adding a bank
 
 The goal is to read statements from any Singapore bank; UOB is simply the one there were real statements to build against. DBS and OCBC already have detection in place — the app can tell a DBS statement from an unreadable file — so what's missing for each is the parser itself, which is written against real sample statements. Everything downstream (categorization, refunds, duplicate detection, the dashboard) is bank-agnostic and needs no changes.
 
-If you have statements from a bank you'd like read, that's the blocker worth removing: open an issue, or see `backend/src/app/parsing/` for how a parser plugs in — each is one folder implementing `detect()` and `parse()`, registered in one list. **Settings → Region** always shows the live state: which banks parse, and which are recognized but waiting on a parser.
+If you have statements from a bank you'd like read, that's the blocker worth removing: [open a bank support request](https://github.com/syoopie/spend-track/issues/new?template=bank-support.yml) (don't attach a real statement — it has your account number in it), or see `backend/src/app/parsing/` for how a parser plugs in — each is one folder implementing `detect()` and `parse()`, registered in one list. **Settings → Region** always shows the live state: which banks parse, and which are recognized but waiting on a parser.
 
 ## For developers
 
