@@ -1,4 +1,4 @@
-import { ChevronDown, SearchX } from 'lucide-react'
+import { ChevronDown, ListChecks, SearchX } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useCategories, useRules } from '../api/hooks'
 import { categoryColor, categoryIcon } from '../lib/categoryColor'
@@ -124,6 +124,7 @@ export function DefaultRules() {
     <PageShell
       title="Default Categorization Rules"
       subtitle="Built-in word bank used to auto-categorize transactions — read-only, and always evaluated after your own rules so anything you set up takes precedence"
+      icon={ListChecks}
       actions={
         <Input
           fullWidth={false}

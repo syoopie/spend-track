@@ -1,4 +1,4 @@
-import { ListChecks, Pencil } from 'lucide-react'
+import { ListChecks, Pencil, SlidersHorizontal } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useCategories, useCreateRule, useDeleteRule, useReorderRules, useRules, useUpdateRule } from '../api/hooks'
 import { Button } from '../components/Button'
@@ -261,6 +261,7 @@ export function Rules() {
     <PageShell
       title="Categorization & Exclusion Rules"
       subtitle="Evaluated top to bottom — the first match wins"
+      icon={SlidersHorizontal}
       actions={
         <Button variant="primary" onClick={() => setFormTarget('new')}>
           + New Rule

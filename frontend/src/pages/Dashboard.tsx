@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, FileUp, Pencil, Receipt, RefreshCw, SearchX } from 'lucide-react'
+import { ArrowDown, ArrowUp, FileUp, LayoutGrid, Pencil, Receipt, RefreshCw, SearchX } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useAccounts, useCategories, useDashboardSummary, useMonthlyTotals, useTransactions } from '../api/hooks'
@@ -465,9 +465,18 @@ export function Dashboard() {
           className={`absolute bottom-0 left-0 right-0 h-[2px] bg-accent transition-opacity duration-200 ${isRefreshing ? 'opacity-100' : 'opacity-0'}`}
         />
         <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <div className="text-title font-bold font-display">Dashboard</div>
-            <div className="text-md text-muted mt-0.5">Post-mortem view of where the money went</div>
+          {/* Same title+icon shape PageShell renders for every other page - this
+              header stays hand-rolled only because it's sticky with its own
+              scroll-tinted background and filter row, not because it looks
+              different. Keep the two in sync. */}
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-accent/12 flex items-center justify-center shrink-0">
+              <LayoutGrid size={18} className="text-accent" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-title font-bold font-display">Dashboard</div>
+              <div className="text-md text-muted mt-0.5">Post-mortem view of where the money went</div>
+            </div>
           </div>
           <div className="flex gap-2.5 items-center">
             <DateRangePicker

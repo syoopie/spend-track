@@ -1,4 +1,4 @@
-import { Loader2 } from 'lucide-react'
+import { Loader2, Settings as SettingsIcon } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -252,7 +252,7 @@ export function Settings() {
   const dbSize = settingsQ.data ? fmtBytes(settingsQ.data.size_bytes) : '—'
 
   return (
-    <PageShell title="Settings & Storage" maxWidth="max-w-4xl">
+    <PageShell title="Settings & Storage" icon={SettingsIcon} maxWidth="max-w-4xl">
       <AppearanceSection />
 
       <AiSection settings={settingsQ.data} />
