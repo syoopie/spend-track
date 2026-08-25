@@ -18,13 +18,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
-
-PAGE_W, PAGE_H = A4  # 595.295 x 841.895, matches the real statements
-FOOTER_TOP_CUTOFF = 780  # must match parsing/*.py - text below this is ignored by the parser
-FONT = "Helvetica"
-FONT_BOLD = "Helvetica-Bold"
+from statement_canvas import FONT, FONT_BOLD, FOOTER_TOP_CUTOFF, PAGE_H, PAGE_W, Doc, y_for_top  # noqa: F401
 
 OUT_DIR = Path(__file__).resolve().parents[2] / "PDF Examples (Sanitized)" / "UOB"
 
@@ -33,38 +27,18 @@ SAMPLE_ADDRESS = ["1 SAMPLE STREET", "#01-01 EXAMPLE BUILDING", "SINGAPORE 00000
 SYNTHETIC_NOTICE = "SAMPLE DATA - SYNTHETIC, NOT AN OFFICIAL UOB DOCUMENT - all names, addresses and numbers below are fictional placeholders."
 
 
-def y_for_top(top: float, font_size: float = 9) -> float:
-    """Convert a pdfplumber-style `top` (distance from page top) to a
-    reportlab baseline y (distance from page bottom, ascending)."""
-    return PAGE_H - top - font_size * 0.8
+#: Stamped on every page, as the real statements' disclaimer footer is - and
+#: at the same y-coordinates, so the fixtures exercise the parsers' footer
+#: cutoff rather than just happening to have nothing down there.
+UOB_FOOTER = [
+    (800, SYNTHETIC_NOTICE),
+    (815, "Page {page}"),
+    (828, "United Overseas Bank Limited (sample letterhead - synthetic document)"),
+]
 
 
-class Doc:
-    def __init__(self, path: Path):
-        self.c = canvas.Canvas(str(path), pagesize=A4)
-        self.page_num = 1
-
-    def text(self, x: float, top: float, s: str, size: float = 9, font: str = FONT):
-        self.c.setFont(font, size)
-        self.c.drawString(x, y_for_top(top, size), s)
-
-    def text_right(self, x_right: float, top: float, s: str, size: float = 9, font: str = FONT):
-        self.c.setFont(font, size)
-        self.c.drawRightString(x_right, y_for_top(top, size), s)
-
-    def footer(self):
-        self.text(36, 800, SYNTHETIC_NOTICE, size=7)
-        self.text(36, 815, f"Page {self.page_num}", size=7)
-        self.text(36, 828, "United Overseas Bank Limited (sample letterhead - synthetic document)", size=7)
-
-    def new_page(self):
-        self.footer()
-        self.c.showPage()
-        self.page_num += 1
-
-    def save(self):
-        self.footer()
-        self.c.save()
+def uob_doc(path: Path) -> Doc:
+    return Doc(path, UOB_FOOTER)
 
 
 # --------------------------------------------------------------------------
@@ -116,7 +90,7 @@ def generate_account_statement(
     total_withdrawals = round(sum(t.withdrawal or 0 for t in txns), 2)
     total_deposits = round(sum(t.deposit or 0 for t in txns), 2)
     path = OUT_DIR / "Account Statements" / filename
-    doc = Doc(path)
+    doc = uob_doc(path)
 
     # --- page 1: summary (content here isn't parsed - only used for detect() / period regex)
     doc.text(36, 40, "Contact Us", size=10, font=FONT_BOLD)
@@ -223,7 +197,7 @@ class Card:
 
 def generate_card_statement(filename: str, statement_date: str, due_date: str, cards: list[Card]):
     path = OUT_DIR / "Card Statements" / filename
-    doc = Doc(path)
+    doc = uob_doc(path)
 
     # --- page 1 top: summary
     doc.text(36, 40, "Statement Summary", size=11, font=FONT_BOLD)

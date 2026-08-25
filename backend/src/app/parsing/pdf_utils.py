@@ -72,3 +72,87 @@ def bucket_line(line: Line, columns: list[Column]) -> dict[str, str]:
                 buckets[c.name].append(w)
                 break
     return {name: " ".join(w.text for w in ws) for name, ws in buckets.items()}
+
+
+@dataclass(frozen=True)
+class HeaderColumn:
+    """One column of a table, described by the header word(s) printed above it."""
+
+    name: str
+    keywords: tuple[str, ...]
+    align: str = "left"
+    #: An optional column may be missing from a given statement template
+    #: (OCBC prints a "Value Date" column on some statements and not others).
+    #: Its absence shifts its neighbours' boundaries together rather than
+    #: failing the whole header match.
+    optional: bool = False
+
+
+def columns_from_header(
+    header: Line,
+    spec: list[HeaderColumn],
+    page_width: float,
+) -> list[Column] | None:
+    """Derive column x-ranges from the header row's own word positions.
+
+    The UOB parsers hardcode their `Column` ranges, calibrated by hand against
+    real statements. That is only possible for a bank whose real statements we
+    have. For DBS and OCBC we have the *layout* (which columns exist, in which
+    order, printed under which words) but no real PDF to measure, so the ranges
+    are read off the header line at parse time instead: each column runs from
+    the left edge of its own header word to the left edge of the next one's.
+
+    That boundary is the left edge and not the midpoint of the gap for a
+    reason worth keeping. A description column is left-aligned and wide, and
+    the amount column to its right is right-aligned and narrow, so the gap
+    between their *header* words is nothing like the gap between their
+    *contents*: descriptions legitimately run on well past the midpoint, while
+    amounts, right-aligned under the tail of a header like "WITHDRAWAL", never
+    begin before that header does. A midpoint boundary therefore truncates
+    long descriptions and reads their tail as an amount - which the first run
+    of this against a fixture did, silently turning "... PTE LTD" into a
+    withdrawal. Anchoring on the left edge gives each column exactly the span
+    its own header claims.
+
+    That is strictly more robust than hardcoding - it survives a bank nudging
+    its column positions between statement revisions, which a hardcoded range
+    does not - and it is what the header row is there to tell us anyway.
+
+    `spec` is ordered left-to-right. Header words are matched
+    case-insensitively; a multi-word header ("Value Date") is matched as
+    consecutive words. Returns None when a required column's header word is
+    absent, which is how a caller tells "this line is not the header" from
+    "this is the header".
+    """
+    found: list[tuple[HeaderColumn, float, float]] = []
+    search_from = 0
+    for column in spec:
+        span = _find_header_words(header.words, column.keywords, search_from)
+        if span is None:
+            if column.optional:
+                continue
+            return None
+        start_idx, end_idx = span
+        found.append((column, header.words[start_idx].x0, header.words[end_idx].x1))
+        search_from = end_idx + 1
+
+    columns: list[Column] = []
+    for i, (column, x0, _x1) in enumerate(found):
+        # The first column reaches to the page's left edge and the last to its
+        # right, so a date printed a shade left of its header, or an amount
+        # right-aligned past the page's last header, still lands in-column.
+        lo = 0.0 if i == 0 else x0
+        hi = page_width if i == len(found) - 1 else found[i + 1][1]
+        columns.append(Column(column.name, lo, hi, align=column.align))
+    return columns
+
+
+def _find_header_words(words: list[Word], keywords: tuple[str, ...], search_from: int) -> tuple[int, int] | None:
+    """Locate any of `keywords` (each possibly multi-word) in `words`, at or
+    after index `search_from`. Returns the (first, last) word index it spans."""
+    for keyword in keywords:
+        parts = keyword.lower().split()
+        for start in range(search_from, len(words) - len(parts) + 1):
+            if all(words[start + n].text.lower() == part for n, part in enumerate(parts)):
+                return start, start + len(parts) - 1
+    return None
