@@ -1,14 +1,20 @@
 import {
   BarChart3,
   BookOpen,
+  CheckCheck,
   FileUp,
   Filter,
+  Info,
+  ListChecks,
   Settings as SettingsIcon,
+  ShieldAlert,
   SlidersHorizontal,
+  Sparkles,
   Users,
   type LucideIcon,
 } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { Card } from '../components/Card'
 
 const SECTIONS: { id: string; label: string; icon: LucideIcon }[] = [
   { id: 'overview', label: 'Overview', icon: BookOpen },
@@ -29,7 +35,7 @@ function Section({ id, title, icon: Icon, children }: { id: string; title: strin
         </div>
         <h2 className="text-base font-bold font-display">{title}</h2>
       </div>
-      <div className="text-md text-muted leading-relaxed flex flex-col gap-2.5">{children}</div>
+      <div className="text-md text-muted leading-relaxed flex flex-col gap-3">{children}</div>
     </section>
   )
 }
@@ -38,11 +44,35 @@ function Kbd({ children }: { children: ReactNode }) {
   return <code className="font-mono text-xs bg-input px-1.5 py-0.5 rounded text-text-2">{children}</code>
 }
 
-// The overview's 3-step loop, as numbered badges matching the priority
-// badges on the Rules page - livelier than a bare <ol>, still no chips.
-function Steps({ items }: { items: string[] }) {
+// A term/explanation pair per row, instead of the same fact buried mid-paragraph.
+// The point of the whole page is to be skimmable back-to-front, and a bolded
+// left column is what makes "where's the bit about passwords?" a glance rather
+// than a read. Single column below sm - a 164px term column stops being a column
+// once the explanation next to it wraps to three lines. Rows are separated by
+// their own bottom rule rather than the list carrying a border-y: a Facts block
+// that opens a section would otherwise draw a second line a few px under the
+// section header's own divider.
+function Facts({ items }: { items: { term: string; children: ReactNode }[] }) {
   return (
-    <div className="flex flex-col gap-2 mt-0.5">
+    <dl className="flex flex-col">
+      {items.map((item) => (
+        <div
+          key={item.term}
+          className="grid gap-x-4 gap-y-0.5 py-2.5 sm:grid-cols-[164px_1fr] border-b border-divider last:border-b-0"
+        >
+          <dt className="text-md font-semibold text-text">{item.term}</dt>
+          <dd className="text-md text-muted">{item.children}</dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
+
+// Numbered badges matching the priority badges on the Rules page - livelier than
+// a bare <ol>, and the categorization ladder it renders *is* a priority order.
+function Steps({ items }: { items: ReactNode[] }) {
+  return (
+    <div className="flex flex-col gap-2">
       {items.map((step, i) => (
         <div key={i} className="flex items-start gap-2.5">
           <div className="w-5 h-5 rounded-md bg-input text-accent text-2xs font-bold flex items-center justify-center shrink-0 mt-0.5">
@@ -52,6 +82,84 @@ function Steps({ items }: { items: string[] }) {
         </div>
       ))}
     </div>
+  )
+}
+
+// The overview's three-step loop as tiles rather than a sentence describing a
+// sequence - it's the one thing on this page a first-time reader should absorb
+// without reading anything.
+function StepCards({ items }: { items: { icon: LucideIcon; title: string; body: string }[] }) {
+  return (
+    <div className="grid gap-2.5 sm:grid-cols-3">
+      {items.map(({ icon: Icon, title, body }, i) => (
+        <Card key={title} padding="p-3.5" className="flex flex-col gap-1.5">
+          <div className="flex items-center gap-2">
+            <div className="w-5 h-5 rounded-md bg-input text-accent text-2xs font-bold flex items-center justify-center shrink-0">
+              {i + 1}
+            </div>
+            <Icon size={13} className="text-muted-2" />
+            <div className="text-md font-semibold text-text">{title}</div>
+          </div>
+          <div className="text-md text-muted leading-relaxed">{body}</div>
+        </Card>
+      ))}
+    </div>
+  )
+}
+
+// Semantic surface tokens per docs/ui-conventions.md - never hand-derived here.
+const NOTE_TONES = {
+  info: { bg: 'var(--color-input)', border: 'var(--color-border)', fg: 'var(--color-text-2)' },
+  ai: { bg: 'var(--color-ai-surface)', border: 'var(--color-ai-surface-border)', fg: 'var(--color-ai-text)' },
+  danger: { bg: 'var(--color-danger-surface)', border: 'var(--color-danger-surface-border)', fg: 'var(--color-danger-text)' },
+} as const
+
+function Note({
+  tone = 'info',
+  icon: Icon,
+  title,
+  children,
+}: {
+  tone?: keyof typeof NOTE_TONES
+  icon: LucideIcon
+  title: string
+  children: ReactNode
+}) {
+  const { bg, border, fg } = NOTE_TONES[tone]
+  return (
+    <div className="rounded-2lg px-3.5 py-3 flex items-start gap-2.5" style={{ background: bg, border: `1px solid ${border}` }}>
+      <Icon size={13} className="shrink-0 mt-0.5" style={{ color: fg }} />
+      <div className="flex flex-col gap-1 min-w-0">
+        <div className="text-md font-semibold" style={{ color: fg }}>
+          {title}
+        </div>
+        <div className="text-md text-muted leading-relaxed">{children}</div>
+      </div>
+    </div>
+  )
+}
+
+function NoteList({ items }: { items: ReactNode[] }) {
+  return (
+    <ul className="flex flex-col gap-1.5">
+      {items.map((item, i) => (
+        <li key={i} className="flex items-start gap-2">
+          <span className="w-1 h-1 rounded-full bg-muted-2 shrink-0 mt-2" />
+          <span className="min-w-0">{item}</span>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function NeedsReviewBadge() {
+  return (
+    <span
+      className="text-2xs font-semibold px-1.5 py-0.5 rounded"
+      style={{ background: 'var(--color-warning-badge-bg)', color: 'var(--color-warning-text)' }}
+    >
+      needs review
+    </span>
   )
 }
 
@@ -91,156 +199,275 @@ export function Guide() {
 
         <div className="flex flex-col gap-7">
           <Section id="overview" title="Overview" icon={BookOpen}>
-            <p>
-              This app turns bank statement PDFs into a categorized, searchable transaction history — entirely on
-              your own machine. Nothing is uploaded anywhere; the SQLite database backing everything lives on your
-              local disk (see the path under <strong className="text-text">Settings</strong>).
-            </p>
-            <p>The everyday loop is:</p>
-            <Steps
+            <p>Statement PDFs in, a categorized and searchable spending history out. The loop is three steps:</p>
+            <StepCards
               items={[
-                'Upload one or more statement PDFs.',
-                'Review how they were auto-categorized in the staging screen.',
-                'Commit — transactions land in the dashboard, ready to filter and analyze.',
+                { icon: FileUp, title: 'Upload', body: 'Drop in one or more statement PDFs.' },
+                { icon: ListChecks, title: 'Review', body: 'Check how each transaction was categorized, fix what looks wrong.' },
+                { icon: CheckCheck, title: 'Commit', body: 'The batch joins your history and the dashboard updates.' },
               ]}
             />
+            <Note icon={Info} title="Everything stays on this machine">
+              Nothing is uploaded anywhere. Your transactions live in a single database file on your own disk — its
+              exact path is on the <strong className="text-text">Settings</strong> page. The one exception is AI
+              categorization with a cloud provider, which is off unless you turn it on yourself.
+            </Note>
           </Section>
 
           <Section id="uploading" title="Uploading Statements" icon={FileUp}>
             <p>
-              Click <strong className="text-text">Upload Bank Statement</strong> in the sidebar (or drag a PDF
-              anywhere onto the app). Currently UOB account and credit card e-statements are supported — other
-              banks will show an "unrecognized format" error rather than silently misparsing.
+              Click <strong className="text-text">Upload Bank Statement</strong> in the sidebar, or drag a PDF
+              anywhere onto the app.
             </p>
-            <p>
-              You can select multiple PDFs at once — they're merged into a single review batch, even across
-              different months or a mix of account and card statements. If a PDF is password-protected, you'll be
-              prompted for the password before it's parsed.
-            </p>
-            <p>
-              Only one batch can be staged at a time. If you have a pending review, you'll need to commit or discard
-              it before uploading another — a banner at the top of the app is a reminder that one is waiting,
-              wherever you navigate to.
-            </p>
-            <p>
-              <strong className="text-text">Duplicate detection</strong> is automatic: re-uploading a statement
-              you've already committed (or one that overlaps a previous upload) marks the overlapping rows as
-              duplicates and skips them on commit, so it's safe to re-upload if you're not sure whether a statement
-              was already processed.
-            </p>
+            <Facts
+              items={[
+                {
+                  term: "What's supported",
+                  children: (
+                    <>
+                      UOB account and credit card e-statements. Other banks show an "unrecognized format" error
+                      rather than silently misparsing.
+                    </>
+                  ),
+                },
+                {
+                  term: 'Several at once',
+                  children:
+                    'Select multiple PDFs and they merge into one review batch — different months and a mix of account and card statements are all fine together.',
+                },
+                { term: 'Password-protected', children: "You'll be prompted for the password before the PDF is parsed." },
+                {
+                  term: 'One batch at a time',
+                  children:
+                    'Commit or discard a pending review before uploading again. A banner at the top of the app follows you around until you do.',
+                },
+                {
+                  term: 'Duplicates',
+                  children:
+                    "Re-uploading a statement you've already committed is safe — overlapping rows are detected and skipped on commit, so you never need to remember which months are already in.",
+                },
+              ]}
+            />
           </Section>
 
           <Section id="categorization" title="Categorization" icon={SlidersHorizontal}>
-            <p>
-              Every transaction is run through a priority-ordered set of rules — first match wins. Your own rules
-              (visible under <strong className="text-text">Rules</strong>) always take precedence over the built-in
-              word bank (<strong className="text-text">Default Rules</strong>), which is read-only and reconciled
-              automatically as the app is updated.
-            </p>
-            <p>
-              A rule matches on a substring of the transaction description and assigns a category — or, for an{' '}
-              <strong className="text-text">exclusion rule</strong>, marks the transaction as excluded from totals
-              instead (useful for self-transfers between your own accounts). You can create a rule directly from a
-              transaction in the staging review screen — it also retroactively re-categorizes any other matching
-              transaction still waiting in the same batch — or from scratch, and edit or delete any existing one,
-              under Rules.
-            </p>
-            <p>
-              If nothing matches, a PayNow-shaped transaction is flagged{' '}
-              <span
-                className="text-2xs font-semibold px-1.5 py-0.5 rounded"
-                style={{ background: 'var(--color-warning-badge-bg)', color: 'var(--color-warning-text)' }}
-              >
-                needs review
-              </span>{' '}
-              in its own Paynow category rather than falling into a generic bucket — a phone number or UEN alone
-              can't tell the app who was paid. Everything else that doesn't match anything lands in the hidden
-              "Others" category.
-            </p>
-            <p>
-              Already committed transactions can be re-scanned against the current rule set at any time with the{' '}
-              <strong className="text-text">Recategorize</strong> button on the dashboard — handy after adding a new
-              rule, since it only affects future uploads otherwise.
-            </p>
-            <p>
-              <strong className="text-text">AI</strong> (under Settings) is opt-in and off by default; categorization
-              is currently its only feature. When enabled, whatever the rule engine leaves in "Others" gets sent to
-              a model for a suggested category, label, and rule — surfaced for review, never applied silently, and
-              a rejected suggestion can always be restored later. The default provider is a local Ollama model, so
-              nothing leaves this device. Choosing a cloud provider instead (OpenAI-compatible or Anthropic) sends
-              those transactions' descriptions and amounts to that provider's servers.
-            </p>
+            <p>Each transaction is checked against the following, in order. First match wins:</p>
+            <Steps
+              items={[
+                <>
+                  <strong className="text-text">Your own rules</strong>, in the order they're listed on the{' '}
+                  <strong className="text-text">Rules</strong> page.
+                </>,
+                <>
+                  <strong className="text-text">The built-in merchant list</strong> (
+                  <strong className="text-text">Default Rules</strong>) — read-only, kept up to date as the app is
+                  updated, and always ranked below your own rules so it can never override one.
+                </>,
+                <>
+                  <strong className="text-text">Credit card bill payments</strong>, which are excluded from spending
+                  so the card's own purchases aren't counted twice. Only applies once a card statement is known —
+                  otherwise the payment stays visible as real outflow.
+                </>,
+                <>
+                  <strong className="text-text">Your contacts</strong> — a saved PayNow identifier categorizes the
+                  transfer as whatever that contact's default category is.
+                </>,
+                <>
+                  <strong className="text-text">Nothing matched.</strong> A PayNow-shaped transaction is flagged{' '}
+                  <NeedsReviewBadge /> in its own Paynow category, since a phone number or UEN alone can't say who
+                  was paid. Anything else lands in "Others" (or "Other Income" for money in).
+                </>,
+              ]}
+            />
+            <Facts
+              items={[
+                {
+                  term: 'What a rule matches',
+                  children:
+                    'Any part of the transaction description, assigned to a category you pick. Matching is case-insensitive.',
+                },
+                {
+                  term: 'Exclusion rules',
+                  children:
+                    'Mark a match as excluded from totals instead of categorizing it — useful for transfers between your own accounts.',
+                },
+                {
+                  term: 'Making one',
+                  children: (
+                    <>
+                      From a transaction in the review screen — which also re-categorizes anything else still in that
+                      batch that matches — or from scratch under <strong className="text-text">Rules</strong>.
+                    </>
+                  ),
+                },
+                {
+                  term: 'Recategorize',
+                  children: (
+                    <>
+                      A new rule only affects future uploads. The{' '}
+                      <strong className="text-text">Recategorize</strong> button on the dashboard re-scans everything
+                      you've already committed against the current rules.
+                    </>
+                  ),
+                },
+              ]}
+            />
+            <Note tone="ai" icon={Sparkles} title="AI suggestions are opt-in and off by default">
+              <NoteList
+                items={[
+                  <>
+                    <strong className="text-text">What it does:</strong> once enabled under{' '}
+                    <strong className="text-text">Settings</strong>, whatever the rules leave in "Others" goes to a
+                    model for a suggested category, label, and rule.
+                  </>,
+                  <>
+                    <strong className="text-text">You still decide:</strong> suggestions arrive pre-filled in the
+                    review screen to accept or reject. Nothing is applied silently, and a rejected one can be
+                    restored later.
+                  </>,
+                  <>
+                    <strong className="text-text">Where it runs:</strong> a local Ollama model by default, so nothing
+                    leaves this device. An OpenAI-compatible or Anthropic provider instead sends those transactions'
+                    descriptions and amounts to that company's servers.
+                  </>,
+                ]}
+              />
+            </Note>
           </Section>
 
           <Section id="dashboard" title="Dashboard & Filters" icon={Filter}>
-            <p>
-              The date range and account pickers at the top of the dashboard stay pinned while you scroll, so you
-              can adjust them without jumping back to the top. The month-range picker supports single-click (one
-              month) or click-and-drag (a range), plus "Latest month" and "All time" shortcuts.
-            </p>
-            <p>
-              The transaction feed below can be searched (matches both the cleaned display name and the raw bank
-              description) and filtered by category. Excluded transactions are dimmed but still listed by default —
-              toggle <Kbd>Show excluded</Kbd> off to hide them entirely.
-            </p>
-            <p>
-              Click the pencil icon on any row to edit its category, display name, or exclusion status by hand — a
-              manual edit always sticks until you either change it again or run Recategorize.
-            </p>
+            <Facts
+              items={[
+                {
+                  term: 'Range & account',
+                  children:
+                    'Both pickers stay pinned while you scroll. Click one month, drag across several for a range, or use the "Latest month" and "All time" shortcuts.',
+                },
+                {
+                  term: 'Search',
+                  children: 'Matches both the cleaned-up display name and the raw description printed on the statement.',
+                },
+                {
+                  term: 'Excluded rows',
+                  children: (
+                    <>
+                      Dimmed but still listed by default — turn <Kbd>Show excluded</Kbd> off to hide them entirely.
+                    </>
+                  ),
+                },
+                {
+                  term: 'Editing by hand',
+                  children:
+                    'The pencil icon on any row edits its category, display name, or exclusion. A manual edit sticks until you change it again or run Recategorize.',
+                },
+              ]}
+            />
           </Section>
 
           <Section id="charts" title="Reading the Charts" icon={BarChart3}>
-            <p>
-              <strong className="text-text">Cash Flow</strong> shows inflow vs. outflow per month, always
-              displaying a minimum of 6 and a maximum of 12 months of context regardless of how narrow or wide your
-              selected range is. Hover a column for the exact figures.
-            </p>
-            <p>
-              <strong className="text-text">Spend Velocity</strong> compares your selected range's cumulative
-              spending pace against the immediately preceding period of equal length, day by day — useful for
-              spotting whether you're on track to spend more or less than usual before the period even ends. Hover
-              anywhere on the chart for a crosshair with both series' values.
-            </p>
-            <p>
-              <strong className="text-text">Category Breakdown</strong> is a donut chart — hover a segment or its
-              legend entry (either direction) to see that category's exact amount and share of total outflow.
-            </p>
-            <p>
-              <strong className="text-text">Top Merchants</strong> and{' '}
-              <strong className="text-text">Top Paynow Contacts</strong> live in the same card as Category
-              Breakdown, switchable by tab.
-            </p>
+            <Facts
+              items={[
+                {
+                  term: 'Cash Flow',
+                  children:
+                    'Money in vs. money out per month, always showing 6–12 months of context however narrow your selected range is. Hover a column for exact figures.',
+                },
+                {
+                  term: 'Spend Velocity',
+                  children:
+                    "Your selected range's spending pace against the period just before it, day by day — so you can see whether you're on track to overspend before the month is even over. Hover for a crosshair with both values.",
+                },
+                {
+                  term: 'Category Breakdown',
+                  children:
+                    "A donut of where the outflow went. Hover a segment or its legend entry — either direction works — for that category's amount and share.",
+                },
+                {
+                  term: 'Top Merchants',
+                  children: 'Who you paid most in the selected range. Shares a card with Category Breakdown, switchable by tab.',
+                },
+                {
+                  term: 'Top Paynow Contacts',
+                  children: 'The same, for people and businesses paid by PayNow transfer.',
+                },
+              ]}
+            />
           </Section>
 
           <Section id="contacts" title="Contacts & PayNow" icon={Users}>
             <p>
-              A contact maps a PayNow identifier (phone number, UEN, or account number) to a name and a default
-              category, so future transfers to that person or business categorize themselves automatically instead
-              of sitting in "needs review". Add one from scratch under{' '}
-              <strong className="text-text">Contacts</strong> — where existing contacts can also be edited — or the
-              quicker way: "Save as contact mapping" directly from a flagged row in the staging review screen.
+              A contact maps a PayNow identifier — phone number, UEN, or account number — to a name and a default
+              category. Future transfers to that person or business then categorize themselves, instead of arriving
+              as <NeedsReviewBadge /> for you to sort out by hand.
             </p>
-            <p>
-              Bulk-import identifiers from a 3-column CSV (Name, Identifier, Category) via{' '}
-              <strong className="text-text">Import CSV</strong> on the Contacts page. An identifier already mapped
-              to someone is left as-is rather than reassigned.
-            </p>
+            <Facts
+              items={[
+                {
+                  term: 'Adding one',
+                  children: (
+                    <>
+                      "Save as contact mapping" straight from a flagged row in the review screen, or from scratch on
+                      the <strong className="text-text">Contacts</strong> page — where existing ones can be edited too.
+                    </>
+                  ),
+                },
+                {
+                  term: 'Bulk import',
+                  children: (
+                    <>
+                      <strong className="text-text">Import CSV</strong> on the Contacts page takes three columns —
+                      name, identifier, category — with an optional header row:
+                      <div className="font-mono text-xs bg-input rounded-md px-2.5 py-1.5 mt-1.5 text-text-2 overflow-x-auto whitespace-pre">
+                        {'Jane Tan,91234567,Paynow\nKopitiam Uncle,201912345K,Food & Drink'}
+                      </div>
+                    </>
+                  ),
+                },
+                {
+                  term: 'Already mapped',
+                  children:
+                    'An identifier that already belongs to someone is left alone rather than reassigned. A new identifier for a name you already have is added to that existing contact.',
+                },
+              ]}
+            />
           </Section>
 
           <Section id="settings" title="Settings & Data" icon={SettingsIcon}>
-            <p>
-              Your accent color, the database's on-disk location, and its size/schema version all live under{' '}
-              <strong className="text-text">Settings</strong>. <strong className="text-text">Change Database
-              Path</strong> moves the actual SQLite file to a new folder — handy for relocating it into a
-              synced/backed-up directory.
-            </p>
-            <p>
-              The Danger Zone offers two levels of destructive action: scoped deletes (clear just your rules,
-              contacts, or transactions — each requires typing <Kbd>DELETE</Kbd> to confirm) and{' '}
-              <strong className="text-text">Nuclear Reset</strong>, which wipes everything and starts fresh.
-              Deleting rules or contacts never touches the built-in default rule bank; deleting transactions leaves
-              your accounts in place so you can re-upload without re-provisioning them.
-            </p>
+            <Facts
+              items={[
+                { term: 'Appearance', children: 'Pick the accent color used throughout the app.' },
+                {
+                  term: 'Region',
+                  children: 'Which country, currency, transfer scheme, and banks this build is set up for.',
+                },
+                {
+                  term: 'Database',
+                  children: (
+                    <>
+                      Where your data file sits, how big it is, and its schema version.{' '}
+                      <strong className="text-text">Change Database Path</strong> physically moves the file — handy
+                      for putting it somewhere synced or backed up.
+                    </>
+                  ),
+                },
+                {
+                  term: 'Danger Zone',
+                  children: (
+                    <>
+                      Clear just your rules, contacts, or transactions — or{' '}
+                      <strong className="text-text">Nuclear Reset</strong>, which wipes everything and starts fresh.
+                    </>
+                  ),
+                },
+              ]}
+            />
+            <Note tone="danger" icon={ShieldAlert} title="What a delete actually takes with it">
+              Deleting rules or contacts never touches the built-in default rules, and deleting transactions keeps
+              your accounts so you can re-upload without setting them up again. The two that can't be undone by
+              ordinary use — <strong className="text-text">Delete All Transactions</strong> and{' '}
+              <strong className="text-text">Nuclear Reset</strong> — ask you to type <Kbd>DELETE</Kbd> first; the
+              lighter ones just ask for a confirmation.
+            </Note>
           </Section>
         </div>
       </div>
