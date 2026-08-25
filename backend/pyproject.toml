@@ -10,6 +10,10 @@ dependencies = [
     "pdfplumber>=0.11",
     "pypdf>=5.0",
     "python-multipart>=0.0.12",
+    # Used at runtime by engine/ai_providers/* (every provider's HTTP calls),
+    # not just by tests' TestClient - must be a real dependency, not dev-only,
+    # or a `uv sync --no-dev`/wheel install can't even start the server.
+    "httpx>=0.27",
 ]
 
 [project.scripts]
@@ -25,7 +29,6 @@ module-name = "app"
 [dependency-groups]
 dev = [
     "pytest>=8.3",
-    "httpx>=0.27",
     "reportlab>=4.0",
 ]
 # Only needed to produce the double-clickable download (scripts/build_desktop.py);

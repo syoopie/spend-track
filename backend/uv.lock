@@ -885,6 +885,7 @@ version = "0.1.1"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "pdfplumber" },
     { name = "pypdf" },
     { name = "python-multipart" },
@@ -896,7 +897,6 @@ build = [
     { name = "pyinstaller" },
 ]
 dev = [
-    { name = "httpx" },
     { name = "pytest" },
     { name = "reportlab" },
 ]
@@ -904,6 +904,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = ">=0.115" },
+    { name = "httpx", specifier = ">=0.27" },
     { name = "pdfplumber", specifier = ">=0.11" },
     { name = "pypdf", specifier = ">=5.0" },
     { name = "python-multipart", specifier = ">=0.0.12" },
@@ -913,7 +914,6 @@ requires-dist = [
 [package.metadata.requires-dev]
 build = [{ name = "pyinstaller", specifier = ">=6.11" }]
 dev = [
-    { name = "httpx", specifier = ">=0.27" },
     { name = "pytest", specifier = ">=8.3" },
     { name = "reportlab", specifier = ">=4.0" },
 ]
