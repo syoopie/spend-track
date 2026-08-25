@@ -28,6 +28,11 @@ def _fetch_contact(conn: sqlite3.Connection, contact_id: int) -> ContactOut:
         "WHERE contact_id = ? AND amount < 0 AND is_excluded = 0",
         (contact_id,),
     ).fetchone()
+    received_row = conn.execute(
+        "SELECT COALESCE(SUM(amount), 0) AS received FROM transactions "
+        "WHERE contact_id = ? AND amount > 0 AND is_excluded = 0",
+        (contact_id,),
+    ).fetchone()
     return ContactOut(
         id=c["id"],
         name=c["name"],
@@ -36,6 +41,7 @@ def _fetch_contact(conn: sqlite3.Connection, contact_id: int) -> ContactOut:
         default_subcategory=c["default_subcategory"],
         identifiers=identifiers,
         historical_spend=spend_row["spend"],
+        historical_received=received_row["received"],
     )
 
 
@@ -57,6 +63,13 @@ def list_contacts():
         ).fetchall():
             spend_by_contact[r["contact_id"]] = r["spend"]
 
+        received_by_contact: dict[int, float] = defaultdict(float)
+        for r in conn.execute(
+            "SELECT contact_id, COALESCE(SUM(amount), 0) AS received FROM transactions "
+            "WHERE contact_id IS NOT NULL AND amount > 0 AND is_excluded = 0 GROUP BY contact_id"
+        ).fetchall():
+            received_by_contact[r["contact_id"]] = r["received"]
+
         return [
             ContactOut(
                 id=c["id"],
@@ -66,6 +79,7 @@ def list_contacts():
                 default_subcategory=c["default_subcategory"],
                 identifiers=identifiers_by_contact.get(c["id"], []),
                 historical_spend=spend_by_contact.get(c["id"], 0.0),
+                historical_received=received_by_contact.get(c["id"], 0.0),
             )
             for c in contacts
         ]

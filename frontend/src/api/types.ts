@@ -206,6 +206,7 @@ export interface Contact {
   default_subcategory: string | null
   identifiers: string[]
   historical_spend: number
+  historical_received: number
 }
 
 export interface ContactCreateRequest {

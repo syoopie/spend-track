@@ -331,6 +331,7 @@ def test_create_list_update_delete_contact(client):
     assert created["default_category_outflow"] == "Paynow"
     assert created["default_category_inflow"] is None
     assert created["historical_spend"] == 0
+    assert created["historical_received"] == 0
 
     listed = client.get("/api/contacts").json()
     assert any(c["name"] == "Auntie Mei" for c in listed)

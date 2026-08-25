@@ -258,6 +258,7 @@ class ContactOut(BaseModel):
     default_subcategory: str | None
     identifiers: list[str]
     historical_spend: float
+    historical_received: float
 
 
 class ContactImportResult(BaseModel):

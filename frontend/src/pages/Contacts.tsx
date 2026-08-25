@@ -39,7 +39,8 @@ const CONTACT_COLUMNS: DataTableColumn[] = [
   { key: 'contact', header: 'Contact', width: '1fr' },
   { key: 'identifiers', header: 'Linked Identifiers', width: '1.6fr' },
   { key: 'category', header: 'Default Category', width: '160px' },
-  { key: 'spend', header: 'Historical Spend', width: '140px', align: 'right' },
+  { key: 'spend', header: 'Spent', width: '110px', align: 'right' },
+  { key: 'received', header: 'Received', width: '110px', align: 'right' },
   { key: 'actions', header: '', width: '36px' },
 ]
 const CONTACT_GRID_TEMPLATE = dataTableGridTemplate(CONTACT_COLUMNS)
@@ -132,6 +133,9 @@ export function Contacts() {
             </DataTableCell>
             <DataTableCell align="right" className="font-mono">
               {fmtPlain(c.historical_spend)}
+            </DataTableCell>
+            <DataTableCell align="right" className="font-mono">
+              {fmtPlain(c.historical_received)}
             </DataTableCell>
             <DataTableCell align="right">
               <button
