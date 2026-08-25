@@ -46,7 +46,6 @@ SPEC = TableSpec(
     ),
     closing_balance_prefix="Balance Carried Forward",
     totals_prefix="Total",
-    account_type_label="DBS Account",
 )
 
 

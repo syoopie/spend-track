@@ -214,6 +214,33 @@ def test_a_statement_whose_rows_do_not_match_its_printed_total_is_refused():
     assert "99.00" in str(excinfo.value)
 
 
+def test_a_second_table_without_its_own_heading_does_not_swallow_the_first():
+    """`_section_end` finds the next section's heading by searching backwards
+    from its header. When there is no heading between the two tables, that
+    search runs past the header and lands on the *first* section's - which,
+    unguarded, makes the first section's row range empty and drops it whole."""
+    from app.parsing.columnar import _section_end
+    from app.parsing.dbs.account_statement import SPEC
+
+    class _Line:
+        def __init__(self, text):
+            self._text = text
+
+        def text(self):
+            return self._text
+
+    lines = [
+        _Line("DBS Multiplier Account"),
+        _Line("Account No. 123-456789-0"),  # the only identity line
+        _Line("DATE DESCRIPTION WITHDRAWAL DEPOSIT BALANCE"),  # header at 2
+        _Line("03 Mar SAMPLE MERCHANT 10.00 990.00"),
+        _Line("DATE DESCRIPTION WITHDRAWAL DEPOSIT BALANCE"),  # header at 4
+        _Line("05 Mar OTHER MERCHANT 20.00 970.00"),
+    ]
+    headers = [(2, []), (4, [])]
+    assert _section_end(lines, headers, 0, SPEC) == 4
+
+
 def test_dbs_and_ocbc_parsers_report_themselves_as_implemented():
     assert DBSParser().parsing_implemented is True
     assert OCBCParser().parsing_implemented is True

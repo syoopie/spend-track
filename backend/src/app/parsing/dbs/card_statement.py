@@ -41,7 +41,6 @@ SPEC = TableSpec(
         "MINIMUM PAYMENT",
     ),
     is_card=True,
-    account_type_label="DBS Credit Card",
 )
 
 

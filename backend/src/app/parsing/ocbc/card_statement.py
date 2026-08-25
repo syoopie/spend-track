@@ -40,7 +40,6 @@ SPEC = TableSpec(
         "MINIMUM PAYMENT",
     ),
     is_card=True,
-    account_type_label="OCBC Credit Card",
 )
 
 

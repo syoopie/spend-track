@@ -141,7 +141,6 @@ class TableSpec:
     #: words into lines - see CLAUDE.md on UOB's bilingual disclaimer, which
     #: lands inside the description column's x-range.
     footer_top_cutoff: float = 780.0
-    account_type_label: str = "Account"
 
 
 @dataclass
@@ -259,9 +258,17 @@ def _section_end(lines: list[Line], headers: list[tuple[int, list]], position: i
     """
     if position + 1 >= len(headers):
         return len(lines)
+    header_idx = headers[position][0]
     next_header_idx = headers[position + 1][0]
     identity_idx = _identity_line_index(lines, next_header_idx, spec)
-    return identity_idx if identity_idx is not None else next_header_idx
+    # The backward search can walk past the next header entirely - if the next
+    # table has no heading of its own (a continuation of the same account, say)
+    # it finds *this* section's identity line instead, which sits before this
+    # header. Ending there would make the row range empty and lose the whole
+    # section without a word about it, so fall back to the next header.
+    if identity_idx is None or identity_idx <= header_idx:
+        return next_header_idx
+    return identity_idx
 
 
 def _identity_line_index(lines: list[Line], header_idx: int, spec: TableSpec) -> int | None:
