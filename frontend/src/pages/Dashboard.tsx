@@ -994,7 +994,7 @@ export function Dashboard() {
           )}
           {(() => {
             let lastMonthKey: string | null = null
-            return pagedTransactions.map((tx) => {
+            return pagedTransactions.map((tx, idx) => {
               const monthKey = tx.transaction_date.slice(0, 7)
               const showDivider = sort.field === 'date' && monthKey !== lastMonthKey
               lastMonthKey = monthKey
@@ -1032,6 +1032,15 @@ export function Dashboard() {
                     }}
                     className={`grid items-center px-5 py-3 text-md border-b border-divider group cursor-pointer
                       focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent
+                      ${
+                        // Alternating rows get a barely-there tint so a long run
+                        // of same-category transactions (identical badge colour,
+                        // identical everything else) still reads as separate
+                        // rows rather than one merged block - the divider border
+                        // alone (--color-divider, deliberately close to the
+                        // surface it sits on) isn't enough contrast on its own.
+                        idx % 2 === 1 ? 'bg-white/[0.025]' : ''
+                      }
                       ${
                         // A persistent accent ring for the row whose editor is
                         // currently open below it - same fix, same reasoning,

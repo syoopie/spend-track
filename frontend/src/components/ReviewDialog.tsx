@@ -15,9 +15,11 @@ import { Modal } from './Modal'
 import { RuleFormModal } from './RuleFormModal'
 import { Select } from './Select'
 
-const AMBER_BG = 'var(--color-warning-surface)'
-const AMBER_BADGE_BG = 'var(--color-warning-badge-bg)'
-const AMBER_BADGE_FG = 'var(--color-warning-text)'
+// "Needs review" flagging - its own dedicated blue, not the generic warning
+// tokens (see index.css's --color-review-* comment for why).
+const REVIEW_BG = 'var(--color-review-surface)'
+const REVIEW_BADGE_BG = 'var(--color-review-badge-bg)'
+const REVIEW_BADGE_FG = 'var(--color-review-text)'
 const AI_BG = 'var(--color-ai-surface)'
 const AI_BADGE_BG = 'var(--color-ai-badge-bg)'
 const AI_BADGE_FG = 'var(--color-ai-text)'
@@ -135,15 +137,15 @@ export interface ApplyRowBody {
 export interface ReviewStatCard {
   label: string
   value: number
-  tone?: 'default' | 'muted' | 'amber' | 'ai'
+  tone?: 'default' | 'muted' | 'review' | 'ai'
 }
 
 function StatCardView({ card }: { card: ReviewStatCard }) {
-  if (card.tone === 'amber') {
+  if (card.tone === 'review') {
     return (
-      <div className="rounded-2lg px-4.5 py-3" style={{ background: 'var(--color-warning-surface)', border: '1px solid var(--color-warning-surface-border)' }}>
-        <div className="text-2xs" style={{ color: 'var(--color-warning-text)' }}>{card.label}</div>
-        <div className="text-xl font-bold font-mono" style={{ color: 'var(--color-warning-text)' }}>{card.value}</div>
+      <div className="rounded-2lg px-4.5 py-3" style={{ background: 'var(--color-review-surface)', border: '1px solid var(--color-review-surface-border)' }}>
+        <div className="text-2xs" style={{ color: 'var(--color-review-text)' }}>{card.label}</div>
+        <div className="text-xl font-bold font-mono" style={{ color: 'var(--color-review-text)' }}>{card.value}</div>
       </div>
     )
   }
@@ -362,8 +364,8 @@ function ReviewRowPopover({
 
   return (
     <div
-      className="px-5 py-4 flex flex-col gap-3 border-b border-border"
-      style={{ background: row.ai_suggested && current ? AI_BG : row.needs_review ? AMBER_BG : 'var(--color-input)' }}
+      className="px-5 py-3 flex flex-col gap-2 border-b border-border"
+      style={{ background: row.ai_suggested && current ? AI_BG : row.needs_review ? REVIEW_BG : 'var(--color-input)' }}
     >
       {/* Restore Default lives here, not squeezed into the category row below
           - that row's other occupant (the PayNow "save as contact" checkbox)
@@ -410,7 +412,7 @@ function ReviewRowPopover({
               ? "Reset to the AI's suggested category and display name"
               : 'Reset to the original category and display name'
           }
-          className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-border bg-transparent text-muted hover:text-text cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg border border-border bg-transparent text-muted hover:text-text cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <FieldStatusIcon status={fieldStatus.restoreDefault} />
           <RotateCcw size={12} className="shrink-0" />
@@ -423,7 +425,7 @@ function ReviewRowPopover({
           both places that edit these two fields together. */}
       <div className="flex items-end gap-3">
         <div className="flex-1 min-w-0">
-          <div className="text-2xs text-muted mb-1 flex items-center gap-1.5">
+          <div className="text-2xs text-muted mb-0.5 flex items-center gap-1.5">
             Display name
             <FieldStatusIcon status={fieldStatus.label} />
           </div>
@@ -443,7 +445,7 @@ function ReviewRowPopover({
           />
         </div>
         <div className="w-[220px] shrink-0">
-          <div className="text-2xs text-muted mb-1 flex items-center gap-1.5">
+          <div className="text-2xs text-muted mb-0.5 flex items-center gap-1.5">
             Assign category · {direction === 'inflow' ? 'Inflow' : 'Outflow'}
             <FieldStatusIcon status={fieldStatus.category} />
           </div>
@@ -529,13 +531,13 @@ function ReviewRowPopover({
           inputs used to live directly in this row; now they live in the
           modal, and this row only needs a trigger button. */}
       {!row.is_paynow && (
-        <div className="flex items-center justify-between gap-3 pt-3 border-t border-border/70">
+        <div className="flex items-center justify-between gap-3 pt-2.5 border-t border-border/70">
           <div className="text-2xs text-muted">
             Turn this into a rule so matching transactions categorize themselves next time.
           </div>
           <button
             onClick={() => setRuleModalOpen(true)}
-            className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold px-3.5 py-2 rounded-lg border border-border bg-transparent text-text hover:bg-input cursor-pointer whitespace-nowrap"
+            className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold px-3.5 py-1.5 rounded-lg border border-border bg-transparent text-text hover:bg-input cursor-pointer whitespace-nowrap"
           >
             <ListPlus size={13} className="shrink-0" />
             Create Rule
@@ -635,14 +637,14 @@ const ReviewRowItem = memo(function ReviewRowItem({
   const shiftKeyRef = useRef(false)
   const current = aiIsCurrent(row)
   const colorOverride = row.needs_review
-    ? { bg: AMBER_BADGE_BG, fg: AMBER_BADGE_FG }
+    ? { bg: REVIEW_BADGE_BG, fg: REVIEW_BADGE_FG }
     : row.ai_suggested && current
       ? { bg: AI_BADGE_BG, fg: AI_BADGE_FG }
       : undefined
   const rowBg = pending
     ? AI_BG
     : row.needs_review
-      ? AMBER_BG
+      ? REVIEW_BG
       : row.ai_suggested && current
         ? AI_BG
         : undefined
@@ -668,13 +670,30 @@ const ReviewRowItem = memo(function ReviewRowItem({
           ${
             // A persistent accent ring, not just the hover one - the chevron
             // rotation and background swap alone were easy to miss (and the
-            // background swap disappears entirely on an AI/amber-tinted row,
+            // background swap disappears entirely on an AI/needs-review-tinted row,
             // since rowBg always wins over it), so a currently-open row had
             // no reliable "this is the one I'm editing" cue while scrolling
             // a long batch. Independent of rowBg for exactly that reason.
-            isOpen ? 'ring-2 ring-inset ring-accent rounded-lg' : 'hover:ring-1 hover:ring-inset hover:ring-accent/40'
+            isOpen ? 'ring-2 ring-inset ring-accent rounded-lg' : 'hover:ring-1 hover:ring-inset hover:ring-accent/40 hover:rounded-lg'
           }`}
-        style={{ gridTemplateColumns: ROW_GRID_TEMPLATE, background: rowBg ?? (isOpen ? 'var(--color-input)' : undefined) }}
+        style={{
+          gridTemplateColumns: ROW_GRID_TEMPLATE,
+          // Base colour: rowBg (AI/needs-review tint) always wins; failing
+          // that, an open row gets the input surface; failing that,
+          // transparent (the dialog's own background shows through).
+          backgroundColor: rowBg ?? (isOpen ? 'var(--color-input)' : undefined),
+          // The stripe is a separate flat overlay layered ON TOP of
+          // whatever backgroundColor is - not an alternative to it - so it
+          // still shows on a tinted (AI/needs-review) row instead of only
+          // applying to plain ones. A big block of same-tint rows (a large
+          // batch where most rows land needs-review, say) used to be
+          // completely indistinguishable row-to-row, since rowBg painted
+          // over the zebra tint entirely rather than combining with it.
+          // Skipped on the open row so it doesn't shift shade depending on
+          // its index parity while its own popover is showing.
+          backgroundImage:
+            !isOpen && index % 2 === 1 ? 'linear-gradient(rgba(255,255,255,0.03), rgba(255,255,255,0.03))' : undefined,
+        }}
       >
         {/* stopPropagation keeps this click from also opening the row below;
             unlike the old version, this deliberately does NOT preventDefault
@@ -1207,7 +1226,7 @@ export function ReviewDialog({
       {rows.length > 0 && (
         <div className="flex items-center gap-4 mb-3 text-2xs text-muted-2 flex-wrap">
           <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: 'var(--color-warning-text)' }} />
+            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: 'var(--color-review-text)' }} />
             Needs review
           </span>
           <span className="flex items-center gap-1.5">

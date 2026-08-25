@@ -145,7 +145,7 @@ export function StagingReviewDialog({ onClose }: { onClose: () => void }) {
     { label: 'Duplicates Skipped', value: batch.duplicates_skipped, tone: 'muted' },
     { label: 'New Accounts Provisioned', value: batch.new_accounts_provisioned },
     ...(batch.needs_category_count > 0
-      ? [{ label: 'PayNow — Needs Review', value: batch.needs_category_count, tone: 'amber' as const }]
+      ? [{ label: 'PayNow — Needs Review', value: batch.needs_category_count, tone: 'review' as const }]
       : []),
     ...(batch.ai_suggested_count > 0
       ? [{ label: 'AI Suggested', value: batch.ai_suggested_count, tone: 'ai' as const }]

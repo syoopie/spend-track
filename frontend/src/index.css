@@ -32,6 +32,20 @@
   --color-warning-surface-border: oklch(40% 0.08 70);
   --color-warning-badge-bg: oklch(30% 0.07 70);
   --color-warning-text: oklch(82% 0.13 70);
+  /* "Needs review" flagging (ReviewDialog.tsx) used to reuse the warning
+     tokens above, but warning's hue (70, amber) sits right next to the
+     Paynow category's own default hue (20) at nearly the same low
+     lightness/chroma - both read as the same muddy brown at a glance, so a
+     needs-review Paynow row and its own orange "Paynow" badge blurred
+     together. This is a distinct blue, chosen to stay clear of every
+     default category hue (migrations.py's DEFAULT_CATEGORIES) as well as
+     warning/danger/success/ai above - kept as its own token rather than
+     reusing warning's, since genuine warnings (a failed AI run, the narrow-
+     window notice) are a different semantic and should stay amber. */
+  --color-review-surface: oklch(25% 0.07 250);
+  --color-review-surface-border: oklch(45% 0.11 250);
+  --color-review-badge-bg: oklch(32% 0.09 250);
+  --color-review-text: oklch(80% 0.15 250);
   --color-ai-surface: oklch(22% 0.045 285);
   --color-ai-surface-border: oklch(45% 0.1 285);
   --color-ai-badge-bg: oklch(30% 0.09 285);
