@@ -311,6 +311,20 @@ export function Dashboard() {
   })
   const [refundTxId, setRefundTxId] = useState<number | null>(null)
   const [editingTxId, setEditingTxId] = useState<number | null>(null)
+  // Keyed by transaction id - each ref spans a row plus its popover-when-open
+  // (see the wrapper div below), so scrolling one into view accounts for the
+  // popover's own height, not just the row header's.
+  const editorRowRefs = useRef(new Map<number, HTMLDivElement>())
+  // Opening a row near the bottom of the feed used to leave its popover
+  // rendered below the visible scroll area, with no indication anything had
+  // even happened. 'nearest' only scrolls when part of the target is
+  // actually out of view, and only as far as needed - a row already fully
+  // visible (popover included) doesn't jump around.
+  useEffect(() => {
+    if (editingTxId != null) {
+      editorRowRefs.current.get(editingTxId)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    }
+  }, [editingTxId])
   const toast = useToast()
   const deleteTransaction = useDeleteTransaction()
   // Optimistically-hidden rows whose real DELETE is still deferred behind
@@ -990,7 +1004,13 @@ export function Dashboard() {
               const isOpen = editingTxId === tx.id
 
               return (
-                <div key={tx.id}>
+                <div
+                  key={tx.id}
+                  ref={(el) => {
+                    if (el) editorRowRefs.current.set(tx.id, el)
+                    else editorRowRefs.current.delete(tx.id)
+                  }}
+                >
                   {showDivider && (
                     <div
                       className="sticky z-[5] px-5 py-1.5 text-2xs font-semibold text-muted-2 bg-input border-b border-divider shadow-[0_4px_6px_-4px_rgba(0,0,0,0.4)]"

@@ -589,6 +589,7 @@ const ReviewRowItem = memo(function ReviewRowItem({
   categories,
   batchRows,
   registerRef,
+  registerContainerRef,
   onToggleOpen,
   onToggleSelect,
   onMoveFocus,
@@ -605,6 +606,7 @@ const ReviewRowItem = memo(function ReviewRowItem({
   categories: Category[] | undefined
   batchRows: ReviewRow[]
   registerRef: (key: number, el: HTMLDivElement | null) => void
+  registerContainerRef: (key: number, el: HTMLDivElement | null) => void
   onToggleOpen: (key: number) => void
   onToggleSelect: (key: number, index: number, shiftKey: boolean) => void
   onMoveFocus: (fromIndex: number, direction: 1 | -1) => void
@@ -637,7 +639,7 @@ const ReviewRowItem = memo(function ReviewRowItem({
         ? AI_BG
         : undefined
   return (
-    <div>
+    <div ref={(el) => registerContainerRef(row.key, el)}>
       <div
         ref={(el) => registerRef(row.key, el)}
         role="button"
@@ -856,12 +858,19 @@ export function ReviewDialog({
   } | null>(null)
   const categoriesQ = useCategories()
   // Row header refs, keyed by row.key - lets keyboard Up/Down move focus
-  // between rows (REV-3). Opening a row no longer force-scrolls it to the
-  // top of the scroller - that fought the user's own scroll position (they
-  // clicked a row because they could already see it) for no real benefit,
-  // since the popover pushing later rows down is a normal, expected result
-  // of expanding something in a scroll region.
+  // between rows (REV-3).
   const rowRefs = useRef(new Map<number, HTMLDivElement>())
+  // Row-plus-popover container refs, keyed by row.key - separate from
+  // rowRefs above because scrolling needs to account for the popover's own
+  // height once it's open, not just the (always-visible) header's position.
+  // Opening a row no longer force-scrolls it to the top of the scroller -
+  // that fought the user's own scroll position (they clicked a row because
+  // they could already see it) for no real benefit - but a row opened near
+  // the bottom of the scroller can still have its popover render below the
+  // visible area entirely, so this scrolls just far enough ('nearest') to
+  // bring the whole opened row into view, and does nothing if it's already
+  // fully visible.
+  const rowContainerRefs = useRef(new Map<number, HTMLDivElement>())
 
   // REV-1: a filter bar + search over the row list, so reviewing a
   // 100+-row batch doesn't mean scrolling past everything already resolved
@@ -1011,6 +1020,19 @@ export function ReviewDialog({
     if (el) rowRefs.current.set(key, el)
     else rowRefs.current.delete(key)
   }, [])
+
+  const registerRowContainerRef = useCallback((key: number, el: HTMLDivElement | null) => {
+    if (el) rowContainerRefs.current.set(key, el)
+    else rowContainerRefs.current.delete(key)
+  }, [])
+
+  // Runs after the popover has actually mounted (this effect fires post-DOM-
+  // commit), so the container's height already includes it.
+  useEffect(() => {
+    if (openKey != null) {
+      rowContainerRefs.current.get(openKey)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    }
+  }, [openKey])
 
   const handleMoveFocus = useCallback(
     (fromIndex: number, direction: 1 | -1) => {
@@ -1332,6 +1354,7 @@ export function ReviewDialog({
             categories={categoriesQ.data}
             batchRows={rows}
             registerRef={registerRowRef}
+            registerContainerRef={registerRowContainerRef}
             onToggleOpen={handleToggleOpen}
             onToggleSelect={handleToggleSelect}
             onMoveFocus={handleMoveFocus}
