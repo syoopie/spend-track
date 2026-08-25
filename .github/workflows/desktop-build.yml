@@ -1,0 +1,144 @@
+name: Desktop build
+
+# Produces the double-clickable download for each OS. PyInstaller freezes
+# the interpreter it runs under, so there's no cross-compiling: each
+# artifact has to be built on its own runner.
+#
+# Pushing a tag like v0.1.0 also publishes them as a GitHub Release, which
+# is the link the README's "Download" section points at.
+
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - ".github/workflows/desktop-build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: SpendTrack-linux-x86_64
+            path: backend/dist/SpendTrack
+          - os: windows-latest
+            artifact: SpendTrack-windows-x86_64
+            path: backend/dist/SpendTrack.exe
+          - os: macos-latest
+            artifact: SpendTrack-macos-arm64
+            path: backend/dist/SpendTrack.app
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Build the executable
+        working-directory: backend
+        run: uv run --group build python scripts/build_desktop.py
+
+      - name: Check it starts and serves the UI
+        # A binary that builds but can't start is the failure mode worth
+        # catching here - a missing hidden import or data file only shows up
+        # at runtime. SG_TRACKER_NO_BROWSER stops it opening a tab on a
+        # headless runner; SG_TRACKER_DB_PATH keeps it off the real one.
+        shell: bash
+        working-directory: backend
+        env:
+          SG_TRACKER_NO_BROWSER: "1"
+        run: |
+          export SG_TRACKER_DB_PATH="$RUNNER_TEMP/smoke.db"
+          case "${{ runner.os }}" in
+            macOS)   ./dist/SpendTrack.app/Contents/MacOS/SpendTrack & ;;
+            Windows) ./dist/SpendTrack.exe & ;;
+            *)       ./dist/SpendTrack & ;;
+          esac
+          pid=$!
+          fail() { echo "FAILED: $1"; kill $pid 2>/dev/null || true; exit 1; }
+
+          for _ in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8123/api/health > /dev/null && break
+            sleep 1
+          done || true
+          curl -sf http://127.0.0.1:8123/api/health > /dev/null || fail "the packaged app never became reachable"
+          echo "API is up"
+
+          # Each of these checks something only the bundle can get wrong, and
+          # each has to be able to fail the job - an informational echo would
+          # let a build that serves no UI at all upload happily.
+          curl -sf http://127.0.0.1:8123/ | grep -qi "<!doctype html" || fail "/ did not serve the UI shell"
+          echo "UI shell is served"
+
+          asset=$(curl -sf http://127.0.0.1:8123/ | grep -o '/assets/[^"]*\.js' | head -1)
+          [ -n "$asset" ] || fail "the UI shell references no JS bundle"
+          curl -sf "http://127.0.0.1:8123$asset" > /dev/null || fail "$asset is missing from the bundle"
+          echo "JS bundle is served ($asset)"
+
+          curl -sf http://127.0.0.1:8123/rules | grep -qi "<!doctype html" || fail "deep link /rules did not fall back to the shell"
+          echo "Client-side routes resolve"
+
+          curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8123/api/nope | grep -q 404 || fail "an unmatched /api path did not 404"
+          echo "Unmatched API paths still 404"
+
+          kill $pid 2>/dev/null || true
+
+      - name: Zip the macOS app bundle
+        # A .app is a directory; upload-artifact would flatten it and lose
+        # the executable bit, so it's zipped with ditto (which preserves
+        # both) before upload.
+        if: runner.os == 'macOS'
+        run: ditto -c -k --keepParent backend/dist/SpendTrack.app backend/dist/SpendTrack-macos.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ runner.os == 'macOS' && 'backend/dist/SpendTrack-macos.zip' || matrix.path }}
+          if-no-files-found: error
+
+  release:
+    # Only for a version tag - PR and manual runs stop at the artifacts above.
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Give each file a name that says what it is
+        run: |
+          mkdir -p release
+          cp artifacts/SpendTrack-linux-x86_64/SpendTrack       release/SpendTrack-linux-x86_64
+          cp artifacts/SpendTrack-windows-x86_64/SpendTrack.exe release/SpendTrack-windows-x86_64.exe
+          cp artifacts/SpendTrack-macos-arm64/SpendTrack-macos.zip release/SpendTrack-macos-arm64.zip
+          ls -lh release
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true
+          body: |
+            Download the file for your computer, then see
+            [Download and run](https://github.com/syoopie/spend-track#download-and-run)
+            for the one-time step macOS and Windows need before an unsigned
+            app will open.
+
+            - **Windows** — `SpendTrack-windows-x86_64.exe`
+            - **macOS (Apple silicon)** — `SpendTrack-macos-arm64.zip`
+            - **Linux** — `SpendTrack-linux-x86_64`

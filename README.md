@@ -30,36 +30,24 @@ There is no account to create, no website to log into, and nothing is uploaded. 
 - **Names the people you pay.** Save a PayNow number or UEN as a contact once, and future transfers to them are labelled and categorized on their own.
 - **Shows you the picture:** money in and out, spending by category, whether you're spending faster than last month, your top merchants and your most-paid PayNow contacts — all filterable by date range and account.
 
-## Getting started
+## Download and run
 
-### Install these two things first (one time only)
+No installers, no accounts, no command line. Grab the file for your computer from the [latest release](https://github.com/syoopie/spend-track/releases/latest), open it, and the app appears in your browser.
 
-- **[uv](https://docs.astral.sh/uv/)** — runs the part of the app that reads your statements
-- **[Node.js](https://nodejs.org/)**, version 18 or newer — runs the part you look at
+| Your computer | Download | How to open it |
+|---|---|---|
+| **Windows** | `SpendTrack-windows-x86_64.exe` | Double-click it. Windows will warn that the publisher is unknown — click **More info** → **Run anyway**. |
+| **Mac** (Apple silicon) | `SpendTrack-macos-arm64.zip` | Unzip, then **right-click** the app → **Open** → **Open**. Double-clicking the first time gives a "cannot be opened" message; right-click → Open is what gets past it. |
+| **Linux** | `SpendTrack-linux-x86_64` | `chmod +x SpendTrack-linux-x86_64` once, then run it. |
 
-Both have ordinary installers and need no configuration.
+A small window opens showing where your data is stored and the address the app is running at, and your browser opens on the dashboard. **Closing that window closes the app.** Your data is saved as you go.
 
-### Then start the app
+<details>
+<summary>Why does my computer warn me about it?</summary>
 
-**Windows**
+Both warnings mean the same thing: the download isn't signed with a paid developer certificate (Apple charges $99/year, Microsoft rather more). Nothing about the app changes if you get past the warning — but you shouldn't take that on faith from the person who wrote it. Everything here is source code you can read, and the download is built in the open by [this GitHub Actions workflow](.github/workflows/desktop-build.yml), from the exact commit each release names. If you'd rather not run an unsigned binary at all, [run it from source](#running-from-source) instead.
 
-```
-git clone https://github.com/syoopie/spend-track.git
-cd spend-track
-scripts\start.bat
-```
-
-If you'd rather not use `git`: open the [project page](https://github.com/syoopie/spend-track), click the green **Code** button → **Download ZIP**, unzip it anywhere, then double-click `scripts\start.bat` inside the unzipped folder.
-
-**macOS / Linux**
-
-```bash
-git clone https://github.com/syoopie/spend-track.git
-cd spend-track
-./scripts/start.sh
-```
-
-The first run takes a few minutes while it downloads what it needs; after that it starts in seconds. The script launches everything, waits for it to be ready, and opens the app in your browser at `http://localhost:5173`. Press `Ctrl+C` in that terminal window to stop it. Re-running the script is safe — it notices what's already running instead of starting a second copy.
+</details>
 
 ### Try it before using your own statements
 
@@ -96,7 +84,7 @@ If the model isn't reachable, the app tells you with a warning instead of leavin
 
 **My statement won't upload.** Make sure it's the e-statement PDF downloaded from the bank, not a scan, a photo, or a printed-then-re-saved copy — the app reads the text inside the file, which those versions don't have. Also check the bank is one that reads today — **Settings → Region** lists which banks parse and which are only recognized.
 
-**My browser didn't open.** Go to `http://localhost:5173` yourself once the terminal says both parts are up.
+**My browser didn't open.** The small window the app opens shows its address (`http://127.0.0.1:8123` by default) — type that into your browser yourself.
 
 **I want to start over.** Settings has buttons to delete your transactions, rules, or contacts individually, or everything at once.
 
@@ -120,6 +108,27 @@ If you have statements from a bank you'd like read, that's the blocker worth rem
 
 <details>
 <summary>Running the two dev servers by hand, tests, and project layout</summary>
+
+### Running from source
+
+Two prerequisites, both with ordinary installers: **[uv](https://docs.astral.sh/uv/)** (Python) and **[Node.js](https://nodejs.org/)** 18 or newer. Then:
+
+```bash
+git clone https://github.com/syoopie/spend-track.git
+cd spend-track
+./scripts/start.sh      # Windows: scripts\start.bat
+```
+
+That script starts both halves, waits for them, and opens `http://localhost:5173`. `Ctrl+C` stops it.
+
+### Building the download yourself
+
+```bash
+cd backend
+uv run --group build python scripts/build_desktop.py
+```
+
+Compiles the frontend, then freezes it and the API into one executable in `backend/dist/` — `SpendTrack.exe` on Windows, `SpendTrack.app` on macOS, `SpendTrack` on Linux. PyInstaller freezes the interpreter it runs under, so each platform's build has to happen on that platform; `.github/workflows/desktop-build.yml` does all three on every pull request and attaches them to a release on a `v*` tag.
 
 ### Manual run
 
@@ -151,6 +160,7 @@ Parser regression tests run against every committed sanitized sample PDF, alongs
 
 - **Backend**: Python 3.12, FastAPI, SQLite (stdlib `sqlite3`, no ORM), `pdfplumber` for PDF parsing, `pypdf` for encrypted PDFs, `httpx` for AI provider calls. Managed with `uv`.
 - **Frontend**: React + TypeScript, Vite, Tailwind CSS v4, TanStack Query, React Router. No charting library — every chart is hand-rolled SVG.
+- **Packaging**: PyInstaller. The compiled frontend rides inside the executable and is served by the same FastAPI process as the API (`app/webui.py`), so a packaged copy is one process on one port with no Node anywhere — Node is a build-time dependency only.
 
 ### Layout
 

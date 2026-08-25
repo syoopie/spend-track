@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.db import init_db
+from app.webui import find_webui_dir, mount_webui
 from app.routers import (
     accounts,
     ai_settings,
@@ -50,6 +51,14 @@ app.include_router(dashboard.router)
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
+
+
+# Must come after every router: the SPA fallback is a catch-all, so anything
+# registered later would be unreachable. No-op when there's no build on disk
+# (the dev-server case), which is why this isn't an error branch.
+_webui_dir = find_webui_dir()
+if _webui_dir is not None:
+    mount_webui(app, _webui_dir)
 
 
 def run():
