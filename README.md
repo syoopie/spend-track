@@ -1,18 +1,22 @@
 <div align="center">
 
-# SG Expenditure Tracker
+# SpendTrack
 
-**Turn your Singapore bank statements into a spending dashboard — on your own computer, with nothing sent anywhere.**
+**Turn bank statement PDFs into a spending dashboard — on your own computer, with nothing sent anywhere.**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 [![Runs locally](https://img.shields.io/badge/data-100%25%20local-brightgreen?style=flat-square)](#your-data-stays-on-your-computer)
+[![Download](https://img.shields.io/github/v/release/syoopie/spend-track?style=flat-square&label=download&color=e35fd0)](https://github.com/syoopie/spend-track/releases/latest)
 [![Python 3.12](https://img.shields.io/badge/python-3.12-3776ab?style=flat-square&logo=python&logoColor=white)](backend/pyproject.toml)
 [![React 19](https://img.shields.io/badge/react-19-61dafb?style=flat-square&logo=react&logoColor=white)](frontend/package.json)
-[![Banks: UOB](https://img.shields.io/badge/statements-UOB-e35fd0?style=flat-square)](#adding-a-bank)
+
+<sub>**A bank becomes supported the moment there are sample statements to build a parser against — that's the whole blocker.** Reads today: **UOB**. Recognized but not parsed yet: **DBS**, **OCBC**. Yours not listed? [Say what you have](https://github.com/syoopie/spend-track/issues/new?template=bank-support.yml) — never a real statement; a redacted sample, or an offer to test on your own machine, is what's needed.</sub>
 
 </div>
 
 Give it a statement PDF you downloaded from your bank, and it reads every transaction, sorts them into categories, cancels out refunds against the purchases they reverse, and shows you where your money actually went.
+
+Which banks it reads is a plugin layer: [one folder per bank](#adding-a-bank) implementing `detect()` and `parse()`, and a region profile carrying the currency, transfer scheme and starting merchant list. Nothing downstream of the parser — categorization, refund pairing, duplicate detection, the dashboard — knows or cares which country a statement came from. The profile that ships today is Singapore's (SGD, PayNow, a Singapore merchant word bank), because that's where the statements came from; a second one is a data change, not a rewrite.
 
 **Using it** · [Download and run](#download-and-run) · [Try the sample data](#try-it-before-using-your-own-statements) · [The everyday routine](#the-everyday-routine) · [AI categorization](#optional-let-ai-sort-out-the-leftovers) · [Questions](#questions)
 
@@ -26,8 +30,8 @@ There is no account to create, no website to log into, and nothing is uploaded. 
 
 ## What it does
 
-- **Reads UOB statements** — bank account and credit card e-statements, including password-protected ones. Upload one PDF, or a whole year's worth at once, mixing months and statement types freely. DBS and OCBC are recognized but not read yet: upload one and the app says so plainly instead of guessing. Support for them, and for other banks, is intended — see [Adding a bank](#adding-a-bank).
-- **Sorts transactions into categories automatically**, using rules you can see and edit, plus a built-in list of common Singapore merchants. Your own rules always take priority.
+- **Reads statement PDFs** — bank account and credit card, including password-protected ones. Upload one, or a whole year's worth at once, mixing months and statement types freely. UOB parses today; DBS and OCBC are recognized but not read yet, and say so plainly instead of guessing. Any other bank is [one parser away](#adding-a-bank).
+- **Sorts transactions into categories automatically**, using rules you can see and edit, plus a built-in merchant list for your region (Singapore's ships today). Your own rules always take priority.
 - **Lets you check before anything is saved.** Every upload lands in a review screen first, with anything the app wasn't sure about — an unfamiliar PayNow transfer, say — flagged for you to decide.
 - **Doesn't double-count.** Uploading the same statement twice is safe: repeats are spotted and skipped. And if you upload both a credit card statement and the bank account that pays that card's bill, the bill payment isn't counted as extra spending on top of the purchases themselves.
 - **Nets off refunds** against the original purchase, matching on the merchant name as well as the amount, so two unrelated transactions don't get paired by accident.
@@ -82,7 +86,7 @@ If the model isn't reachable, the app tells you with a warning instead of leavin
 
 ## Questions
 
-**Where is my data kept?** In a single database file at `~/.sg-expenditure-tracker/data.db`. **Settings → Change Database Path** lets you move it — pointing it at a Dropbox or OneDrive folder is an easy way to get backups and access from another computer.
+**Where is my data kept?** In a single database file at `~/.spendtrack/data.db` — **Settings** shows the exact path. (An install from before the app was renamed keeps using its original `~/.sg-expenditure-tracker` folder rather than having its database moved out from under it.) **Settings → Change Database Path** lets you move it — pointing it at a Dropbox or OneDrive folder is an easy way to get backups and access from another computer.
 
 **Does it need my bank login?** No. It only reads statement PDFs you've already downloaded yourself, and never connects to your bank.
 
@@ -104,7 +108,9 @@ If the model isn't reachable, the app tells you with a warning instead of leavin
 
 ## Adding a bank
 
-The goal is to read statements from any Singapore bank; UOB is simply the one there were real statements to build against. DBS and OCBC already have detection in place — the app can tell a DBS statement from an unreadable file — so what's missing for each is the parser itself, which is written against real sample statements. Everything downstream (categorization, refunds, duplicate detection, the dashboard) is bank-agnostic and needs no changes.
+The goal is to read statements from any bank, anywhere. UOB is simply the one there were real statements to build a parser against. DBS and OCBC already have detection in place — the app can tell a DBS statement from an unreadable file — so what's missing for each is the parser itself, which has to be written against real sample statements. Everything downstream (categorization, refunds, duplicate detection, the dashboard) is bank-agnostic and needs no changes.
+
+A new **country** is a second `CountryProfile` in `backend/src/app/localization.py` — currency, transfer scheme, the contact-identifier hint, and which parsers belong to it — plus a starting merchant word bank in `engine/default_rules.py`. Neither is a rewrite; the Singapore profile is just the one that exists.
 
 If you have statements from a bank you'd like read, that's the blocker worth removing: [open a bank support request](https://github.com/syoopie/spend-track/issues/new?template=bank-support.yml) (don't attach a real statement — it has your account number in it), or see `backend/src/app/parsing/` for how a parser plugs in — each is one folder implementing `detect()` and `parse()`, registered in one list. **Settings → Region** always shows the live state: which banks parse, and which are recognized but waiting on a parser.
 
@@ -139,7 +145,7 @@ uv sync
 uv run uvicorn app.main:app --reload
 ```
 
-The SQLite database defaults to `~/.sg-expenditure-tracker/data.db`; `SG_TRACKER_DB_PATH` overrides it, which is handy for pointing a second instance at a scratch database.
+The SQLite database defaults to `~/.spendtrack/data.db`; `SPENDTRACK_DB_PATH` overrides it, which is handy for pointing a second instance at a scratch database. (The pre-rename `SG_TRACKER_*` variable names still work — see `backend/src/app/config.py`.)
 
 **Frontend** (from `frontend/`) — serves the UI on `http://localhost:5173` and proxies `/api/*` to the backend:
 
@@ -175,7 +181,7 @@ cd backend && uv run pytest
 
 Parser regression tests run against every committed sanitized sample PDF, alongside full API integration tests via FastAPI's `TestClient` — all pass on a fresh clone with no setup beyond `uv sync`. A few extra tests run only if you've dropped your own real UOB statements into a local, gitignored `PDF Examples/UOB/` folder (they cross-validate against each statement's own printed totals) and are skipped, not failed, when it doesn't exist.
 
-The synthetic samples are generated by `backend/scripts/generate_sample_pdfs.py` at the exact column positions the real parser expects, so they exercise the genuine parsing path. `backend/scripts/seed_demo_data.py` rebuilds the exact database the screenshots above were taken from — a throwaway `SG_TRACKER_DB_PATH`, the whole sample folder uploaded in one batch, plus placeholder contacts and rules.
+The synthetic samples are generated by `backend/scripts/generate_sample_pdfs.py` at the exact column positions the real parser expects, so they exercise the genuine parsing path. `backend/scripts/seed_demo_data.py` rebuilds the exact database the screenshots above were taken from — a throwaway `SPENDTRACK_DB_PATH`, the whole sample folder uploaded in one batch, plus placeholder contacts and rules.
 
 The frontend has no automated test suite yet — verified manually in-browser, with `npx tsc -b` and `npm run build` for type and build checks.
 

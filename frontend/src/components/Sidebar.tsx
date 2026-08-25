@@ -128,9 +128,9 @@ export function Sidebar() {
             </div>
             <div className={`overflow-hidden shrink-0 ${expanded ? 'w-auto' : 'w-0'}`}>
               <div className="text-sm font-semibold font-display text-text leading-tight whitespace-nowrap">
-                Expenditure
+                Spend
                 <br />
-                Tracker
+                Track
               </div>
             </div>
           </NavLink>

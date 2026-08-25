@@ -1,6 +1,6 @@
-# SG Expenditure Tracker (frontend)
+# SpendTrack (frontend)
 
-React + TypeScript + Vite frontend for the local-only SG bank statement expenditure tracker. See the [repo root README](../README.md) for the full picture (what it does, one-command startup, design decisions).
+React + TypeScript + Vite frontend for SpendTrack, the local-first bank statement tracker. See the [repo root README](../README.md) for the full picture (what it does, one-command startup, design decisions).
 
 ```bash
 npm install

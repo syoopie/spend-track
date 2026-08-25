@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Starts the SG Expenditure Tracker: backend (FastAPI) + frontend (Vite) dev
+# Starts SpendTrack in development: backend (FastAPI) + frontend (Vite) dev
 # servers in the background, waits for both to come up, opens the app in
 # your browser, and stops both when you Ctrl+C this script.
 #
@@ -46,8 +46,8 @@ open_url() {
     fi
 }
 
-echo "SG Expenditure Tracker"
-echo "-----------------------"
+echo "SpendTrack"
+echo "----------"
 
 if ! command -v uv >/dev/null 2>&1; then
     echo "ERROR: 'uv' is not installed or not on PATH. Install it from https://docs.astral.sh/uv/" >&2

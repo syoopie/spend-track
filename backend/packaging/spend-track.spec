@@ -80,7 +80,7 @@ if sys.platform == "darwin":
         bundle_identifier="dev.spendtrack.app",
         info_plist={
             "CFBundleName": "SpendTrack",
-            "CFBundleDisplayName": "SG Expenditure Tracker",
+            "CFBundleDisplayName": "SpendTrack",
             "CFBundleShortVersionString": "0.1.0",
             "LSMinimumSystemVersion": "12.0",
             "LSBackgroundOnly": False,

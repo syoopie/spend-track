@@ -26,7 +26,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="SG Expenditure Tracker", lifespan=lifespan)
+app = FastAPI(title="SpendTrack", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -62,7 +62,7 @@ if _webui_dir is not None:
 
 
 def run():
-    """Entry point for `expenditure-tracker` / `uvx expenditure-tracker`."""
+    """Entry point for the `spendtrack` console script."""
     uvicorn.run("app.main:app", host="127.0.0.1", port=8000)
 
 
