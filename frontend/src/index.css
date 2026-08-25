@@ -103,14 +103,24 @@ input[type="number"]::-webkit-outer-spin-button {
    set the same outline via Tailwind utility classes on themselves; this
    rule is what covers every native element that isn't going through one
    of those primitives (Sidebar nav links, calendar day-cell buttons,
-   native <select> in MonthRangeCalendar, etc.) - redundant, not
-   conflicting, when a component already sets its own. */
-button:focus-visible,
-a:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible,
-[tabindex]:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
+   native <select> in MonthRangeCalendar, etc.) - "redundant, not
+   conflicting" was the intent, but this rule used to sit outside any
+   @layer, and unlayered CSS always beats layered CSS in the cascade
+   regardless of specificity - so it was silently overriding Field/Select's
+   own inset -outline-offset-2 (meant to keep the ring from bleeding past a
+   tight container's padding into a clipped edge) back to the outward
+   +2px every time, on every input in the app. @layer base puts it back
+   below Tailwind's own utilities (the `utilities` layer), so a
+   component's own focus-visible classes win over this fallback again,
+   exactly as the comment above already claimed they did. */
+@layer base {
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
 }

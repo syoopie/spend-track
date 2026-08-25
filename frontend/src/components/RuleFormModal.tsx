@@ -98,7 +98,12 @@ export function RuleFormModal({
 
   return (
     <Modal onClose={onClose} width={460} title={rule ? 'Edit Rule' : 'New Rule'}>
-      <div className="text-xs text-muted mb-4 -mt-2.5">
+      {/* No negative top margin here (there used to be one, to tuck this
+          closer under the title) - Modal's body wrapper is overflow-y-auto
+          with no top padding, so a negative margin on its first child
+          rendered above the scroll container's own top edge and got
+          silently clipped instead of just looking tighter. */}
+      <div className="text-xs text-muted mb-4">
         Applies to every transaction whose description contains the text below.
       </div>
 
