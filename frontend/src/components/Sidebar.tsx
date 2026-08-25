@@ -2,6 +2,7 @@ import { BookOpen, LayoutGrid, ListChecks, Pin, PinOff, Settings as SettingsIcon
 import { useRef, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useSettings } from '../api/hooks'
+import { Logo } from './Logo'
 import { useUploadDialog } from './UploadProvider'
 
 const NAV_ITEMS = [
@@ -124,13 +125,13 @@ export function Sidebar() {
         <div className="flex items-center justify-between pt-1.5 pb-5.5">
           <NavLink to="/" end className="flex items-center gap-2 min-w-0">
             <div className="w-9 flex items-center justify-center shrink-0">
-              <div className="w-6.5 h-6.5 rounded-md bg-accent" />
+              <Logo size={26} />
             </div>
             <div className={`overflow-hidden shrink-0 ${expanded ? 'w-auto' : 'w-0'}`}>
               <div className="text-sm font-semibold font-display text-text leading-tight whitespace-nowrap">
-                Expenditure
+                Spend
                 <br />
-                Tracker
+                Track
               </div>
             </div>
           </NavLink>

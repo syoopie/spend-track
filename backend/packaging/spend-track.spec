@@ -18,6 +18,10 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 ROOT = Path(SPECPATH).resolve().parents[1]  # backend/packaging -> repo root
 BACKEND = ROOT / "backend"
 WEBUI = ROOT / "frontend" / "dist"
+# One PNG master for every platform: PyInstaller converts it to .ico or
+# .icns as needed (via Pillow, which pdfplumber already pulls in), so there
+# are no per-platform binaries to keep in sync with docs/logo.svg.
+ICON = SPECPATH + "/icon.png"
 
 if not (WEBUI / "index.html").is_file():
     raise SystemExit(
@@ -55,6 +59,7 @@ exe = EXE(
     a.datas,
     [],
     name="SpendTrack",
+    icon=ICON,
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -76,11 +81,11 @@ if sys.platform == "darwin":
     app = BUNDLE(
         exe,
         name="SpendTrack.app",
-        icon=None,
+        icon=ICON,
         bundle_identifier="dev.spendtrack.app",
         info_plist={
             "CFBundleName": "SpendTrack",
-            "CFBundleDisplayName": "SG Expenditure Tracker",
+            "CFBundleDisplayName": "SpendTrack",
             "CFBundleShortVersionString": "0.1.0",
             "LSMinimumSystemVersion": "12.0",
             "LSBackgroundOnly": False,

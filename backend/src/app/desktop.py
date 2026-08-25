@@ -75,8 +75,8 @@ def main() -> int:
     port = choose_port()
     url = f"http://{HOST}:{port}/"
 
-    print("SG Expenditure Tracker")
-    print("----------------------")
+    print("SpendTrack")
+    print("----------")
     print(f"Your data:  {get_db_path()}")
     print(f"Open at:    {url}")
     print()
@@ -84,7 +84,9 @@ def main() -> int:
     print("Closing this window shuts the app down. Your data is saved as you go.")
     print()
 
-    if os.environ.get("SG_TRACKER_NO_BROWSER") != "1":
+    # Both spellings, new name first - see config.py's _ENV_ALIASES.
+    no_browser = os.environ.get("SPENDTRACK_NO_BROWSER") or os.environ.get("SG_TRACKER_NO_BROWSER")
+    if no_browser != "1":
         threading.Thread(target=_open_browser_when_ready, args=(url, port), daemon=True).start()
 
     # Imported here rather than at module scope so the messages above appear

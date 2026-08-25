@@ -1,4 +1,4 @@
-# Starts the SG Expenditure Tracker: backend (FastAPI) + frontend (Vite) dev
+# Starts SpendTrack in development: backend (FastAPI) + frontend (Vite) dev
 # servers, each in its own window, then opens the app in your browser.
 #
 # Run with:  powershell -ExecutionPolicy Bypass -File scripts/start.ps1
@@ -21,7 +21,7 @@ function Test-Port($port, $path = "/") {
     return $false
 }
 
-Write-Host "SG Expenditure Tracker" -ForegroundColor Cyan
+Write-Host "SpendTrack" -ForegroundColor Cyan
 Write-Host "-----------------------"
 
 if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {

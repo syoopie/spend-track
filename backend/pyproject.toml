@@ -1,7 +1,7 @@
 [project]
-name = "expenditure-tracker"
+name = "spendtrack"
 version = "0.1.0"
-description = "Local-only SG bank statement expenditure tracker"
+description = "Local-first bank statement tracker - parsers are per-bank plugins"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [project.scripts]
-expenditure-tracker = "app.main:run"
+spendtrack = "app.main:run"
 
 [build-system]
 requires = ["uv_build>=0.11.32,<0.12.0"]

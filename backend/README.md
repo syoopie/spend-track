@@ -1,6 +1,6 @@
-# SG Expenditure Tracker (backend)
+# SpendTrack (backend)
 
-FastAPI + SQLite backend for the local-only SG bank statement expenditure tracker. See the [repo root README](../README.md) for the full picture (what it does, one-command startup, design decisions).
+FastAPI + SQLite backend for SpendTrack, the local-first bank statement tracker. See the [repo root README](../README.md) for the full picture (what it does, one-command startup, design decisions).
 
 ```bash
 uv sync

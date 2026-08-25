@@ -61,14 +61,14 @@ jobs:
       - name: Check it starts and serves the UI
         # A binary that builds but can't start is the failure mode worth
         # catching here - a missing hidden import or data file only shows up
-        # at runtime. SG_TRACKER_NO_BROWSER stops it opening a tab on a
-        # headless runner; SG_TRACKER_DB_PATH keeps it off the real one.
+        # at runtime. SPENDTRACK_NO_BROWSER stops it opening a tab on a
+        # headless runner; SPENDTRACK_DB_PATH keeps it off the real one.
         shell: bash
         working-directory: backend
         env:
-          SG_TRACKER_NO_BROWSER: "1"
+          SPENDTRACK_NO_BROWSER: "1"
         run: |
-          export SG_TRACKER_DB_PATH="$RUNNER_TEMP/smoke.db"
+          export SPENDTRACK_DB_PATH="$RUNNER_TEMP/smoke.db"
           case "${{ runner.os }}" in
             macOS)   ./dist/SpendTrack.app/Contents/MacOS/SpendTrack & ;;
             Windows) ./dist/SpendTrack.exe & ;;

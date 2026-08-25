@@ -9,7 +9,7 @@ still showing the shape the contacts feature is for.
 
 Usage - with the backend running against a throwaway database:
 
-    SG_TRACKER_DB_PATH=/tmp/demo.db uv run uvicorn app.main:app --port 8000
+    SPENDTRACK_DB_PATH=/tmp/demo.db uv run uvicorn app.main:app --port 8000
     uv run python scripts/seed_demo_data.py
 
 Contacts and rules are created *before* the upload on purpose: categorization
@@ -26,7 +26,7 @@ import os
 import urllib.request
 from pathlib import Path
 
-API = os.environ.get("SG_TRACKER_API", "http://127.0.0.1:8000/api")
+API = os.environ.get("SPENDTRACK_API", "http://127.0.0.1:8000/api")
 SAMPLES = Path(__file__).resolve().parents[2] / "PDF Examples (Sanitized)" / "UOB"
 
 CONTACTS = [
@@ -93,7 +93,7 @@ def upload(paths: list[str]):
 
 def main() -> None:
     if get("/transactions"):
-        raise SystemExit("This database already has transactions - point SG_TRACKER_DB_PATH at an empty one.")
+        raise SystemExit("This database already has transactions - point SPENDTRACK_DB_PATH at an empty one.")
 
     for name, identifiers, category in CONTACTS:
         post("/contacts", {"name": name, "identifiers": identifiers, "default_category": category})
