@@ -132,56 +132,73 @@ export function RuleFormModal({
 
         <div className="h-px bg-border" />
 
-        {!isExclusion && (
-          <div>
-            <div className="text-xs text-muted mb-1">Category</div>
-            <Select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full">
-              <option value="">Select category…</option>
-              {categoryOptionElements(categoriesQ.data)}
-            </Select>
-          </div>
-        )}
-
-        {!isExclusion && (
-          <Field
-            label="Display name (optional)"
-            hint='Shown instead of the raw bank description for matching transactions. Leave blank to just title-case the pattern above.'
+        {/* Both branches stay mounted, stacked in the same grid cell, so the
+            track sizes to the taller of the two - only visibility (not
+            presence) toggles with isExclusion. A plain conditional-render
+            swap here used to change the modal's content height on every
+            checkbox click, which made the dialog visibly grow/shrink instead
+            of staying put while the user is just exploring the checkbox -
+            Modal's own height is otherwise driven only by viewport (see
+            Modal.tsx's max-h), and this section is the one place that broke
+            that. visibility:hidden (not display:none) is what preserves the
+            layout space while also dropping the hidden block out of the tab
+            order and the accessibility tree, so there's nothing extra to
+            wire up for keyboard/screen-reader users. */}
+        <div className="grid">
+          <div
+            className={`col-start-1 row-start-1 flex flex-col gap-3.5 ${isExclusion ? 'invisible' : ''}`}
+            aria-hidden={isExclusion}
           >
-            <Input
-              value={displayLabel}
-              onChange={(e) => setDisplayLabel(e.target.value)}
-              placeholder={pattern.trim() ? titleCase(pattern.trim()) : 'e.g. Netflix'}
-            />
-          </Field>
-        )}
-
-        {mode === 'full' && isExclusion && (
-          <div className="flex flex-col gap-3.5">
-            <Field label="Exclusion reason">
+            <div>
+              <div className="text-xs text-muted mb-1">Category</div>
+              <Select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full">
+                <option value="">Select category…</option>
+                {categoryOptionElements(categoriesQ.data)}
+              </Select>
+            </div>
+            <Field
+              label="Display name (optional)"
+              hint='Shown instead of the raw bank description for matching transactions. Leave blank to just title-case the pattern above.'
+            >
               <Input
-                value={exclusionReason}
-                onChange={(e) => setExclusionReason(e.target.value)}
-                placeholder="e.g. Self-transfer between own accounts"
+                value={displayLabel}
+                onChange={(e) => setDisplayLabel(e.target.value)}
+                placeholder={pattern.trim() ? titleCase(pattern.trim()) : 'e.g. Netflix'}
               />
             </Field>
-            <div>
-              <div className="text-xs text-muted mb-1">Applies to</div>
-              <Select
-                value={exclusionDirection}
-                onChange={(e) => setExclusionDirection(e.target.value as CategoryDirection)}
-                className="w-full"
-              >
-                <option value="outflow">Outflow transactions only</option>
-                <option value="inflow">Inflow transactions only</option>
-              </Select>
-              <div className="text-2xs text-muted-2 mt-1">
-                An exclusion rule has no category to imply a direction from, so this must be picked explicitly -
-                otherwise a pattern like a self-transfer's description could exclude both legs of an unrelated
-                transaction pair.
+          </div>
+
+          {mode === 'full' && (
+            <div
+              className={`col-start-1 row-start-1 flex flex-col gap-3.5 ${!isExclusion ? 'invisible' : ''}`}
+              aria-hidden={!isExclusion}
+            >
+              <Field label="Exclusion reason">
+                <Input
+                  value={exclusionReason}
+                  onChange={(e) => setExclusionReason(e.target.value)}
+                  placeholder="e.g. Self-transfer between own accounts"
+                />
+              </Field>
+              <div>
+                <div className="text-xs text-muted mb-1">Applies to</div>
+                <Select
+                  value={exclusionDirection}
+                  onChange={(e) => setExclusionDirection(e.target.value as CategoryDirection)}
+                  className="w-full"
+                >
+                  <option value="outflow">Outflow transactions only</option>
+                  <option value="inflow">Inflow transactions only</option>
+                </Select>
+                <div className="text-2xs text-muted-2 mt-1">
+                  An exclusion rule has no category to imply a direction from, so this must be picked explicitly -
+                  otherwise a pattern like a self-transfer's description could exclude both legs of an unrelated
+                  transaction pair.
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {mode === 'full' && (
           <div className="flex items-center justify-between gap-3">
