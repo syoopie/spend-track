@@ -372,7 +372,12 @@ export function Dashboard() {
   }, [filteredTransactions])
 
   const netTotal = useMemo(() => filteredTransactions.reduce((sum, t) => sum + t.amount, 0), [filteredTransactions])
-  const inflowCount = (txQ.data ?? []).filter((t) => t.amount > 0).length
+  // Excluded rows are left out on purpose: this hint sits under Total
+  // Inflow, which the backend computes from non-excluded rows only
+  // (routers/dashboard.py::_fetch_range_transactions). Counting every
+  // positive row here made the two disagree the moment anything inflow-side
+  // got excluded - a card statement's bill-payment credits, say.
+  const inflowCount = (txQ.data ?? []).filter((t) => t.amount > 0 && !t.is_excluded).length
   const maxAbsAmount = useMemo(
     () => filteredTransactions.reduce((m, t) => Math.max(m, Math.abs(t.amount)), 0),
     [filteredTransactions],

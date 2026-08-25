@@ -225,6 +225,78 @@ def test_explicit_rule_overrides_card_bill_payment_heuristic():
     assert result.matched_label == "UOB Card Bill"
 
 
+def test_payment_credit_on_a_card_statement_is_excluded():
+    """The other half of the same bill payment. Without this the card's own
+    "PAYMT THRU..." credit counts as inflow, so a year of statements reports
+    every bill payment as income."""
+    result = cat(
+        "PAYMT THRU E-BANK/HOMEB/CYBERB",
+        [],
+        [],
+        amount=150.00,
+        posting_account_is_card=True,
+    )
+    assert result.is_excluded
+    assert "not income" in result.exclusion_reason
+    assert result.matched_label == "Credit Card Payment"
+
+
+def test_payment_credit_exclusion_needs_no_known_bank_account():
+    """Unlike the outflow half, this one isn't gated on having seen the
+    paying account: a payment credit posting to a card is settling that
+    card either way, and is never income."""
+    result = cat(
+        "PAYMENT - THANK YOU",
+        [],
+        [],
+        amount=200.00,
+        has_card_account=False,
+        posting_account_is_card=True,
+    )
+    assert result.is_excluded
+
+
+def test_payment_credit_exclusion_only_applies_on_a_card_account():
+    """The same words arriving in a bank account are someone paying *you*."""
+    result = cat("PAYMENT RECEIVED", [], [], amount=200.00, posting_account_is_card=False)
+    assert not result.is_excluded
+
+
+def test_payment_credit_exclusion_never_fires_for_an_outflow_on_a_card():
+    result = cat("PAYMT THRU E-BANK/HOMEB/CYBERB", [], [], amount=-150.00, posting_account_is_card=True)
+    assert not result.is_excluded
+
+
+def test_a_refund_credit_on_a_card_is_not_treated_as_a_bill_payment():
+    """Card statements carry real credits too - a refund is money coming
+    back, and must keep its own category rather than vanishing from totals."""
+    rules = [rule(1, "REFUND", "Refunds & Reimbursements", direction="inflow")]
+    result = cat(
+        "SAMPLE ONLINE STORE REFUND",
+        rules,
+        [],
+        amount=49.90,
+        category_directions={"Refunds & Reimbursements": "inflow"},
+        posting_account_is_card=True,
+    )
+    assert not result.is_excluded
+    assert result.category == "Refunds & Reimbursements"
+
+
+def test_explicit_rule_overrides_the_payment_credit_exclusion():
+    rules = [rule(1, "PAYMT THRU", "Other Income", display_label="Card Payment In", direction="inflow")]
+    result = cat(
+        "PAYMT THRU E-BANK/HOMEB/CYBERB",
+        rules,
+        [],
+        amount=150.00,
+        category_directions={"Other Income": "inflow"},
+        posting_account_is_card=True,
+    )
+    assert not result.is_excluded
+    assert result.category == "Other Income"
+
+
 def test_card_bill_payment_heuristic_never_fires_for_inflow():
     """The heuristic is conceptually outflow-only (paying your own bill is
     money leaving), so the direction check is explicit rather than assumed

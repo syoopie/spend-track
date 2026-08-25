@@ -23,10 +23,13 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping, Sequence
 
 from app.engine import paynow
-from app.engine.card_payments import looks_like_card_bill_payment
+from app.engine.card_payments import looks_like_card_bill_payment, looks_like_payment_received_on_card
 
 CARD_PAYMENT_EXCLUSION_REASON = (
     "Credit card bill payment - the actual spending is already counted on the card's own statement"
+)
+CARD_PAYMENT_RECEIVED_EXCLUSION_REASON = (
+    "Payment settling this card's balance - money moved between your own accounts, not income"
 )
 
 
@@ -177,6 +180,23 @@ def categorize(request: CategorizationRequest, ruleset: CategorizationRuleset) -
             contact_id=None,
             is_excluded=True,
             exclusion_reason=CARD_PAYMENT_EXCLUSION_REASON,
+            needs_review=False,
+            matched_label="Credit Card Payment",
+            is_paynow=is_paynow,
+        )
+
+    if direction == "inflow" and posting_account_is_card and looks_like_payment_received_on_card(desc_upper):
+        # The mirror of the check above, on the other side of the same
+        # payment. This one needs no has_card_account gate: the transaction
+        # is posting to a card account, so a payment credit there is by
+        # definition settling that card - there's no reading under which it
+        # is income, whether or not the paying account was ever uploaded.
+        return Categorization(
+            category=_fallback_category(direction),
+            subcategory=None,
+            contact_id=None,
+            is_excluded=True,
+            exclusion_reason=CARD_PAYMENT_RECEIVED_EXCLUSION_REASON,
             needs_review=False,
             matched_label="Credit Card Payment",
             is_paynow=is_paynow,
