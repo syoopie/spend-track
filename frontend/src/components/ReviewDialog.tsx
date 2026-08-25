@@ -331,9 +331,7 @@ function ReviewRowPopover({
 
   // Best-effort - real UOB PayNow lines usually carry only the resolved
   // payee name, no phone number/UEN (see the util's own docstring), so this
-  // is often ''. Never falls back to a name-shaped guess: a name in the
-  // identifier field is what task 2 in this session's request explicitly
-  // asked to stop doing.
+  // is often ''.
   const identifierCandidate = useMemo(() => extractPaynowIdentifierCandidate(row.raw_description), [row.raw_description])
   const contactsQ = useContacts()
   // If the suggested identifier already belongs to someone, this opens
@@ -500,7 +498,17 @@ function ReviewRowPopover({
           <ContactFormModal
             contact={matchedContact}
             initialName={label.trim() || undefined}
-            initialIdentifier={identifierCandidate || undefined}
+            // A real phone number/UEN in the raw description is rare (see
+            // extractPaynowIdentifierCandidate's docstring) - when there
+            // isn't one, fall back to the payee name itself. Contact
+            // matching works by checking whether the stored identifier
+            // appears verbatim inside a future transaction's raw
+            // description (engine/rules.py::find_matching_contact), and
+            // this label was extracted FROM that same description
+            // (engine/naming.py::extract_display_name just drops noise
+            // tokens, keeping the rest in order), so it reliably re-matches
+            // - unlike leaving the field blank, which never does.
+            initialIdentifier={identifierCandidate || label.trim() || undefined}
             initialCategoryOutflow={direction === 'outflow' ? category : undefined}
             initialCategoryInflow={direction === 'inflow' ? category : undefined}
             onSubmit={handleContactSubmit}

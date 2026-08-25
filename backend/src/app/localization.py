@@ -40,7 +40,11 @@ SINGAPORE = CountryProfile(
     currency_code="SGD",
     currency_symbol="$",
     phone_calling_code="+65",
-    contact_identifier_hint="+65 9xxx xxxx, UEN, or account no.",
+    # No phone number example - real UOB PayNow lines almost never carry the
+    # payer's actual phone number in the raw description, so hinting one was
+    # actively misleading (see frontend/src/lib/localization.ts's mirror of
+    # this constant).
+    contact_identifier_hint="UEN, account no., or payee name",
     transfer_scheme_name="PayNow",
     bank_parsers=[UOBParser(), DBSParser(), OCBCParser()],
 )

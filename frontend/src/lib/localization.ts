@@ -8,4 +8,11 @@
  * live check (see Settings.tsx's Region card).
  */
 export const CURRENCY_SYMBOL = '$'
-export const CONTACT_IDENTIFIER_HINT = '+65 9xxx xxxx, UEN, or account no.'
+// No phone number example here on purpose - real UOB PayNow lines almost
+// never carry the payer's actual phone number in the raw description (see
+// lib/paynowIdentifier.ts's docstring), so hinting one was actively
+// misleading about what usually ends up in this field (a UEN, an account
+// number, or - now the common case - the payee name itself, since
+// ReviewDialog.tsx's "Save as Contact" falls back to that when no
+// phone/UEN is found).
+export const CONTACT_IDENTIFIER_HINT = 'UEN, account no., or payee name'

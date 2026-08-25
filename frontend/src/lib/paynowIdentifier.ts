@@ -5,10 +5,11 @@
 // backend/src/app/engine/naming.py's docstring example
 // ("PAYNOW-FAST PIB2605050213183371 BOON HENG PTE. LTD. OTHR
 // QL0TbuzeBASv00000002Sj"), which has no phone number in it at all - so this
-// often comes back empty. When it does find something, it's deliberately
-// never the name: a phone number/UEN is what "identifier" actually means
-// (see CONTACT_IDENTIFIER_HINT), and defaulting to a name-shaped guess here
-// was actively misleading.
+// often comes back empty. This function itself never guesses a name - it
+// only ever returns a genuine phone/UEN-shaped match, or ''. The empty case
+// is common enough in practice that the caller falls back to the payee name
+// on its own when this returns '' (see ReviewDialog.tsx's use of this
+// function) rather than leaving the identifier field blank.
 const UEN_TOKEN_RE = /^\d{8,9}[A-Za-z]$|^[TSts]\d{2}[A-Za-z]{2}\d{4}[A-Za-z]$/
 
 export function extractPaynowIdentifierCandidate(rawDescription: string): string {
