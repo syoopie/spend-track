@@ -16,6 +16,11 @@ on:
       - "frontend/**"
       - ".github/workflows/desktop-build.yml"
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Publish a release at this tag (e.g. v0.1.0). Leave empty to just build."
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -112,8 +117,11 @@ jobs:
           if-no-files-found: error
 
   release:
-    # Only for a version tag - PR and manual runs stop at the artifacts above.
-    if: startsWith(github.ref, 'refs/tags/v')
+    # A pushed v* tag, or a manual run that names one. The manual path exists
+    # because a tag can't always be pushed from where the work happens; given
+    # a tag name, action-gh-release creates the tag itself (at this run's
+    # commit) as well as the release. PR runs stop at the artifacts above.
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != ''
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -131,6 +139,7 @@ jobs:
 
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.release_tag || github.ref_name }}
           files: release/*
           generate_release_notes: true
           body: |
