@@ -1,90 +1,37 @@
 import { Pencil, Users } from 'lucide-react'
 import { useRef, useState } from 'react'
-import {
-  useCategories,
-  useContacts,
-  useCreateContact,
-  useImportContactsCsv,
-  useUpdateContact,
-} from '../api/hooks'
+import { useCategories, useContacts, useCreateContact, useImportContactsCsv, useUpdateContact } from '../api/hooks'
 import type { Contact } from '../api/types'
 import { Button } from '../components/Button'
 import { Card } from '../components/Card'
 import { CategoryBadge } from '../components/CategoryBadge'
-import { categoryOptionElements } from '../components/CategoryOptions'
+import { ContactFormModal, type ContactFormSubmitValues } from '../components/ContactFormModal'
 import { DataTableCell, DataTableHeader, DataTableRow, dataTableGridTemplate, type DataTableColumn } from '../components/DataTable'
 import { EmptyState, ErrorState } from '../components/EmptyState'
-import { Field, Input } from '../components/Field'
-import { Modal } from '../components/Modal'
 import { PageShell } from '../components/PageShell'
-import { Select } from '../components/Select'
 import { fmtPlain } from '../lib/format'
-import { CONTACT_IDENTIFIER_HINT } from '../lib/localization'
 
 // contact === undefined -> "Add Contact"; contact set -> "Edit Contact",
 // pre-filled and saving via PATCH instead of POST.
-function ContactFormModal({ contact, onClose }: { contact?: Contact; onClose: () => void }) {
-  const categoriesQ = useCategories()
+function ContactModal({ contact, onClose }: { contact?: Contact; onClose: () => void }) {
   const createContact = useCreateContact()
   const updateContact = useUpdateContact()
-  const [name, setName] = useState(contact?.name ?? '')
-  const [category, setCategory] = useState(contact?.default_category ?? '')
-  const [identifiers, setIdentifiers] = useState<string[]>(contact?.identifiers.length ? contact.identifiers : [''])
 
-  const isEditing = contact != null
-  const saving = createContact.isPending || updateContact.isPending
-
-  function updateIdentifier(i: number, value: string) {
-    setIdentifiers((prev) => prev.map((id, idx) => (idx === i ? value : id)))
-  }
-
-  async function handleSave() {
-    if (!name.trim()) return
-    const body = {
-      name: name.trim(),
-      default_category: category || categoriesQ.data?.[0]?.name || '',
-      identifiers: identifiers.map((i) => i.trim()).filter(Boolean),
-    }
-    if (isEditing) {
+  async function handleSubmit(body: ContactFormSubmitValues) {
+    if (contact) {
       await updateContact.mutateAsync({ id: contact.id, body })
     } else {
       await createContact.mutateAsync(body)
     }
-    onClose()
   }
 
   return (
-    <Modal onClose={onClose} title={isEditing ? 'Edit Contact' : 'Add Contact'}>
-      <Field label="Name" className="mb-3.5">
-        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Auntie Mei" />
-      </Field>
-
-      <div className="text-xs text-muted mb-1">Default Category</div>
-      <Select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full mb-3.5">
-        <option value="">Select category…</option>
-        {categoryOptionElements(categoriesQ.data)}
-      </Select>
-
-      <div className="text-xs text-muted mb-1.5">Linked Identifiers</div>
-      {identifiers.map((identifier, i) => (
-        <div key={i} className="flex gap-2 mb-2">
-          <Input value={identifier} onChange={(e) => updateIdentifier(i, e.target.value)} placeholder={CONTACT_IDENTIFIER_HINT} />
-        </div>
-      ))}
-      <button
-        onClick={() => setIdentifiers((prev) => [...prev, ''])}
-        className="text-xs text-accent bg-transparent border-none cursor-pointer p-0 mb-4.5"
-      >
-        + Add another identifier
-      </button>
-
-      <div className="flex justify-end gap-2.5">
-        <Button onClick={onClose}>Cancel</Button>
-        <Button variant="primary" onClick={handleSave} disabled={saving || !name.trim()}>
-          {isEditing ? 'Save Changes' : 'Save Contact'}
-        </Button>
-      </div>
-    </Modal>
+    <ContactFormModal
+      contact={contact}
+      onSubmit={handleSubmit}
+      saving={createContact.isPending || updateContact.isPending}
+      onClose={onClose}
+    />
   )
 }
 
@@ -189,7 +136,7 @@ export function Contacts() {
       </Card>
 
       {formTarget && (
-        <ContactFormModal contact={formTarget === 'new' ? undefined : formTarget} onClose={() => setFormTarget(null)} />
+        <ContactModal contact={formTarget === 'new' ? undefined : formTarget} onClose={() => setFormTarget(null)} />
       )}
     </PageShell>
   )

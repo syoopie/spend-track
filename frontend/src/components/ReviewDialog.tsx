@@ -1,4 +1,4 @@
-import { Check, ChevronRight, Inbox, ListPlus, Loader2, RotateCcw, Sparkles, Undo2, XCircle } from 'lucide-react'
+import { Check, ChevronRight, Inbox, ListPlus, Loader2, RotateCcw, Sparkles, Undo2, UserPlus, XCircle } from 'lucide-react'
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useCategories, useRuleMatchCount } from '../api/hooks'
 import type { AiJobStatus, Category, RuleRerunRowSnapshot } from '../api/types'
@@ -6,6 +6,7 @@ import { fmtDate, fmtSigned } from '../lib/format'
 import { CategoryBadge } from './CategoryBadge'
 import { categoryOptionElements } from './CategoryOptions'
 import { Checkbox } from './Checkbox'
+import { ContactFormModal, type ContactFormSubmitValues } from './ContactFormModal'
 import { DataTableHeader, dataTableGridTemplate, type DataTableColumn } from './DataTable'
 import { fmtElapsed, useElapsedMs } from './ElapsedTimer'
 import { EmptyState } from './EmptyState'
@@ -266,7 +267,11 @@ function ReviewRowPopover({
   // full description) - otherwise tokenises this row's raw description
   // itself, rather than defaulting to the full string.
   const [rulePattern, setRulePattern] = useState(row.ai_rule_pattern ?? tokenizeSuggestion(row.raw_description))
-  const [saveAsContact, setSaveAsContact] = useState(false)
+  // Save-as-contact has no "undo" on the backend (apply_save_as_rule_and_contact
+  // only ever inserts) - once this fires successfully there's nothing left to
+  // toggle back off, so it's tracked as a one-way completion flag rather than
+  // a checked/unchecked boolean.
+  const [contactSaved, setContactSaved] = useState(false)
 
   // Debounced 150ms behind rulePattern, same convention as every other
   // live-filtering input in the app (see docs/ui-conventions.md) - avoids
@@ -304,7 +309,7 @@ function ReviewRowPopover({
     if (next === appliedLabelRef.current) return
     const previous = appliedLabelRef.current
     appliedLabelRef.current = next
-    applyField('label', { category, matched_label: next, save_as_contact: saveAsContact }, () => {
+    applyField('label', { category, matched_label: next, save_as_contact: contactSaved }, () => {
       appliedLabelRef.current = previous
       setLabel(previous ?? '')
     })
@@ -324,6 +329,23 @@ function ReviewRowPopover({
   }
 
   const [ruleModalOpen, setRuleModalOpen] = useState(false)
+  const [contactModalOpen, setContactModalOpen] = useState(false)
+
+  async function handleContactSubmit(body: ContactFormSubmitValues) {
+    const previous = contactSaved
+    setContactSaved(true)
+    await applyField(
+      'contact',
+      {
+        category,
+        matched_label: label.trim() || null,
+        save_as_contact: true,
+        contact_name: body.name,
+        contact_identifier: body.identifiers[0],
+      },
+      () => setContactSaved(previous),
+    )
+  }
 
   return (
     <div
@@ -340,7 +362,7 @@ function ReviewRowPopover({
           the button never sits alone on an otherwise-empty row (8a) - a row
           with no AI suggestion at all used to leave this whole strip looking
           like stray UI with nothing explaining it. */}
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-center justify-between gap-3">
         <div className="flex-1 min-w-0">
           {row.ai_suggested && current && (
             <div className="text-2xs flex items-center gap-1.5" style={{ color: AI_BADGE_FG }}>
@@ -423,7 +445,7 @@ function ReviewRowPopover({
               const previous = category
               setCategory(next)
               if (next !== previous) {
-                applyField('category', { category: next, matched_label: label.trim() || null, save_as_contact: saveAsContact }, () =>
+                applyField('category', { category: next, matched_label: label.trim() || null, save_as_contact: contactSaved }, () =>
                   setCategory(previous),
                 )
               }
@@ -438,24 +460,34 @@ function ReviewRowPopover({
             way to resolve it going forward is a contact mapping. Every other
             row is the reverse: no identifiable payee to attach a contact
             to, so it gets the Create Rule action below instead.
-            Toggling this also applies immediately (paired with whatever
-            category/label are currently set), so it works whichever order
-            the controls are used in. */}
+            A button that opens the same ContactFormModal the Contacts page
+            uses (not a checkbox that silently guessed an identifier from the
+            raw description), for the same reason Create Rule below opens
+            RuleFormModal instead of applying inline - and, like that
+            checkbox-turned-button already was, a one-way action: there's no
+            backend "unsave" for a contact mapping
+            (apply_save_as_rule_and_contact only ever inserts), so it
+            disables itself once saved rather than pretending it can be
+            unchecked. */}
         {row.is_paynow && (
-          <label className="flex items-center gap-1.5 text-xs text-text pb-2 cursor-pointer shrink-0">
-            <Checkbox
-              checked={saveAsContact}
-              onChange={(next) => {
-                const previous = saveAsContact
-                setSaveAsContact(next)
-                applyField('contact', { category, matched_label: label.trim() || null, save_as_contact: next }, () =>
-                  setSaveAsContact(previous),
-                )
-              }}
-            />
-            Save as contact mapping
+          <button
+            onClick={() => setContactModalOpen(true)}
+            disabled={fieldStatus.contact === 'pending' || contactSaved}
+            className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-border bg-transparent text-muted hover:text-text cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed mb-[1px]"
+          >
             <FieldStatusIcon status={fieldStatus.contact} />
-          </label>
+            <UserPlus size={12} className="shrink-0" />
+            {contactSaved ? 'Saved as Contact' : 'Save as Contact'}
+          </button>
+        )}
+        {contactModalOpen && (
+          <ContactFormModal
+            initialName={label.trim() || undefined}
+            initialCategory={category}
+            onSubmit={handleContactSubmit}
+            saving={fieldStatus.contact === 'pending'}
+            onClose={() => setContactModalOpen(false)}
+          />
         )}
       </div>
       {/* Deliberately its own row with its own button, not a checkbox bolted
