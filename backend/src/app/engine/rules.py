@@ -204,13 +204,21 @@ def categorize(request: CategorizationRequest, ruleset: CategorizationRuleset) -
 
     contact = find_matching_contact(raw_description, contact_identifiers)
     if contact is not None:
-        stored_category = contact["default_category"]
-        category = paynow.redirect_for_direction(stored_category, amount)
-        if _category_direction(category_directions, category) == direction:
+        # A contact's default category is stored per-direction (someone who's
+        # both paid and paid by the same PayNow identifier - a housemate
+        # splitting bills, a client who's also a supplier - needs both set
+        # independently), so this reads straight off whichever column matches
+        # the transaction's own direction rather than the old single-column
+        # "redirect Paynow<->Paynow Received and hope" approach.
+        column = "default_category_outflow" if direction == "outflow" else "default_category_inflow"
+        stored_category = contact[column]
+        if stored_category and _category_direction(category_directions, stored_category) == direction:
             name = contact["name"] if "name" in contact.keys() else None
-            label = paynow.contact_label(name, amount) if paynow.is_paynow_category(category) and name else name
+            label = (
+                paynow.contact_label(name, amount) if paynow.is_paynow_category(stored_category) and name else name
+            )
             return Categorization(
-                category=category,
+                category=stored_category,
                 subcategory=contact["default_subcategory"],
                 contact_id=contact["contact_id"],
                 is_excluded=False,
@@ -219,10 +227,10 @@ def categorize(request: CategorizationRequest, ruleset: CategorizationRuleset) -
                 matched_label=label,
                 is_paynow=is_paynow,
             )
-        # else: this contact's category doesn't fit the transaction's actual
-        # direction and isn't a Paynow<->Paynow Received case either - fall
+        # else: this contact has no default set for this transaction's
+        # direction (or, defensively, a direction-mismatched one) - fall
         # through to the generic PayNow-marker/fallback tier below instead
-        # of forcing a mismatched category.
+        # of forcing an absent or wrong category.
 
     category = paynow.category_for_direction(amount) if is_paynow else _fallback_category(direction)
     return Categorization(

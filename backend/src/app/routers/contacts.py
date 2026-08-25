@@ -5,7 +5,7 @@ from collections import defaultdict
 
 from fastapi import APIRouter, File, UploadFile
 
-from app import contact_directory
+from app import contact_directory, rule_catalog
 from app.db import get_conn
 from app.errors import not_found_error
 from app.models import ContactCreateRequest, ContactImportResult, ContactOut, ContactUpdateRequest
@@ -31,7 +31,8 @@ def _fetch_contact(conn: sqlite3.Connection, contact_id: int) -> ContactOut:
     return ContactOut(
         id=c["id"],
         name=c["name"],
-        default_category=c["default_category"],
+        default_category_outflow=c["default_category_outflow"],
+        default_category_inflow=c["default_category_inflow"],
         default_subcategory=c["default_subcategory"],
         identifiers=identifiers,
         historical_spend=spend_row["spend"],
@@ -60,7 +61,8 @@ def list_contacts():
             ContactOut(
                 id=c["id"],
                 name=c["name"],
-                default_category=c["default_category"],
+                default_category_outflow=c["default_category_outflow"],
+                default_category_inflow=c["default_category_inflow"],
                 default_subcategory=c["default_subcategory"],
                 identifiers=identifiers_by_contact.get(c["id"], []),
                 historical_spend=spend_by_contact.get(c["id"], 0.0),
@@ -75,7 +77,8 @@ def create_contact(body: ContactCreateRequest):
         contact_id = contact_directory.insert_contact(
             conn,
             name=body.name,
-            default_category=body.default_category,
+            default_category_outflow=body.default_category_outflow,
+            default_category_inflow=body.default_category_inflow,
             default_subcategory=body.default_subcategory,
             identifiers=body.identifiers,
         )
@@ -89,13 +92,31 @@ def update_contact(contact_id: int, body: ContactUpdateRequest):
         if existing is None:
             raise not_found_error("contact", "CONTACT_NOT_FOUND")
         name = body.name if body.name is not None else existing["name"]
-        category = body.default_category if body.default_category is not None else existing["default_category"]
         subcategory = (
             body.default_subcategory if body.default_subcategory is not None else existing["default_subcategory"]
         )
+        outflow = (
+            None
+            if body.clear_default_category_outflow
+            else (
+                body.default_category_outflow
+                if body.default_category_outflow is not None
+                else existing["default_category_outflow"]
+            )
+        )
+        inflow = (
+            None
+            if body.clear_default_category_inflow
+            else (
+                body.default_category_inflow
+                if body.default_category_inflow is not None
+                else existing["default_category_inflow"]
+            )
+        )
         conn.execute(
-            "UPDATE contacts SET name = ?, default_category = ?, default_subcategory = ? WHERE id = ?",
-            (name, category, subcategory, contact_id),
+            "UPDATE contacts SET name = ?, default_category_outflow = ?, default_category_inflow = ?, "
+            "default_subcategory = ? WHERE id = ?",
+            (name, outflow, inflow, subcategory, contact_id),
         )
         if body.identifiers is not None:
             contact_directory.replace_contact_identifiers(conn, contact_id, body.identifiers)
@@ -142,8 +163,14 @@ async def import_contacts_csv(file: UploadFile = File(...)):
                     (contact_id, identifier),
                 )
             else:
+                resolved_category = category or "Others"
+                direction = rule_catalog.category_direction(conn, resolved_category)
                 contact_directory.insert_contact(
-                    conn, name=name, default_category=category or "Others", identifiers=[identifier]
+                    conn,
+                    name=name,
+                    default_category_outflow=resolved_category if direction == "outflow" else None,
+                    default_category_inflow=resolved_category if direction == "inflow" else None,
+                    identifiers=[identifier],
                 )
                 created += 1
 

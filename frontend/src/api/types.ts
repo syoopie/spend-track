@@ -198,7 +198,11 @@ export interface RefundPairing {
 export interface Contact {
   id: number
   name: string
-  default_category: string
+  // Independently optional - a contact who's only ever paid, or only ever
+  // pays, has no reason to carry a default for the direction that never
+  // happens (see backend/src/app/schema.sql's contacts table).
+  default_category_outflow: string | null
+  default_category_inflow: string | null
   default_subcategory: string | null
   identifiers: string[]
   historical_spend: number
@@ -206,16 +210,24 @@ export interface Contact {
 
 export interface ContactCreateRequest {
   name: string
-  default_category: string
+  default_category_outflow?: string | null
+  default_category_inflow?: string | null
   default_subcategory?: string | null
   identifiers: string[]
 }
 
 export interface ContactUpdateRequest {
   name?: string
-  default_category?: string
+  default_category_outflow?: string | null
+  default_category_inflow?: string | null
   default_subcategory?: string | null
   identifiers?: string[]
+  // default_category_outflow/inflow above already use undefined/None for
+  // "leave unchanged" (matching every other field here), so there's no way
+  // to ask for an explicit no-selection without a separate signal - see
+  // ContactUpdateRequest's docstring on the backend (models.py).
+  clear_default_category_outflow?: boolean
+  clear_default_category_inflow?: boolean
 }
 
 export interface ContactImportResult {

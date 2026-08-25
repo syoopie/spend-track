@@ -89,3 +89,37 @@ def test_rules_direction_backfilled_from_category_for_pre_existing_dbs(tmp_path)
     row = conn.execute("SELECT direction FROM rules WHERE match_pattern = 'PAYROLL'").fetchone()
     conn.close()
     assert row["direction"] == "inflow"
+
+
+def test_contacts_category_split_backfills_from_old_single_column_by_direction(tmp_path):
+    """Simulates a DB created before the outflow/inflow split (a single NOT
+    NULL default_category) - each contact's existing value must land under
+    whichever new column matches its own category's direction, the other
+    left null, and the old column itself must be gone afterward (not just
+    ignored)."""
+    db_path = tmp_path / "test.db"
+    init_db(db_path)
+
+    conn = _connect(db_path)
+    conn.execute("ALTER TABLE contacts DROP COLUMN default_category_outflow")
+    conn.execute("ALTER TABLE contacts DROP COLUMN default_category_inflow")
+    conn.execute("ALTER TABLE contacts ADD COLUMN default_category TEXT NOT NULL DEFAULT ''")
+    conn.execute("INSERT INTO contacts (name, default_category) VALUES ('Auntie Mei', 'Paynow')")
+    conn.execute("INSERT INTO contacts (name, default_category) VALUES ('Employer Co', 'Salary')")
+    conn.commit()
+    conn.close()
+
+    init_db(db_path)  # simulates the app restarting on a pre-split DB
+
+    conn = _connect(db_path)
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(contacts)").fetchall()}
+    assert "default_category" not in columns
+
+    mei = conn.execute("SELECT * FROM contacts WHERE name = 'Auntie Mei'").fetchone()
+    assert mei["default_category_outflow"] == "Paynow"
+    assert mei["default_category_inflow"] is None
+
+    employer = conn.execute("SELECT * FROM contacts WHERE name = 'Employer Co'").fetchone()
+    assert employer["default_category_outflow"] is None
+    assert employer["default_category_inflow"] == "Salary"
+    conn.close()

@@ -16,7 +16,12 @@ CREATE TABLE IF NOT EXISTS accounts (
 CREATE TABLE IF NOT EXISTS contacts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
-    default_category TEXT NOT NULL,
+    -- Independently optional (a contact who's only ever paid, or only ever
+    -- pays, has no reason to carry a default for the direction that never
+    -- happens) - see migrations.py::_migrate_contacts_category_split for how
+    -- an existing DB's single NOT NULL default_category becomes these two.
+    default_category_outflow TEXT,
+    default_category_inflow TEXT,
     default_subcategory TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

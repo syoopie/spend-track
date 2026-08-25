@@ -35,6 +35,7 @@ Non-obvious stuff learned while building this. Don't re-derive these the hard wa
 - **Staging is in-memory** (`engine/staging_store.py`), not a DB table — the spec's schema has none, and pre-commit review is inherently transient. A batch is lost if the server restarts before commit.
 - **Refund pairing is not amount-only.** The literal SQL in the spec (`t1.amount = -t2.amount`) would mass-false-positive on any two unrelated transactions of equal-and-opposite amount. Pairing also requires merchant-name similarity after stripping suffix tokens like REFUND/REVERSAL (see `engine/refunds.py`).
 - **`categories` table exists but isn't in the spec's schema** — added purely so the mockup's fixed category list is extensible later without a migration.
+- **`contacts.default_category` (the spec's single `NOT NULL` column) is split into `default_category_outflow`/`default_category_inflow`, both nullable.** A contact who's both paid and paid by the same PayNow identifier (a housemate splitting bills, a client who's also a supplier) needs each direction to resolve independently — the single-column version could only ever auto-categorize one direction, silently falling through to the generic fallback on the other. `migrations.py::_migrate_contacts_category_split` rebuilds an old DB's single column into the two new ones (`ALTER TABLE ... DROP COLUMN`, not just an added column, since the old one was `NOT NULL`).
 
 ## Design decisions worth knowing (these used to live in the README)
 

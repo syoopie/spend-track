@@ -111,7 +111,8 @@ def test_no_rule_match_falls_back_to_contact():
             "contact_id": 7,
             "name": "Auntie Mei",
             "identifier": "+65 9123 4567",
-            "default_category": "Paynow",
+            "default_category_outflow": "Paynow",
+            "default_category_inflow": None,
             "default_subcategory": None,
         }
     ]
@@ -122,17 +123,23 @@ def test_no_rule_match_falls_back_to_contact():
 
 
 def test_contact_match_paynow_label_says_from_for_incoming_amount():
+    """The inflow half needs its own explicit default (unlike the old
+    single-column model, an outflow default no longer auto-bridges to the
+    inflow PayNow category - see test_contact_with_only_outflow_default_
+    does_not_resolve_inflow_transactions below)."""
     contacts = [
         {
             "contact_id": 7,
             "name": "Auntie Mei",
             "identifier": "+65 9123 4567",
-            "default_category": "Paynow",
+            "default_category_outflow": "Paynow",
+            "default_category_inflow": "Paynow Received",
             "default_subcategory": None,
         }
     ]
     result = cat("PAYNOW-FAST PAYNOW OTHR +65 9123 4567", [], contacts, amount=25.00)
     assert result.matched_label == "PayNow from Auntie Mei"
+    assert result.contact_id == 7
 
 
 def test_no_rule_or_contact_match_flags_paynow_for_review_in_its_own_category():
@@ -166,7 +173,8 @@ def test_rules_take_priority_over_contact_match():
         {
             "contact_id": 1,
             "identifier": "GRAB",
-            "default_category": "Others",
+            "default_category_outflow": "Others",
+            "default_category_inflow": None,
             "default_subcategory": None,
         }
     ]
@@ -353,15 +361,18 @@ def test_outflow_unmatched_still_falls_back_to_others():
 
 
 def test_contact_category_direction_mismatch_falls_through_instead_of_forcing_it():
-    """A contact's default_category is a fixed outflow category unrelated to
-    PayNow. An inflow transaction identified as being from that contact
-    must not be force-categorized under an outflow-only bucket."""
+    """Defensive case: a contact's inflow default somehow holds an
+    outflow-only category name (bad data, e.g. a direct DB edit - the UI
+    itself only ever offers direction-filtered category pickers). An inflow
+    transaction identified as being from that contact must not be
+    force-categorized under an outflow-only bucket."""
     contacts = [
         {
             "contact_id": 3,
             "name": "Some Vendor",
             "identifier": "VENDOR123",
-            "default_category": "Transport",
+            "default_category_outflow": None,
+            "default_category_inflow": "Transport",
             "default_subcategory": None,
         }
     ]
@@ -370,13 +381,37 @@ def test_contact_category_direction_mismatch_falls_through_instead_of_forcing_it
     assert result.contact_id is None  # the mismatched contact match wasn't used at all
 
 
-def test_contact_default_paynow_redirects_to_paynow_received_for_inflow():
+def test_contact_with_only_outflow_default_does_not_resolve_inflow_transactions():
+    """Unlike the old single-column model (which redirected Paynow <->
+    Paynow Received live based on the transaction's own amount), a contact
+    with no inflow default set gets no special treatment on an inflow
+    transaction - it falls all the way through to the generic PayNow-marker
+    fallback, unattributed to this contact."""
     contacts = [
         {
             "contact_id": 7,
             "name": "Auntie Mei",
             "identifier": "+65 9123 4567",
-            "default_category": "Paynow",
+            "default_category_outflow": "Paynow",
+            "default_category_inflow": None,
+            "default_subcategory": None,
+        }
+    ]
+    result = cat(
+        "PAYNOW-FAST PAYNOW OTHR +65 9123 4567", [], contacts, amount=25.00, category_directions=DIRECTIONS
+    )
+    assert result.category == "Paynow Received"  # still a PayNow marker match, just not via the contact
+    assert result.contact_id is None
+
+
+def test_contact_with_explicit_inflow_default_resolves_inflow_transactions():
+    contacts = [
+        {
+            "contact_id": 7,
+            "name": "Auntie Mei",
+            "identifier": "+65 9123 4567",
+            "default_category_outflow": "Paynow",
+            "default_category_inflow": "Paynow Received",
             "default_subcategory": None,
         }
     ]

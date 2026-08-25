@@ -48,11 +48,12 @@ _CATEGORY_RENAMES = {"PayNow Transfers": "Paynow"}
 
 # These three categories used to serve both directions before categories
 # gained a locked `direction`. Only *transactions* get migrated here -
-# contact.default_category/rule.target_category have no amount to check
-# against, so they keep pointing at the outflow name; categorize() redirects
-# Paynow <-> Paynow Received live per-transaction based on the actual
-# amount, and simply skips a rule/contact whose category direction doesn't
-# match (falling through to the next tier) for the other two.
+# rule.target_category has no amount to check against, so it keeps pointing
+# at the outflow name (categorize() simply skips a rule whose category
+# direction doesn't match, falling through to the next tier). Contacts don't
+# need this redirect at all: default_category_outflow/_inflow are already
+# independently direction-scoped columns (see _migrate_contacts_category_split),
+# not a single ambiguous value that needs live redirecting.
 _AMBIGUOUS_CATEGORY_INFLOW_REDIRECT = {
     "Investing": "Investment Income",
     "Paynow": "Paynow Received",
@@ -63,7 +64,8 @@ _AMBIGUOUS_CATEGORY_INFLOW_REDIRECT = {
 def _apply_category_renames(conn: sqlite3.Connection) -> None:
     for old, new in _CATEGORY_RENAMES.items():
         conn.execute("UPDATE transactions SET category = ? WHERE category = ?", (new, old))
-        conn.execute("UPDATE contacts SET default_category = ? WHERE default_category = ?", (new, old))
+        conn.execute("UPDATE contacts SET default_category_outflow = ? WHERE default_category_outflow = ?", (new, old))
+        conn.execute("UPDATE contacts SET default_category_inflow = ? WHERE default_category_inflow = ?", (new, old))
         conn.execute("UPDATE rules SET target_category = ? WHERE target_category = ?", (new, old))
         conn.execute("DELETE FROM categories WHERE name = ?", (old,))
 
@@ -120,7 +122,35 @@ def migrate_schema(conn: sqlite3.Connection) -> bool:
     _add_column_if_missing(conn, "accounts", "is_card", "is_card BOOLEAN DEFAULT 0")
     _add_column_if_missing(conn, "categories", "direction", "direction TEXT NOT NULL DEFAULT 'outflow'")
     _add_column_if_missing(conn, "transactions", "source_filename", "source_filename TEXT")
+    _add_column_if_missing(conn, "contacts", "default_category_outflow", "default_category_outflow TEXT")
+    _add_column_if_missing(conn, "contacts", "default_category_inflow", "default_category_inflow TEXT")
     return _add_column_if_missing(conn, "rules", "direction", "direction TEXT NOT NULL DEFAULT 'outflow'")
+
+
+def _migrate_contacts_category_split(conn: sqlite3.Connection) -> None:
+    """One-time rebuild for a DB that predates the outflow/inflow split
+    (schema.sql's contacts table used to have a single NOT NULL
+    default_category) - _add_column_if_missing alone can't do this one,
+    since ADD COLUMN can't relax an existing NOT NULL constraint, so this
+    backfills the two new columns from the old one's value and then drops
+    it outright (SQLite's ALTER TABLE ... DROP COLUMN, supported since
+    3.35 - this project ships 3.45+, see db.py's sqlite3 usage). Must run
+    before _apply_category_renames, which writes the new columns directly
+    and no longer knows the old one exists; uses _CATEGORY_DIRECTIONS (a
+    static map, not the categories table) so it doesn't have to wait for
+    reconcile_categories() to run first - a category's direction never
+    depends on live DB state, only on default_rules.py's own definition."""
+    existing_columns = {row["name"] for row in conn.execute("PRAGMA table_info(contacts)").fetchall()}
+    if "default_category" not in existing_columns:
+        return
+    for row in conn.execute("SELECT id, default_category FROM contacts WHERE default_category IS NOT NULL").fetchall():
+        column = (
+            "default_category_inflow"
+            if _CATEGORY_DIRECTIONS.get(row["default_category"], "outflow") == "inflow"
+            else "default_category_outflow"
+        )
+        conn.execute(f"UPDATE contacts SET {column} = ? WHERE id = ?", (row["default_category"], row["id"]))
+    conn.execute("ALTER TABLE contacts DROP COLUMN default_category")
 
 
 def _backfill_rule_directions_from_category(conn: sqlite3.Connection) -> None:
@@ -188,6 +218,7 @@ def run_all(conn: sqlite3.Connection) -> None:
     reconciliation, and renames/direction-redirects before reconcile_categories()
     so a just-migrated row isn't immediately re-created under its old name."""
     rules_direction_just_added = migrate_schema(conn)
+    _migrate_contacts_category_split(conn)
     _apply_category_renames(conn)
     _migrate_ambiguous_category_directions(conn)
     _migrate_direction_mismatched_transactions(conn)

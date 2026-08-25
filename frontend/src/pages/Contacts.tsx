@@ -5,7 +5,7 @@ import type { Contact } from '../api/types'
 import { Button } from '../components/Button'
 import { Card } from '../components/Card'
 import { CategoryBadge } from '../components/CategoryBadge'
-import { ContactFormModal, type ContactFormSubmitValues } from '../components/ContactFormModal'
+import { ContactFormModal, contactSubmitValuesToUpdateBody, type ContactFormSubmitValues } from '../components/ContactFormModal'
 import { DataTableCell, DataTableHeader, DataTableRow, dataTableGridTemplate, type DataTableColumn } from '../components/DataTable'
 import { EmptyState, ErrorState } from '../components/EmptyState'
 import { PageShell } from '../components/PageShell'
@@ -19,7 +19,7 @@ function ContactModal({ contact, onClose }: { contact?: Contact; onClose: () => 
 
   async function handleSubmit(body: ContactFormSubmitValues) {
     if (contact) {
-      await updateContact.mutateAsync({ id: contact.id, body })
+      await updateContact.mutateAsync({ id: contact.id, body: contactSubmitValuesToUpdateBody(body) })
     } else {
       await createContact.mutateAsync(body)
     }
@@ -117,7 +117,18 @@ export function Contacts() {
               </div>
             </DataTableCell>
             <DataTableCell>
-              <CategoryBadge category={c.default_category} categories={categoriesQ.data} />
+              {c.default_category_outflow == null && c.default_category_inflow == null ? (
+                <span className="text-muted-2 text-xs">—</span>
+              ) : (
+                <div className="flex flex-col gap-1 items-start">
+                  {c.default_category_outflow != null && (
+                    <CategoryBadge category={c.default_category_outflow} categories={categoriesQ.data} />
+                  )}
+                  {c.default_category_inflow != null && (
+                    <CategoryBadge category={c.default_category_inflow} categories={categoriesQ.data} />
+                  )}
+                </div>
+              )}
             </DataTableCell>
             <DataTableCell align="right" className="font-mono">
               {fmtPlain(c.historical_spend)}

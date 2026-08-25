@@ -323,20 +323,37 @@ def test_create_list_update_delete_contact(client):
         "/api/contacts",
         json={
             "name": "Auntie Mei",
-            "default_category": "Paynow",
+            "default_category_outflow": "Paynow",
             "identifiers": ["+65 9123 4567"],
         },
     ).json()
     assert created["identifiers"] == ["+65 9123 4567"]
+    assert created["default_category_outflow"] == "Paynow"
+    assert created["default_category_inflow"] is None
     assert created["historical_spend"] == 0
 
     listed = client.get("/api/contacts").json()
     assert any(c["name"] == "Auntie Mei" for c in listed)
 
+    # Filling in the previously-unset inflow default leaves the outflow one
+    # untouched - the two are independent, not a single value that gets
+    # overwritten (schema.sql's contacts table split).
     updated = client.patch(
-        f"/api/contacts/{created['id']}", json={"identifiers": ["+65 9123 4567", "UEN12345678A"]}
+        f"/api/contacts/{created['id']}",
+        json={"default_category_inflow": "Paynow Received", "identifiers": ["+65 9123 4567", "UEN12345678A"]},
     ).json()
     assert set(updated["identifiers"]) == {"+65 9123 4567", "UEN12345678A"}
+    assert updated["default_category_outflow"] == "Paynow"
+    assert updated["default_category_inflow"] == "Paynow Received"
+
+    # Explicitly clearing back to no selection needs the clear_* flag - a
+    # plain omitted field means "leave unchanged" (see
+    # ContactUpdateRequest's docstring).
+    cleared = client.patch(
+        f"/api/contacts/{created['id']}", json={"clear_default_category_outflow": True}
+    ).json()
+    assert cleared["default_category_outflow"] is None
+    assert cleared["default_category_inflow"] == "Paynow Received"  # untouched
 
     resp = client.delete(f"/api/contacts/{created['id']}")
     assert resp.status_code == 204
@@ -569,7 +586,7 @@ def test_delete_rules_requires_confirmation_and_only_removes_user_rules(client):
 def test_delete_contacts_removes_all_contacts_and_identifiers(client):
     client.post(
         "/api/contacts",
-        json={"name": "Auntie Mei", "default_category": "Paynow", "identifiers": ["+65 9123 4567"]},
+        json={"name": "Auntie Mei", "default_category_outflow": "Paynow", "identifiers": ["+65 9123 4567"]},
     )
     resp = client.post("/api/data-lifecycle/delete-contacts", json={"confirm": "DELETE"})
     assert resp.status_code == 200
@@ -586,7 +603,7 @@ def test_delete_contacts_nulls_out_contact_id_on_linked_transactions(client):
     tx_id = client.get("/api/transactions").json()[0]["id"]
     contact = client.post(
         "/api/contacts",
-        json={"name": "Auntie Mei", "default_category": "Paynow", "identifiers": ["+65 9123 4567"]},
+        json={"name": "Auntie Mei", "default_category_outflow": "Paynow", "identifiers": ["+65 9123 4567"]},
     ).json()
     client.patch(f"/api/transactions/{tx_id}", json={"contact_id": contact["id"]})
     linked = next(t for t in client.get("/api/transactions").json() if t["id"] == tx_id)

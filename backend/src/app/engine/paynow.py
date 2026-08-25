@@ -36,16 +36,6 @@ def category_for_direction(amount: float) -> str:
     return CATEGORY_RECEIVED if amount > 0 else CATEGORY_SENT
 
 
-def redirect_for_direction(category: str, amount: float) -> str:
-    """A contact's stored default_category might say "Paynow" (sent), but
-    this particular transfer from that same contact could be incoming -
-    swap to whichever of the two matches the actual amount. Categories
-    outside the PayNow pair pass through untouched."""
-    if not is_paynow_category(category):
-        return category
-    return category_for_direction(amount)
-
-
 def label(raw_description: str, amount: float) -> str:
     direction_word = "from" if amount > 0 else "to"
     return f"PayNow {direction_word} {extract_display_name(raw_description)}"

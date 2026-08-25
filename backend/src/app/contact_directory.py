@@ -13,7 +13,9 @@ def fetch_contact_identifiers(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     return conn.execute(
         """
         SELECT ci.identifier AS identifier, c.id AS contact_id, c.name AS name,
-               c.default_category AS default_category, c.default_subcategory AS default_subcategory
+               c.default_category_outflow AS default_category_outflow,
+               c.default_category_inflow AS default_category_inflow,
+               c.default_subcategory AS default_subcategory
         FROM contact_identifiers ci JOIN contacts c ON c.id = ci.contact_id
         """
     ).fetchall()
@@ -28,13 +30,15 @@ def insert_contact(
     conn: sqlite3.Connection,
     *,
     name: str,
-    default_category: str | None,
+    default_category_outflow: str | None,
+    default_category_inflow: str | None,
     default_subcategory: str | None = None,
     identifiers: list[str] = (),
 ) -> int:
     cur = conn.execute(
-        "INSERT INTO contacts (name, default_category, default_subcategory) VALUES (?, ?, ?)",
-        (name, default_category, default_subcategory),
+        "INSERT INTO contacts (name, default_category_outflow, default_category_inflow, default_subcategory) "
+        "VALUES (?, ?, ?, ?)",
+        (name, default_category_outflow, default_category_inflow, default_subcategory),
     )
     contact_id = cur.lastrowid
     for identifier in identifiers:

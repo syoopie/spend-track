@@ -1,12 +1,13 @@
 import { Check, ChevronRight, Inbox, ListPlus, Loader2, RotateCcw, Sparkles, Undo2, UserPlus, XCircle } from 'lucide-react'
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { useCategories, useRuleMatchCount } from '../api/hooks'
+import { useCategories, useContacts, useCreateContact, useRuleMatchCount, useUpdateContact } from '../api/hooks'
 import type { AiJobStatus, Category, RuleRerunRowSnapshot } from '../api/types'
 import { fmtDate, fmtSigned } from '../lib/format'
+import { extractPaynowIdentifierCandidate } from '../lib/paynowIdentifier'
 import { CategoryBadge } from './CategoryBadge'
 import { categoryOptionElements } from './CategoryOptions'
 import { Checkbox } from './Checkbox'
-import { ContactFormModal, type ContactFormSubmitValues } from './ContactFormModal'
+import { ContactFormModal, contactSubmitValuesToUpdateBody, type ContactFormSubmitValues } from './ContactFormModal'
 import { DataTableHeader, dataTableGridTemplate, type DataTableColumn } from './DataTable'
 import { fmtElapsed, useElapsedMs } from './ElapsedTimer'
 import { EmptyState } from './EmptyState'
@@ -118,9 +119,12 @@ export interface ApplyRowBody {
   // backend applies both together, so leaving this out would silently wipe
   // the label back to null the next time only the category changes.
   matched_label?: string | null
+  // Always false here - contact creation/linking no longer piggybacks on
+  // this endpoint (see ReviewRowPopover's handleContactSubmit, which calls
+  // the Contacts page's own create/update mutations directly instead). Kept
+  // rather than dropped since BatchRowUpdateRequest (api/types.ts) still
+  // requires it on the wire.
   save_as_contact: boolean
-  contact_name?: string
-  contact_identifier?: string
   // True only for the single "Restore Default" action - tells the backend
   // to ignore category/matched_label above and instead re-apply
   // ai_category/ai_label if an AI suggestion exists, else
@@ -165,7 +169,7 @@ function StatCardView({ card }: { card: ReviewStatCard }) {
 // UI Review.dc.html) - restoreDefault counts as its own field rather than
 // sharing category/label's slots, since it can be mid-flight at the same
 // time a user starts editing category or label by hand.
-type FieldKey = 'category' | 'label' | 'contact' | 'restoreDefault'
+type FieldKey = 'category' | 'label' | 'restoreDefault'
 type FieldStatus = 'idle' | 'pending' | 'saved' | 'error'
 
 // How long a "saved" checkmark stays up before fading back to nothing -
@@ -223,7 +227,6 @@ function ReviewRowPopover({
   const [fieldStatus, setFieldStatus] = useState<Record<FieldKey, FieldStatus>>({
     category: 'idle',
     label: 'idle',
-    contact: 'idle',
     restoreDefault: 'idle',
   })
   const fadeTimers = useRef<Partial<Record<FieldKey, ReturnType<typeof setTimeout>>>>({})
@@ -267,11 +270,6 @@ function ReviewRowPopover({
   // full description) - otherwise tokenises this row's raw description
   // itself, rather than defaulting to the full string.
   const [rulePattern, setRulePattern] = useState(row.ai_rule_pattern ?? tokenizeSuggestion(row.raw_description))
-  // Save-as-contact has no "undo" on the backend (apply_save_as_rule_and_contact
-  // only ever inserts) - once this fires successfully there's nothing left to
-  // toggle back off, so it's tracked as a one-way completion flag rather than
-  // a checked/unchecked boolean.
-  const [contactSaved, setContactSaved] = useState(false)
 
   // Debounced 150ms behind rulePattern, same convention as every other
   // live-filtering input in the app (see docs/ui-conventions.md) - avoids
@@ -309,7 +307,7 @@ function ReviewRowPopover({
     if (next === appliedLabelRef.current) return
     const previous = appliedLabelRef.current
     appliedLabelRef.current = next
-    applyField('label', { category, matched_label: next, save_as_contact: contactSaved }, () => {
+    applyField('label', { category, matched_label: next, save_as_contact: false }, () => {
       appliedLabelRef.current = previous
       setLabel(previous ?? '')
     })
@@ -331,20 +329,37 @@ function ReviewRowPopover({
   const [ruleModalOpen, setRuleModalOpen] = useState(false)
   const [contactModalOpen, setContactModalOpen] = useState(false)
 
+  // Best-effort - real UOB PayNow lines usually carry only the resolved
+  // payee name, no phone number/UEN (see the util's own docstring), so this
+  // is often ''. Never falls back to a name-shaped guess: a name in the
+  // identifier field is what task 2 in this session's request explicitly
+  // asked to stop doing.
+  const identifierCandidate = useMemo(() => extractPaynowIdentifierCandidate(row.raw_description), [row.raw_description])
+  const contactsQ = useContacts()
+  // If the suggested identifier already belongs to someone, this opens
+  // ContactFormModal in edit mode for THEM instead of trying to create a
+  // second contact with a duplicate identifier (which the DB's UNIQUE
+  // constraint would reject anyway) - e.g. an inflow suggestion for a
+  // contact who so far only has an outflow default set.
+  const matchedContact = useMemo(
+    () => (identifierCandidate ? contactsQ.data?.find((c) => c.identifiers.includes(identifierCandidate)) : undefined),
+    [contactsQ.data, identifierCandidate],
+  )
+  const createContact = useCreateContact()
+  const updateContact = useUpdateContact()
+  const contactMutationPending = createContact.isPending || updateContact.isPending
+
+  // Bypasses applyField/onApply entirely - unlike category/label/restore,
+  // this never touches the row itself, only the contacts table, so it uses
+  // the same create/update calls the Contacts page itself uses (see
+  // ContactFormModal's own docstring) rather than piggybacking on the
+  // batch row-update endpoint's save_as_contact side channel.
   async function handleContactSubmit(body: ContactFormSubmitValues) {
-    const previous = contactSaved
-    setContactSaved(true)
-    await applyField(
-      'contact',
-      {
-        category,
-        matched_label: label.trim() || null,
-        save_as_contact: true,
-        contact_name: body.name,
-        contact_identifier: body.identifiers[0],
-      },
-      () => setContactSaved(previous),
-    )
+    if (matchedContact) {
+      await updateContact.mutateAsync({ id: matchedContact.id, body: contactSubmitValuesToUpdateBody(body) })
+    } else {
+      await createContact.mutateAsync(body)
+    }
   }
 
   return (
@@ -445,7 +460,7 @@ function ReviewRowPopover({
               const previous = category
               setCategory(next)
               if (next !== previous) {
-                applyField('category', { category: next, matched_label: label.trim() || null, save_as_contact: contactSaved }, () =>
+                applyField('category', { category: next, matched_label: label.trim() || null, save_as_contact: false }, () =>
                   setCategory(previous),
                 )
               }
@@ -461,31 +476,35 @@ function ReviewRowPopover({
             row is the reverse: no identifiable payee to attach a contact
             to, so it gets the Create Rule action below instead.
             A button that opens the same ContactFormModal the Contacts page
-            uses (not a checkbox that silently guessed an identifier from the
-            raw description), for the same reason Create Rule below opens
-            RuleFormModal instead of applying inline - and, like that
-            checkbox-turned-button already was, a one-way action: there's no
-            backend "unsave" for a contact mapping
-            (apply_save_as_rule_and_contact only ever inserts), so it
-            disables itself once saved rather than pretending it can be
-            unchecked. */}
+            uses, for the same reason Create Rule below opens RuleFormModal
+            instead of applying inline. The label itself already tells the
+            user what's about to happen - "Edit Contact" when the suggested
+            identifier already belongs to someone (see matchedContact above),
+            "Save as Contact" when it doesn't - rather than always saying
+            the same thing and surprising them with which dialog opens. */}
         {row.is_paynow && (
           <button
             onClick={() => setContactModalOpen(true)}
-            disabled={fieldStatus.contact === 'pending' || contactSaved}
+            disabled={contactMutationPending}
             className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-border bg-transparent text-muted hover:text-text cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed mb-[1px]"
           >
-            <FieldStatusIcon status={fieldStatus.contact} />
-            <UserPlus size={12} className="shrink-0" />
-            {contactSaved ? 'Saved as Contact' : 'Save as Contact'}
+            {contactMutationPending ? (
+              <Loader2 size={12} className="animate-spin shrink-0" />
+            ) : (
+              <UserPlus size={12} className="shrink-0" />
+            )}
+            {matchedContact ? 'Edit Contact' : 'Save as Contact'}
           </button>
         )}
         {contactModalOpen && (
           <ContactFormModal
+            contact={matchedContact}
             initialName={label.trim() || undefined}
-            initialCategory={category}
+            initialIdentifier={identifierCandidate || undefined}
+            initialCategoryOutflow={direction === 'outflow' ? category : undefined}
+            initialCategoryInflow={direction === 'inflow' ? category : undefined}
             onSubmit={handleContactSubmit}
-            saving={fieldStatus.contact === 'pending'}
+            saving={contactMutationPending}
             onClose={() => setContactModalOpen(false)}
           />
         )}

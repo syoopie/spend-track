@@ -229,22 +229,32 @@ class ContactIdentifierIn(BaseModel):
 
 class ContactCreateRequest(BaseModel):
     name: str
-    default_category: str
+    default_category_outflow: str | None = None
+    default_category_inflow: str | None = None
     default_subcategory: str | None = None
     identifiers: list[str] = []
 
 
 class ContactUpdateRequest(BaseModel):
     name: str | None = None
-    default_category: str | None = None
+    default_category_outflow: str | None = None
+    default_category_inflow: str | None = None
     default_subcategory: str | None = None
     identifiers: list[str] | None = None  # if provided, replaces the full identifier set
+    # default_category_outflow/inflow above already use None for "leave
+    # unchanged" (matching every other optional field here), so there's no
+    # way to ask for an explicit no-selection without a separate signal -
+    # mirrors AiSettingsUpdateRequest's clear_openai_api_key pattern
+    # (config.py) for the same reason.
+    clear_default_category_outflow: bool = False
+    clear_default_category_inflow: bool = False
 
 
 class ContactOut(BaseModel):
     id: int
     name: str
-    default_category: str
+    default_category_outflow: str | None
+    default_category_inflow: str | None
     default_subcategory: str | None
     identifiers: list[str]
     historical_spend: float

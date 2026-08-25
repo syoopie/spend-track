@@ -70,9 +70,23 @@ def apply_save_as_rule_and_contact(
         return None
     identifier = contact_identifier or extract_display_name(raw_description)
     name = contact_name or identifier
+    direction = rule_catalog.category_direction(conn, category)
     contact_id = contact_directory.find_contact_id_by_identifier(conn, identifier)
     if contact_id is None:
         contact_id = contact_directory.insert_contact(
-            conn, name=name, default_category=category, default_subcategory=subcategory, identifiers=[identifier]
+            conn,
+            name=name,
+            default_category_outflow=category if direction == "outflow" else None,
+            default_category_inflow=category if direction == "inflow" else None,
+            default_subcategory=subcategory,
+            identifiers=[identifier],
         )
+    else:
+        # The identifier already belongs to someone - fill in whichever
+        # direction this category is (a contact can have both an outflow and
+        # an inflow default independently; see schema.sql's contacts table),
+        # rather than silently ignoring a category for a direction that
+        # contact doesn't have set yet.
+        column = "default_category_outflow" if direction == "outflow" else "default_category_inflow"
+        conn.execute(f"UPDATE contacts SET {column} = ? WHERE id = ?", (category, contact_id))
     return contact_id
