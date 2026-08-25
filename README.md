@@ -78,6 +78,8 @@ Parser regression tests run against every committed sanitized sample PDF, plus f
 
 Off by default. Turn it on in **Settings → AI** and every future upload or recategorize run automatically sends whatever the rules engine couldn't resolve — no rule match, no contact match, and not a PayNow marker (those keep their existing manual-review path unchanged) — to an LLM in the background. It comes back with a suggested category, a clean merchant label stripped of bank-statement noise, and a candidate rule pattern; nothing is applied silently, it just shows up pre-filled in the staging review screen for you to accept, edit, or reject like any other row. Closing the review dialog doesn't cancel the job — reopen it later and the suggestions are there.
 
+The categorization call itself has no timeout — a large batch against a local model can legitimately take a while, and there's no benefit to an arbitrary cutoff silently falling back to rules-only. Instead, the review dialog shows how long the current pass has been running and, after 15 seconds, offers a Terminate button that stops it (best-effort — closes the underlying connection) and leaves everything AI hadn't already resolved exactly as the rules engine left it.
+
 **Three provider options, one shared code path** (`backend/src/app/engine/ai_providers/`):
 
 - **Local (Ollama)** — the default. Points at a model you're already running yourself (`ollama serve`); nothing leaves the device, consistent with the rest of the app.
