@@ -59,6 +59,11 @@ def _config_file() -> Path:
     return _config_dir() / "config.json"
 
 
+def config_file_path() -> Path:
+    """Public alias - routers/data_lifecycle.py packs this file into a backup."""
+    return _config_file()
+
+
 def _default_db_path() -> Path:
     return _config_dir() / "data.db"
 
@@ -101,6 +106,11 @@ _AI_DEFAULTS = {
     "anthropic_model": "",
     "anthropic_api_key": "",
 }
+
+
+#: Keys a backup must never carry out of the machine (see the export
+#: endpoint): a zip tends to end up in cloud storage or an email.
+SECRET_CONFIG_KEYS = ("openai_api_key", "anthropic_api_key")
 
 
 def get_ai_settings() -> dict:

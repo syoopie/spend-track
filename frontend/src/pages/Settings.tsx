@@ -1,4 +1,4 @@
-import { Loader2, Settings as SettingsIcon } from 'lucide-react'
+import { Download, Loader2, Settings as SettingsIcon } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -308,9 +308,30 @@ export function Settings() {
             <div className="text-md font-mono">{settingsQ.data?.schema_version ?? '—'}</div>
           </div>
         </div>
-        <Button variant="secondary" className="font-semibold" onClick={() => setRelocateOpen(true)}>
-          Change Database Path
-        </Button>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {/* A plain anchor, not a Button with an onClick: the browser's own
+              download handling is what puts the file in Downloads and shows
+              the progress. Fetching it into JS to trigger a save would buy
+              nothing and break the "just works" case. */}
+          <a
+            href="/api/data-lifecycle/export"
+            download
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg border border-border bg-input text-text text-md font-semibold no-underline
+              transition-colors hover:border-accent cursor-pointer
+              focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2"
+          >
+            <Download size={14} />
+            Download Backup
+          </a>
+          <Button variant="secondary" className="font-semibold" onClick={() => setRelocateOpen(true)}>
+            Change Database Path
+          </Button>
+        </div>
+        <div className="text-xs text-muted mt-2.5 leading-relaxed">
+          A zip holding your database, your settings and a note explaining how to put them back — enough to restore
+          on this computer or move to another one. AI provider keys are left out on purpose; re-enter yours after
+          restoring.
+        </div>
       </Card>
 
       <Card style={{ border: '1px solid var(--color-danger-surface-border)' }}>
