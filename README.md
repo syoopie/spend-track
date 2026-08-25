@@ -168,7 +168,7 @@ uv run --group build python scripts/build_desktop.py
 
 Compiles the frontend, then freezes it and the API into one executable in `backend/dist/` — `SpendTrack.exe` on Windows, `SpendTrack.app` on macOS, `SpendTrack` on Linux.
 
-PyInstaller freezes the interpreter it runs under, so each platform's build has to happen on that platform; `.github/workflows/desktop-build.yml` does all three on every pull request, smoke-starts each one, and attaches them to a release on a `v*` tag.
+PyInstaller freezes the interpreter it runs under, so each platform's build has to happen on that platform; `.github/workflows/desktop-build.yml` does all three, smoke-starts each one, and attaches them to a release. It runs on a `v*` tag or on demand from the Actions tab (where naming a tag publishes a release), not on every pull request.
 
 </details>
 
