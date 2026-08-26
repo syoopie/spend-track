@@ -6,12 +6,18 @@ import type { LucideIcon } from 'lucide-react'
 // re-typed on each one (root cause 01). Settings and Guide opt into a
 // maxWidth; Guide also opts into the leading icon tile, which is why that's
 // a prop here rather than a reason to hand-roll a second header shape.
+//
+// `maxWidth` defaults to the shared page cap rather than to "unbounded", and
+// the container is centred in whatever room is left. A page that wants a
+// narrower measure still passes its own (Settings, Guide) - what it can't do
+// is opt out of being bounded at all, since nothing on any of these pages
+// gets denser as the window widens.
 export function PageShell({
   title,
   subtitle,
   icon: Icon,
   actions,
-  maxWidth = '',
+  maxWidth = 'max-w-page',
   children,
 }: {
   title: string
@@ -22,7 +28,7 @@ export function PageShell({
   children: ReactNode
 }) {
   return (
-    <div className={`px-9 pt-7 pb-15 ${maxWidth}`}>
+    <div className={`px-9 pt-7 pb-15 mx-auto ${maxWidth}`}>
       <div className="flex items-start justify-between gap-4 mb-5">
         <div className="flex items-center gap-3 min-w-0">
           {Icon && (

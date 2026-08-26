@@ -71,6 +71,16 @@
      off-scale outlier was rounded-[10px] (ReviewDialog stat cards,
      RefundDrawer), which sits between lg and xl with no default home. */
   --radius-2lg: 0.625rem; /* 10px */
+
+  /* The width every page's content column stops growing at, centred in
+     whatever is left. Nothing here gets denser as the window widens - the
+     dashboard shows four metrics, two charts and one feed however much room
+     it has - so an uncapped column just stretched each component around the
+     same content: a metric card 600px wide holding a label and a number, a
+     feed row with 1200px of nothing between its description and its
+     category. `--container-*` is Tailwind's own namespace for max-w-*, so
+     this reads as `max-w-page` at the call site. */
+  --container-page: 100rem; /* 1600px */
 }
 
 body {

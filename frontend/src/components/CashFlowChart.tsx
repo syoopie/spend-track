@@ -49,7 +49,11 @@ export function CashFlowChart({
   // (instead of holding size fixed and letting the row overflow) means the
   // full range always fits in whatever width the card actually has.
   const n = chartData.length
-  const barW = n > 9 ? 'w-2' : n > 6 ? 'w-2.5' : 'w-3.5'
+  // Bars grow with the column they sit in and are only *capped* per month
+  // count, rather than being pinned to a fixed width. Fixed widths meant a
+  // wide card stretched the columns but not the bars, so a 6-month range on
+  // a large screen drew two 14px slivers marooned in a 150px column.
+  const barMaxW = n > 9 ? 'max-w-3' : n > 6 ? 'max-w-4.5' : 'max-w-7'
   const barGap = n > 9 ? 'gap-0.5' : 'gap-1'
   const colGap = n > 9 ? 'gap-1' : n > 6 ? 'gap-2' : 'gap-3.5'
 
@@ -83,13 +87,13 @@ export function CashFlowChart({
                   </div>
                 </div>
               )}
-              <div className={`flex items-end ${barGap} h-[120px]`}>
+              <div className={`flex items-end justify-center w-full ${barGap} h-[120px]`}>
                 <div
-                  className={`${barW} rounded-t-[3px] bg-success transition-opacity ${hovered && !hoveredMonth ? '' : hovered && hovered !== m.month ? 'opacity-60' : ''}`}
+                  className={`flex-1 min-w-[6px] ${barMaxW} rounded-t-[3px] bg-success transition-opacity ${hovered && !hoveredMonth ? '' : hovered && hovered !== m.month ? 'opacity-60' : ''}`}
                   style={{ height: `${Math.max(1, (m.inflow / max) * 120)}px` }}
                 />
                 <div
-                  className={`${barW} rounded-t-[3px] transition-opacity ${hovered && hovered !== m.month ? 'opacity-60' : ''}`}
+                  className={`flex-1 min-w-[6px] ${barMaxW} rounded-t-[3px] transition-opacity ${hovered && hovered !== m.month ? 'opacity-60' : ''}`}
                   style={{ height: `${Math.max(1, (m.outflow / max) * 120)}px`, background: isSelected ? 'var(--color-accent)' : 'var(--color-dim)' }}
                 />
               </div>

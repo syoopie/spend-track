@@ -53,6 +53,16 @@ export function CategoryDonut({
   const tail = data.slice(LEGEND_HEAD)
   const tailTotal = tail.reduce((sum, s) => sum + s.amount, 0)
   const tailPct = tail.reduce((sum, s) => sum + s.pct, 0)
+  // Each legend row draws a bar proportional to the largest slice - the
+  // same device the Top Merchants / Top Paynow tabs of this same card
+  // already use. It's what gives the legend something to do with the width
+  // a wide card hands it; stretched without one, every percentage just ends
+  // up stranded a few hundred pixels from the name it belongs to.
+  // Scaled against the largest row *including* the collapsed "Other" total,
+  // which can exceed any single category - scaling to the top slice alone
+  // clamped both to full width and made them read as equal.
+  const barBasis = Math.max(data[0]?.pct ?? 0, tailPct)
+  const barWidth = (pct: number) => (barBasis > 0 ? `${(pct / barBasis) * 100}%` : '0%')
 
   const content = (
     <>
@@ -102,37 +112,53 @@ export function CategoryDonut({
             )}
           </div>
         </div>
-        <div className="flex flex-col gap-1.5 text-xs min-w-0">
+        {/* flex-1, so the legend spans whatever the card actually has
+            rather than shrinking to its longest category name and leaving
+            the rest of a wide card empty - each row's `ml-auto` then pushes
+            the percentage and amount out to the card's right edge. */}
+        <div className="flex flex-col gap-1.5 text-xs min-w-0 flex-1">
           {data.length === 0 && <div className="text-muted-2">No spending yet</div>}
           {head.map((s) => {
             const Icon = categoryIcon(categories, s.category)
             const isActive = active === s.category
+            const color = categoryDotColor(categories, s.category)
             return (
               <div
                 key={s.category}
                 onMouseEnter={() => setHovered(s.category)}
                 onMouseLeave={() => setHovered(null)}
                 onClick={() => onCategoryClick?.(s.category)}
-                className={`flex items-center gap-1.5 rounded-md px-1 -mx-1 transition-colors ${
+                className={`relative flex items-center gap-1.5 rounded-md px-1 -mx-1 transition-colors ${
                   onCategoryClick ? 'cursor-pointer' : ''
                 } ${isActive ? 'bg-input text-text' : 'text-text-2'} ${active && !isActive ? 'opacity-50' : ''}`}
               >
-                <Icon size={12} color={categoryDotColor(categories, s.category)} className="shrink-0" />
-                <span className="truncate">{s.category}</span>
+                {/* The row's own text is `relative` so it paints above this:
+                    a positioned element outranks static siblings regardless
+                    of DOM order, so without it the bar covers the label. */}
+                <div
+                  className="absolute inset-y-0 left-0 rounded pointer-events-none transition-[width,opacity]"
+                  style={{ width: barWidth(s.pct), background: color, opacity: isActive ? 0.26 : 0.14 }}
+                />
+                <Icon size={12} color={color} className="shrink-0 relative" />
+                <span className="truncate relative">{s.category}</span>
                 {/* Amount now shows on every row, not just on hover (DASH-5) -
                     it used to require hovering each row in turn to see what
                     any of them actually cost. */}
-                <span className="text-muted-2 shrink-0 ml-auto pl-1.5">{s.pct}%</span>
-                <span className="font-mono text-muted-2 shrink-0">· {fmtPlain(s.amount)}</span>
+                <span className="text-muted-2 shrink-0 ml-auto pl-1.5 relative">{s.pct}%</span>
+                <span className="font-mono text-muted-2 shrink-0 relative">· {fmtPlain(s.amount)}</span>
               </div>
             )
           })}
           {tail.length > 0 && (
-            <div className="flex items-center gap-1.5 px-1 -mx-1 text-muted-2">
-              <span className="w-3 shrink-0 text-center">⋯</span>
-              <span>Other ({tail.length})</span>
-              <span className="ml-auto pl-1.5">{Math.round(tailPct)}%</span>
-              <span className="font-mono shrink-0">· {fmtPlain(tailTotal)}</span>
+            <div className="relative flex items-center gap-1.5 rounded-md px-1 -mx-1 text-muted-2">
+              <div
+                className="absolute inset-y-0 left-0 rounded pointer-events-none bg-dim/40"
+                style={{ width: barWidth(tailPct) }}
+              />
+              <span className="w-3 shrink-0 text-center relative">⋯</span>
+              <span className="relative">Other ({tail.length})</span>
+              <span className="ml-auto pl-1.5 relative">{Math.round(tailPct)}%</span>
+              <span className="font-mono shrink-0 relative">· {fmtPlain(tailTotal)}</span>
             </div>
           )}
         </div>
