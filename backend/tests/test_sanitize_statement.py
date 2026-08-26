@@ -283,5 +283,23 @@ def test_runs_as_a_script_from_a_clone(tmp_path):
         text=True,
     )
     assert result.returncode == 0, result.stderr
-    assert "verified" in result.stdout
+    assert "checks passed" in result.stdout
     assert "parses as UOB" in result.stdout
+
+
+def test_the_console_output_never_reads_as_an_all_clear(statement_with_pii):
+    """The checks confirm the rules did what they were asked. They say nothing
+    about a name no rule was going to recognize, and an earlier version of this
+    line read as "no PII found" while five names sat in the output. Anything
+    that sounds like a clean bill of health here gets people to skip the review
+    file, which is the only thing that catches those."""
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), str(statement_with_pii), "--redact", "JANE WONG MEI LING"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    lowered = result.stdout.lower()
+    for phrase in ("no pii", "safe to share", "all clear", "no personal"):
+        assert phrase not in lowered
+    assert "review" in lowered, "the output must point at the review file"

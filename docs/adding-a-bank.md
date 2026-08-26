@@ -36,10 +36,21 @@ uv run python scripts/sanitize_statement.py ~/Downloads/statement.pdf \
 This rebuilds the PDF from scratch — it does not draw boxes over your data,
 which leaves the data in the file — keeping every word's exact position while
 replacing account numbers, references, NRIC/FIN, emails, phone numbers and
-transfer counterparties. It also writes a `.review.txt` listing every word that
-survived. **Read that file** before sharing: no automatic rule knows your
-landlord's name or the nickname in a PayNow reference. Re-run with more
-`--redact` values until the list is clean.
+transfer counterparties. Identifiers split across words (`4111 1111 1111 1234`)
+are handled too.
+
+**It is a two-pass tool, and the second pass is not optional.** No rule can
+find a name that nothing introduces — yours in the address block, a joint
+holder's, a landlord's, a street. So it writes a `.review.txt` whose first
+section lists every name-shaped phrase that survived, with the line each came
+from. Read it, re-run with `--redact` for each one, repeat until that list
+holds nothing personal. The script's own checks confirm the rules did what
+they were asked; they are not a clean bill of health.
+
+Before finishing it re-reads its own output and refuses the file if anything it
+removed is still findable anywhere in it — including in the output's *name*,
+since `JaneWong-Jan2024.pdf` identifies its owner as well as its contents do.
+Pass `--output` to name the result something neutral.
 
 Amounts, dates and merchant names are kept on purpose. They are what a parser
 has to read correctly, and the reconciliation checks are written against them.
