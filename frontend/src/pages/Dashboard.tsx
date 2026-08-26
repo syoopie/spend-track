@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowUp, FileUp, LayoutGrid, Loader2, Pencil, Receipt, RefreshCw, SearchX, SlidersHorizontal, Trash2 } from 'lucide-react'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   useAccounts,
@@ -15,6 +15,7 @@ import { ElapsedTimer } from '../components/ElapsedTimer'
 import { useToast } from '../components/Toast'
 import { fmtDate, fmtMonthRangeLabel, fmtMonthYearLabel, fmtPlain, fmtSigned, shiftMonth } from '../lib/format'
 import { loadDashboardFilters, saveDashboardFilters, type DashboardFilters, type DirectionFilter } from '../lib/dashboardFilters'
+import { useScrolledUnder } from '../lib/useScrolledUnder'
 import { CashFlowChart, cashFlowQualifier } from '../components/CashFlowChart'
 import { CategoryBadge, CategoryLabel } from '../components/CategoryBadge'
 import { categoryOptionElements } from '../components/CategoryOptions'
@@ -551,6 +552,19 @@ export function Dashboard() {
   // not the row list inside it, so the card's own header/filter chips come
   // into view too, not just a blank first row.
   const feedRef = useRef<HTMLDivElement>(null)
+  // Scroll shadows, drawn only while there's something under them - see the
+  // comment on each header's className, and lib/useScrolledUnder.ts.
+  const [pageScrolled, pageHeaderRef] = useScrolledUnder<HTMLDivElement>()
+  const [feedScrolled, feedHeaderScrollRef] = useScrolledUnder<HTMLDivElement>()
+  // The feed's column header needs both refs: its own height (for the month
+  // dividers that stick below it) and the scroll subscription above.
+  const attachColumnHeader = useCallback(
+    (node: HTMLDivElement | null) => {
+      columnHeaderRef.current = node
+      feedHeaderScrollRef(node)
+    },
+    [feedHeaderScrollRef],
+  )
   // Layout effect, not a plain effect - runs before the browser paints, so
   // the very first divider (if one's visible without scrolling) never
   // flashes at top:0 overlapping the column header for a frame.
@@ -672,8 +686,20 @@ export function Dashboard() {
   const isRefreshing = !summaryQ.isLoading && (summaryQ.isFetching || txQ.isFetching)
 
   return (
-    <div className="px-9 pb-15">
-      <div className="sticky top-0 z-20 -mx-9 px-9 bg-bg pt-7 pb-5.5 relative shadow-[0_4px_6px_-4px_rgba(0,0,0,0.4)]">
+    <div className="px-9 pb-15 mx-auto max-w-page">
+      <div
+        ref={pageHeaderRef}
+        // The drop shadow is conditional on something actually being
+        // scrolled underneath. Drawn unconditionally it painted ~6px of
+        // shadow straight onto the top edge of the metric cards below,
+        // because a sticky header's own pb is inside its box - there is no
+        // gap between the header's bottom edge and the first card for the
+        // shadow to land in, so at rest it read as the header overlapping
+        // the card rather than as depth.
+        className={`sticky top-0 z-20 -mx-9 px-9 bg-bg pt-7 pb-5.5 relative transition-shadow ${
+          pageScrolled ? 'shadow-[0_4px_6px_-4px_rgba(0,0,0,0.4)]' : ''
+        }`}
+      >
         <div
           className={`absolute bottom-0 left-0 right-0 h-[2px] bg-accent transition-opacity duration-200 ${isRefreshing ? 'opacity-100' : 'opacity-0'}`}
         />
@@ -953,12 +979,14 @@ export function Dashboard() {
             1000+ rows from turning the whole page into one giant scroller. */}
         <div className="max-h-[65vh] overflow-y-auto">
           <DataTableHeader
-            headerRef={columnHeaderRef}
+            headerRef={attachColumnHeader}
             columns={FEED_COLUMNS}
             gridTemplate={FEED_GRID_TEMPLATE}
             sort={sort}
             onSort={toggleSort}
-            className="px-5 py-2.5 border-b border-divider sticky top-0 z-10 bg-card text-2xs text-muted-2 uppercase tracking-wide shadow-[0_4px_6px_-4px_rgba(0,0,0,0.4)]"
+            className={`px-5 py-2.5 border-b border-divider sticky top-0 z-10 bg-card text-2xs text-muted-2 uppercase tracking-wide transition-shadow ${
+              feedScrolled ? 'shadow-[0_4px_6px_-4px_rgba(0,0,0,0.4)]' : ''
+            }`}
           />
           {txQ.isLoading && <div className="p-5 text-muted text-sm">Loading transactions…</div>}
           {txQ.isError && <ErrorState description="Couldn't load transactions for this range." onRetry={() => txQ.refetch()} />}

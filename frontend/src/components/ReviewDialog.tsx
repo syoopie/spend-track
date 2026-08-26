@@ -4,6 +4,7 @@ import { useCategories, useContacts, useCreateContact, useRuleMatchCount, useUpd
 import type { AiJobStatus, Category, RuleRerunRowSnapshot } from '../api/types'
 import { fmtDate, fmtSigned } from '../lib/format'
 import { extractPaynowIdentifierCandidate } from '../lib/paynowIdentifier'
+import { useScrolledUnder } from '../lib/useScrolledUnder'
 import { CategoryBadge } from './CategoryBadge'
 import { categoryOptionElements } from './CategoryOptions'
 import { Checkbox } from './Checkbox'
@@ -876,6 +877,7 @@ export function ReviewDialog({
   footer: ReactNode
   emptyMessage?: string
 }) {
+  const [rowsScrolled, rowsHeaderRef] = useScrolledUnder<HTMLDivElement>()
   const [openKey, setOpenKey] = useState<number | null>(null)
   const [ruleBanner, setRuleBanner] = useState<{
     ruleId: number
@@ -1342,7 +1344,12 @@ export function ReviewDialog({
           // once AI categorization is actually running with real pending
           // rows (see Dashboard.tsx's feed header, which already carries the
           // same z-10 for the identical reason).
-          className="px-5 py-2.5 text-2xs text-muted-2 uppercase tracking-wide border-b border-border/70 sticky top-0 z-10 bg-input shadow-[0_4px_6px_-4px_rgba(0,0,0,0.4)]"
+          headerRef={rowsHeaderRef}
+          // Same conditional scroll shadow as the dashboard feed's header:
+          // drawn at rest it lands on the first row rather than in a gap.
+          className={`px-5 py-2.5 text-2xs text-muted-2 uppercase tracking-wide border-b border-border/70 sticky top-0 z-10 bg-input transition-shadow ${
+            rowsScrolled ? 'shadow-[0_4px_6px_-4px_rgba(0,0,0,0.4)]' : ''
+          }`}
         />
         {rows.length === 0 && <EmptyState icon={Inbox} title={emptyMessage} />}
         {rows.length > 0 && visibleRows.length === 0 && (
