@@ -265,7 +265,13 @@ def redact_line(words: list[Word], literals: list[str], keep_counterparties: boo
         # 2. A counterparty name, i.e. whatever follows a "To:"/"From:" marker
         #    until the rail's own trailing codes resume.
         if counterparty_run > 0 and not keep_counterparties:
-            if lower.strip(":,-") in COUNTERPARTY_STOPWORDS or is_money(text) or is_date(text):
+            # A counterparty's name is alphabetic. A digit-heavy token is a
+            # reference number, so end the run and let the identifier rule
+            # have it: both redact it, but that rule keeps its shape
+            # ("PIB" + 16 digits), and the shape is what a parser author
+            # needs to see. Ending the run here costs no privacy at all.
+            looks_like_identifier = sum(c.isdigit() for c in text) >= IDENTIFIER_DIGIT_COUNT
+            if lower.strip(":,-") in COUNTERPARTY_STOPWORDS or is_money(text) or is_date(text) or looks_like_identifier:
                 counterparty_run = 0
             else:
                 counterparty_run -= 1

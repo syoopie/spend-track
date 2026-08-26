@@ -145,6 +145,19 @@ def test_reference_numbers_are_replaced_even_when_prefixed_with_letters(statemen
     assert re.search(r"PIB\d{16}", text), "the reference should keep its shape, not vanish"
 
 
+def test_a_reference_number_ends_a_counterparty_run_instead_of_joining_it():
+    """A name run that hits a reference number should hand it to the
+    identifier rule. Both redact it, but only that rule keeps its shape, and
+    the shape is what a parser author needs to see."""
+    words = [
+        sanitize.Word(text=t, x0=i * 20, x1=i * 20 + 15, top=0, bottom=9, size=9, bold=False)
+        for i, t in enumerate(["To:", "TAN", "WEI", "MING", "PIB0000123456789012"])
+    ]
+    result = sanitize.redact_line(words, [], False, False, sanitize.Stats())
+    assert re.fullmatch(r"PIB\d{16}", result[-1].text)
+    assert all(w.text.startswith("SAM") for w in result[1:4])
+
+
 def test_a_single_word_redaction_does_not_strike_words_that_merely_contain_it():
     """Substring matching would make --redact "TAN" gut every merchant with
     those letters in it. What survives is the point of sharing the file."""
