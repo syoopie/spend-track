@@ -117,11 +117,13 @@ The goal is to read statements from any bank, anywhere. Everything downstream of
 
 The hard part is never the code. A parser is written against a real statement, and a real statement carries your name, address, account number and a year of spending — which is why nobody can simply send one. No bank publishes a specimen, the "statement template" sites a search turns up are forgery tools, and even [monopoly](https://github.com/benjamin-awd/monopoly), the most complete open-source Singapore parser, keeps its own test statements encrypted in its repository.
 
-**So there's a script for it.** `scripts/sanitize_statement.py` rebuilds your statement into a shareable one: same layout, same amounts, same merchants, with account numbers, references, NRIC, emails, phone numbers and transfer counterparties replaced. It rebuilds the file rather than drawing boxes over it — a box leaves the text underneath — and writes a review list of everything that survived, so you can check it before sharing.
+**So there's a script for it.** `scripts/sanitize_statement.py` rebuilds your statement into a shareable one — rebuilds, rather than drawing boxes over it, since a box leaves the text underneath.
 
 ```
-uv run python scripts/sanitize_statement.py statement.pdf --redact "YOUR NAME"
+uv run python scripts/sanitize_statement.py statement.pdf --structure-only
 ```
+
+That keeps only what it recognizes as your bank's own template — headings, the `BALANCE B/F` and `Total` rows, the statement date, the figures and dates — and replaces every other word with its shape. It needs no decisions from you, and it costs a parser nothing: a parser reads the statement's chrome, never the descriptions. Drop `--structure-only` and add `--redact "YOUR NAME"` if you also want the merchant wording kept, which is what testing the categorization engine needs; then read the review list it writes before sharing.
 
 That's the contribution worth making: [open a bank support request](https://github.com/syoopie/spend-track/issues/new?template=bank-support.yml) and attach a sanitized sample — or just run the parsers against your own files locally and report what breaks, which needs no sanitizing at all. **[docs/adding-a-bank.md](docs/adding-a-bank.md)** has the details, including how DBS and OCBC were built from their published layouts when no statement was available, and why those parsers refuse to import figures that don't reconcile.
 

@@ -292,6 +292,74 @@ def test_the_process_exits_non_zero_when_a_check_fails(tmp_path):
     assert "do not share this file" in result.stdout
 
 
+# --- --structure-only, the mode that needs no judgement calls --------------
+
+
+@pytest.fixture(scope="module")
+def structure_only(tmp_path_factory):
+    """Sanitized with --structure-only and *no --redact at all* - the whole
+    point of the mode being that it needs none."""
+    directory = tmp_path_factory.mktemp("structure")
+    source = directory / "statement.pdf"
+    _build_statement(source)
+    assert sanitize.main([str(source), "--structure-only"]) == 0
+
+    out = source.with_name("statement.sanitized.pdf")
+    with pdfplumber.open(out) as pdf:
+        text = " ".join(" ".join((page.extract_text() or "").split()) for page in pdf.pages)
+    return {"text": text, "raw": out.read_bytes()}
+
+
+@pytest.mark.parametrize(
+    ("case", "secret"),
+    [(name, secret) for name, _line, secret in PII_CASES + PAGE_TWO_CASES] + [("repeated name", REPEATED_NAME)],
+    ids=[name for name, _line, _secret in PII_CASES + PAGE_TWO_CASES] + ["repeated name"],
+)
+def test_structure_only_removes_every_shape_with_no_redact_arguments(structure_only, case, secret):
+    """The default mode leaves bare names to a human, because no rule can tell
+    a landlord from a merchant. --structure-only removes that judgement call
+    entirely by keeping only what it positively recognizes as the bank's own
+    template - so every one of these goes without being named."""
+    assert secret not in structure_only["text"], f"{case}: {secret!r} readable in the output"
+    assert secret.encode() not in structure_only["raw"], f"{case}: {secret!r} in the output's bytes"
+
+
+def test_structure_only_leaves_no_name_shaped_phrase_for_a_human_to_judge(structure_only):
+    for fragment in ("ORCHID", "KAMALA", "Ramirez", "Siobhan", "Anne", "Marie"):
+        assert fragment not in structure_only["text"]
+
+
+@pytest.mark.parametrize("keep", ["01 Feb", "15/03/2024", "1,234.56", "3,200.00", "123456.78"])
+def test_structure_only_still_keeps_the_figures_and_dates(structure_only, keep):
+    """Same pairing as everywhere else: privacy bought by destroying the
+    numbers would leave nothing worth sharing."""
+    assert keep in structure_only["text"]
+
+
+def test_structure_only_keeps_a_bare_year_intact():
+    """A four-digit year is a bare digit run with no separators, and the mode
+    replaces digit-bearing tokens with no length threshold at all. Left
+    unguarded that moved every transaction in the fixture set to the year
+    6557 - silently, since the dates still looked like dates."""
+    word = sanitize.Word(text="2024", x0=0, x1=20, top=0, bottom=9, size=9, bold=False)
+    (result,) = sanitize.redact_line([word], [], False, False, sanitize.Stats(), structure_only=True)
+    assert result.text == "2024"
+    # ...but a four-digit card group is not a year and must still go.
+    group = sanitize.Word(text="4111", x0=0, x1=20, top=0, bottom=9, size=9, bold=False)
+    (replaced,) = sanitize.redact_line([group], [], False, False, sanitize.Stats(), structure_only=True)
+    assert replaced.text != "4111"
+
+
+def test_structure_only_scrubs_the_digits_of_a_letter_prefixed_reference():
+    """Shaping alone maps letters and leaves digits, so "PIB0000123456789012"
+    came out as "XXX0000123456789012" - the entire reference intact behind a
+    masked prefix."""
+    word = sanitize.Word(text="PIB0000123456789012", x0=0, x1=90, top=0, bottom=9, size=9, bold=False)
+    (result,) = sanitize.redact_line([word], [], False, False, sanitize.Stats(), structure_only=True)
+    assert "0000123456789012" not in result.text
+    assert result.text.startswith("XXX")
+
+
 # --- the rules that fix the split-identifier leak, unit-tested -------------
 
 

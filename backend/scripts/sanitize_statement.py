@@ -56,6 +56,29 @@ each one until it holds nothing personal. The script's own checks confirm the
 rules did what they were asked; they are not a clean bill of health, and the
 output never claims to be one.
 
+--structure-only, which removes that judgement call
+---------------------------------------------------
+If all you want is a sample a parser can be built against, use it. It inverts
+the model from "remove what looks personal, keep the rest" to "keep only what
+is recognizably the bank's own template, replace the rest with its shape" -
+default-deny instead of default-allow, so a word nobody thought about is
+discarded rather than published. On the adversarial fixture it removes every
+one of thirty-one planted identifiers with no --redact arguments at all,
+including the bare names the default mode has to hand to a human.
+
+It costs the parsers nothing, and that is a measured claim rather than a hope:
+a parser reads the bank name, the column headings, the BALANCE B/F and Total
+rows and the statement date, and never reads a description for anything but
+passing it through. Replacing every description across the whole committed
+fixture set leaves all three parsers returning identical dates, amounts and
+balances, and `test_structure_only_costs_the_parsers_nothing` pins that.
+
+What it does cost is the categorization engine, which *does* read descriptions:
+a structure-only sample cannot exercise the PayNow handling or the merchant
+rule bank. And if the built-in template vocabulary doesn't know one of your
+bank's headings, the sample won't parse - --check-parse tells you, and --keep
+fixes it. That failure is a loud one, not a silent leak.
+
 What it deliberately keeps
 --------------------------
 Amounts and balances, merchant names, dates, and every piece of table
@@ -66,6 +89,10 @@ structure, at the cost of the reconciliation checks a parser is tested with.
 
 Using it
 --------
+    # strongest, and needs no decisions from you
+    uv run python scripts/sanitize_statement.py statement.pdf --structure-only
+
+    # keeps merchant wording, so it can also test categorization
     uv run python scripts/sanitize_statement.py statement.pdf \\
         --redact "YOUR NAME" --redact "SPOUSE NAME"
 
@@ -88,7 +115,7 @@ import argparse
 import hashlib
 import re
 import sys
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import pdfplumber
@@ -145,6 +172,40 @@ COUNTERPARTY_STOPWORDS = {
     "giro", "inb", "ref", "sgd", "via", "incoming", "outgoing", "-",
 }
 
+#: The statement template's own vocabulary: bank names, table headings, the
+#: furniture rows, month names, currency and polarity markers. Everything a
+#: parser is actually keyed on lives in this set, and none of it belongs to
+#: the customer - it is printed identically on every statement the bank issues.
+#:
+#: Used only by --structure-only, where it is the *keep* list rather than a
+#: remove list. Being generous here is safe for privacy (no customer's name is
+#: in it) and the cost of a miss is only that the sample needs a --keep to
+#: parse, which --check-parse surfaces immediately.
+CHROME_VOCABULARY = frozenset(
+    """
+    bank banking corporation limited ltd pte berhad group
+    united overseas uob dbs posb oversea-chinese ocbc citibank hsbc maybank
+    standard chartered trust gxs anext
+    statement statements account accounts current savings cheque deposit deposits
+    withdrawal withdrawals balance balances credit debit card cards
+    transaction transactions details detail description descriptions
+    date dates period from to as at value posting post trans effective
+    total totals subtotal sub grand previous new opening closing
+    brought carried forward b/f c/f bf cf
+    minimum payment due paid amount amounts limit available outstanding
+    currency singapore dollar sgd usd myr eur gbp cr dr db
+    jan feb mar apr may jun jul aug sep sept oct nov dec
+    january february march april june july august september october november december
+    page pages continued cont summary overview no number ref reference
+    interest charges fee fees gst rate
+    """.split()
+) | frozenset(
+    # Connectives, which carry nothing and appear inside anchors a parser
+    # matches whole: UOB looks for the literal "Statement of Account", so
+    # dropping "of" makes the sample unrecognizable.
+    "a an and at as by for from in of on or the this to with your".split()
+)
+
 REDACTED_DIGIT_ALPHABET = "0123456789"
 #: What a redacted NRIC becomes. Shaped like one on purpose, so a parser that
 #: has to cope with the field still sees the field - and skipped by the
@@ -171,12 +232,33 @@ class Word:
 
 @dataclass
 class Stats:
+    #: Every word a rule acted on, as the original Word - so per *instance*,
+    #: not per distinct text. Both properties are load-bearing for the
+    #: whole-document cross-check:
+    #:
+    #: * Recorded rather than inferred by diffing before and after, because a
+    #:   redaction is occasionally a no-op (_pseudonym_text("SAMPLE") is
+    #:   "SAMPLE") and inferring would file that under "left alone".
+    #: * Per instance, because the check's whole job is finding the *second*
+    #:   occurrence of a name whose first occurrence was redacted. Keyed by
+    #:   text alone, that second occurrence looks like it was handled.
+    touched: set["Word"] = field(default_factory=set)
+    #: The subset the *automatic* rules acted on. The cross-check uses this
+    #: rather than `touched`, because an explicit --redact is phrase-scoped by
+    #: design: "JANE WONG" deliberately does not match a lone "WONG" in a
+    #: merchant name, so flagging that lone "WONG" as a survivor would
+    #: contradict the matching rule the contributor was promised. The phrase
+    #: itself is verified present-or-absent separately. What the cross-check
+    #: is for is the automatic rules disagreeing with themselves across a
+    #: document, which is a bug rather than a judgement call.
+    touched_by_rule: set["Word"] = field(default_factory=set)
     numbers: int = 0
     nrics: int = 0
     emails: int = 0
     counterparties: int = 0
     named: int = 0
     amounts: int = 0
+    structure: int = 0
     dropped_rotated: int = 0
 
 
@@ -210,12 +292,71 @@ def _pseudonym_text(original: str) -> str:
     return ("SAMPLE" * ((len(original) // 6) + 1))[: len(original)]
 
 
+def _shape_of(original: str) -> str:
+    """A stand-in preserving only the shape: X for a capital, x for a letter.
+
+    Used by --structure-only, where the word's *content* is exactly what is
+    being thrown away and its geometry is exactly what is being kept. Case is
+    preserved because a reader of the sample can then still see which parts of
+    a description were shouted and which were not - which is occasionally the
+    only clue to where one field ends and the next begins.
+    """
+    return "".join("X" if c.isupper() else "x" if c.isalpha() else c for c in original)
+
+
+def is_placeholder(text: str) -> bool:
+    """Is this word something this script wrote on an earlier run?
+
+    Only the cross-check consults this, never the redaction rules. Making the
+    *rules* skip placeholder-looking words would mean a contributor actually
+    named Sam went unredacted after a "To:", which is a real leak traded for a
+    convenience. The verifier has no such stake: it just needs to stop
+    reporting its own output as a survivor when the same file is sanitized
+    twice, which is otherwise the only thing a second pass produces.
+    """
+    if text == NRIC_PLACEHOLDER or text.lower().endswith(EMAIL_PLACEHOLDER_DOMAIN):
+        return True
+    if text and _pseudonym_text(text) == text:
+        return True
+    return bool(text) and set(text) <= {"X", "x"}
+
+
+def is_chrome(text: str) -> bool:
+    """Is this word part of the bank's own template rather than the customer's
+    data?
+
+    Matched twice: once with punctuation stripped from the ends ("Balance:"),
+    and once with every non-alphanumeric removed, because banks punctuate
+    inside their own headings too - UOB prints "Credit Card(s) Statement", and
+    only the second form reduces "Card(s)" to the "cards" in the vocabulary.
+    """
+    lowered = text.lower()
+    if lowered.strip("(),.:;/-") in CHROME_VOCABULARY:
+        return True
+    return "".join(c for c in lowered if c.isalnum()) in CHROME_VOCABULARY
+
+
 def is_money(text: str) -> bool:
     return bool(MONEY_RE.match(text)) and any(c.isdigit() for c in text)
 
 
 def is_date(text: str) -> bool:
     return bool(DATE_RE.match(text))
+
+
+def is_year(text: str) -> bool:
+    """A bare four-digit year, printed on its own as statements do in
+    "Statement Date 20 FEB 2024".
+
+    It needs its own check because DATE_RE only matches one- and two-digit
+    day numbers and fully-punctuated dates, so a lone "2024" reads as neither
+    a date nor an amount. Under --structure-only, where every remaining
+    digit-bearing token is replaced regardless of length, that put every
+    statement's year through the pseudonymiser and moved all its transactions
+    to the year 6557. Bounded to a plausible range so a four-digit card group
+    still gets replaced.
+    """
+    return len(text) == 4 and text.isdigit() and 1900 <= int(text) <= 2099
 
 
 def group_lines(words: list[Word], y_tol: float = 3.0) -> list[list[Word]]:
@@ -357,7 +498,15 @@ def _literal_matches(words: list[Word], literals: list[str]) -> set[int]:
     return hits
 
 
-def redact_line(words: list[Word], literals: list[str], keep_counterparties: bool, redact_amounts: bool, stats: Stats) -> list[Word]:
+def redact_line(
+    words: list[Word],
+    literals: list[str],
+    keep_counterparties: bool,
+    redact_amounts: bool,
+    stats: Stats,
+    structure_only: bool = False,
+    keep: frozenset[str] = frozenset(),
+) -> list[Word]:
     """Apply every redaction rule to one line's words, in order.
 
     One line at a time, because a "To:" marker only introduces a name on its
@@ -369,6 +518,12 @@ def redact_line(words: list[Word], literals: list[str], keep_counterparties: boo
     out: list[Word] = []
     counterparty_run = 0
 
+    def redacted(word: Word, new_text: str, by_rule: bool = True) -> Word:
+        stats.touched.add(word)
+        if by_rule:
+            stats.touched_by_rule.add(word)
+        return replace(word, text=new_text)
+
     for index, word in enumerate(words):
         text = word.text
         lower = text.lower()
@@ -377,7 +532,7 @@ def redact_line(words: list[Word], literals: list[str], keep_counterparties: boo
         #    remove it, no later rule gets to decide it looked like an amount.
         if index in literal_hits:
             stats.named += 1
-            out.append(replace(word, text=_pseudonym_text(text)))
+            out.append(redacted(word, _pseudonym_text(text), by_rule=False))
             counterparty_run = 0
             continue
 
@@ -387,7 +542,7 @@ def redact_line(words: list[Word], literals: list[str], keep_counterparties: boo
         #    and destroy the number's shape.
         if index in digit_runs:
             stats.numbers += 1
-            out.append(replace(word, text=digit_runs[index]))
+            out.append(redacted(word, digit_runs[index]))
             counterparty_run = 0
             continue
 
@@ -405,7 +560,7 @@ def redact_line(words: list[Word], literals: list[str], keep_counterparties: boo
             else:
                 counterparty_run -= 1
                 stats.counterparties += 1
-                out.append(replace(word, text=_pseudonym_text(text)))
+                out.append(redacted(word, _pseudonym_text(text)))
                 continue
         if lower in COUNTERPARTY_MARKERS:
             # Cap the run: a marker inside an unusual description shouldn't
@@ -414,18 +569,18 @@ def redact_line(words: list[Word], literals: list[str], keep_counterparties: boo
 
         if NRIC_RE.match(text):
             stats.nrics += 1
-            out.append(replace(word, text=NRIC_PLACEHOLDER))
+            out.append(redacted(word, NRIC_PLACEHOLDER))
             continue
 
         if EMAIL_RE.match(text):
             stats.emails += 1
-            out.append(replace(word, text=_pseudonym_text(text.split("@")[0]) + EMAIL_PLACEHOLDER_DOMAIN))
+            out.append(redacted(word, _pseudonym_text(text.split("@")[0]) + EMAIL_PLACEHOLDER_DOMAIN))
             continue
 
         if is_money(text):
             if redact_amounts:
                 stats.amounts += 1
-                out.append(replace(word, text=re.sub(r"\d", "0", text)))
+                out.append(redacted(word, re.sub(r"\d", "0", text)))
             else:
                 out.append(word)
             continue
@@ -434,6 +589,29 @@ def redact_line(words: list[Word], literals: list[str], keep_counterparties: boo
             out.append(word)
             continue
 
+        # --structure-only inverts the whole model: instead of removing what
+        # looks personal and keeping the rest, keep only what is recognizably
+        # the bank's own template and replace the rest. Default-deny, so a
+        # word nobody thought about is thrown away rather than published.
+        #
+        # This costs the parsers nothing. Every one of them keys on the
+        # statement's chrome - the bank name, the column headings, the
+        # BALANCE B/F and Total rows, the statement date - and none of them
+        # reads a transaction description for anything except passing it
+        # through. Scrambling every description in the fixture set leaves all
+        # six parsers returning byte-identical dates, amounts and balances.
+        if structure_only and any(c.isalnum() for c in text) and not is_year(text):
+            if not is_chrome(text) and text.lower() not in keep:
+                stats.structure += 1
+                # Digits first, then letters. Shaping alone would leave a
+                # reference like "PIB0000123456789012" as "XXX0000123456789012"
+                # - every digit of it intact - because _shape_of only touches
+                # letters. And no length threshold applies here: default-deny
+                # means a five-digit unit number goes too, where the ordinary
+                # identifier rule would have let it stand.
+                out.append(redacted(word, _shape_of(_pseudonym_digits(text))))
+                continue
+
         # Counted rather than pattern-matched, because a reference number is
         # not always a bare run of digits: real statements print things like
         # "PIB0000000000000001" and "TRF-123456789", and a rule anchored on a
@@ -441,7 +619,7 @@ def redact_line(words: list[Word], literals: list[str], keep_counterparties: boo
         digits = sum(c.isdigit() for c in text)
         if digits >= IDENTIFIER_DIGIT_COUNT and not MONEY_TAIL_RE.search(text):
             stats.numbers += 1
-            out.append(replace(word, text=_pseudonym_digits(text)))
+            out.append(redacted(word, _pseudonym_digits(text)))
             continue
 
         out.append(word)
@@ -697,7 +875,13 @@ CROSS_CHECK_MIN_DIGITS = 5
 CROSS_CHECK_MIN_LETTERS = 2
 
 
-def verify(out_path: Path, literals: list[str], removed: set[str] | None = None, source_name: str = "") -> list[str]:
+def verify(
+    out_path: Path,
+    literals: list[str],
+    removed: set[str] | None = None,
+    untouched: set[str] | None = None,
+    source_name: str = "",
+) -> list[str]:
     """Re-read the output and report anything that should not have survived.
 
     A redaction tool that trusts its own rules is how documents leak, so this
@@ -732,7 +916,13 @@ def verify(out_path: Path, literals: list[str], removed: set[str] | None = None,
         elif EMAIL_RE.match(token) and not token.lower().endswith(EMAIL_PLACEHOLDER_DOMAIN):
             problems.append(f"an email address survived: {token}")
 
-    surviving = {t.strip(".,:;()") for t in tokens}
+    # A word counts as still present only if the redactor left it alone *and*
+    # it is really in the written file. Comparing against every token in the
+    # output instead would flag the script's own placeholder text: redacting
+    # "SAMPLE MART" removes the word "SAMPLE", and _pseudonym_text emits
+    # "SAMPLE" as its replacement for something else two lines down.
+    present = {t.strip(".,:;()") for t in tokens}
+    surviving = {t.strip(".,:;()") for t in (untouched or ())} & present
     for original in sorted(removed or ()):
         stripped = original.strip(".,:;()")
         if not stripped or stripped not in surviving:
@@ -800,6 +990,23 @@ def main(argv: list[str] | None = None) -> int:
         help="also blank out every figure. Shares the structure only, and defeats the "
         "reconciliation checks a parser is tested against - prefer leaving it off.",
     )
+    parser.add_argument(
+        "--structure-only",
+        action="store_true",
+        help="keep only the bank's own template wording (headings, BALANCE B/F, Total, the "
+        "statement date) and replace every other word with its shape. The strongest option: "
+        "it discards descriptions wholesale rather than trying to spot the personal ones, and "
+        "the parsers do not read descriptions anyway. Costs you the ability to test "
+        "categorization, which does read them.",
+    )
+    parser.add_argument(
+        "--keep",
+        action="append",
+        default=[],
+        metavar="TEXT",
+        help="with --structure-only, extra wording to preserve - anything your bank prints "
+        "that this script doesn't recognize as template. Repeatable.",
+    )
     parser.add_argument("--check-parse", action="store_true", help="try parsing the result with this app's parsers")
     args = parser.parse_args(argv)
 
@@ -810,6 +1017,7 @@ def main(argv: list[str] | None = None) -> int:
     review_path = out_path.with_suffix(".review.txt")
 
     stats = Stats()
+    keep_words = frozenset(word.lower() for phrase in args.keep for word in phrase.split())
     pages = read_pages(args.pdf, args.password)
 
     original = [(width, height, group_lines(words), rotated) for width, height, words, rotated in pages]
@@ -817,7 +1025,18 @@ def main(argv: list[str] | None = None) -> int:
         (
             width,
             height,
-            [redact_line(line, args.redact, args.keep_counterparties, args.redact_amounts, stats) for line in lines],
+            [
+                redact_line(
+                    line,
+                    args.redact,
+                    args.keep_counterparties,
+                    args.redact_amounts,
+                    stats,
+                    structure_only=args.structure_only,
+                    keep=keep_words,
+                )
+                for line in lines
+            ],
             rotated,
         )
         for width, height, lines, rotated in original
@@ -827,14 +1046,21 @@ def main(argv: list[str] | None = None) -> int:
     # The two page lists are index-parallel, so a word that changed tells us
     # both what was removed (for the cross-check) and what the replacement text
     # is (so the review file can leave the script's own output out of it).
+    # What the rules acted on, against what they left alone - compared per
+    # word instance, so the second, unredacted printing of a name shows up as
+    # untouched even though the first was removed.
     removed: set[str] = set()
+    untouched: set[str] = set()
     placeholders: set[str] = set()
     for (_w, _h, before_lines, _r), (_w2, _h2, after_lines, _r2) in zip(original, sanitized):
         for before_line, after_line in zip(before_lines, after_lines):
             for before, after in zip(before_line, after_line):
-                if before.text != after.text:
-                    removed.add(before.text)
+                if before in stats.touched:
                     placeholders.add(after.text)
+                    if before in stats.touched_by_rule:
+                        removed.add(before.text)
+                elif not is_placeholder(before.text):
+                    untouched.add(before.text)
 
     notice = "Synthetic/sanitized sample - personal data removed by scripts/sanitize_statement.py"
     write_pdf(out_path, sanitized, notice)
@@ -846,11 +1072,12 @@ def main(argv: list[str] | None = None) -> int:
         f"  redacted: {stats.numbers} numbers, {stats.nrics} NRIC/FIN, {stats.emails} emails, "
         f"{stats.counterparties} counterparty name words, {stats.named} words you named"
         + (f", {stats.amounts} amounts" if stats.amounts else "")
+        + (f", {stats.structure} non-template words" if stats.structure else "")
     )
     if stats.dropped_rotated:
         print(f"  dropped {stats.dropped_rotated} rotated/vertical words (sidebars and watermarks, never transactions)")
 
-    problems = verify(out_path, args.redact, removed, out_path.name)
+    problems = verify(out_path, args.redact, removed, untouched, out_path.name)
     if problems:
         print("\nVERIFICATION FAILED - do not share this file:")
         for problem in problems:

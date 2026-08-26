@@ -28,6 +28,33 @@ So there are exactly three ways to get one, in descending order of usefulness.
 
 ### 1. Sanitize your own statement (best)
 
+There are two modes, and the difference is worth understanding before you pick.
+
+**`--structure-only` — use this unless you need the other one.**
+
+```
+uv run python scripts/sanitize_statement.py ~/Downloads/statement.pdf --structure-only
+```
+
+It keeps only what it positively recognizes as your bank's own template — the
+bank name, the column headings, the `BALANCE B/F` and `Total` rows, the
+statement date, the figures and the dates — and replaces every other word with
+its shape (`FAIRPRICE FINEST` becomes `XXXXXXXXX XXXXXX`). Default-deny: a word
+nobody anticipated is discarded rather than published, so it needs no
+`--redact` arguments and leaves no judgement calls to you.
+
+This costs a parser author nothing, which is measured rather than assumed. A
+parser keys on the statement's chrome and never reads a transaction description
+for anything except passing it through — replacing every description across the
+whole fixture set leaves all three parsers returning identical dates, amounts
+and balances. What it does cost is the categorization engine, which *does* read
+descriptions: a structure-only sample can't exercise the PayNow handling or the
+merchant rule bank. If the built-in vocabulary doesn't know one of your bank's
+headings the sample won't parse — `--check-parse` says so, and `--keep "THAT
+HEADING"` fixes it. A loud failure, not a silent leak.
+
+**The default mode — when the categorization engine needs testing too.**
+
 ```
 uv run python scripts/sanitize_statement.py ~/Downloads/statement.pdf \
     --redact "YOUR NAME" --redact "ANY OTHER NAME ON IT"

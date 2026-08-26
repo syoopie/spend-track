@@ -11,6 +11,8 @@ a public issue tracker. Those tests assert on the *output file's text* as a
 recipient would read it, never on the script's internal bookkeeping.
 """
 
+import glob
+import os
 import re
 import subprocess
 import sys
@@ -267,6 +269,63 @@ def test_dates_survive_sanitizing(token):
 def test_amounts_are_never_mistaken_for_identifiers():
     for amount in ("1,234.56", "0.99", "123456.78", "1,234.56CR", "(45.00)"):
         assert sanitize.is_money(amount), f"{amount!r} would be redacted as an identifier"
+
+
+# --- --structure-only: the strongest privacy tier ------------------------
+
+COMMITTED_FIXTURES = sorted(glob.glob("../PDF Examples (Sanitized)/*/*/*.pdf"))
+
+
+@pytest.mark.parametrize("fixture", COMMITTED_FIXTURES, ids=lambda p: os.path.basename(p))
+def test_structure_only_costs_the_parsers_nothing(fixture, tmp_path):
+    """The claim --structure-only rests on: a parser reads the statement's own
+    chrome - the bank name, the column headings, the BALANCE B/F and Total
+    rows, the statement date - and never reads a transaction description for
+    anything but passing it through.
+
+    So throwing every description away wholesale should leave the parse
+    bit-for-bit unchanged. If this ever fails, some parser has quietly grown a
+    dependency on customer wording, and the mode's whole justification with it.
+    """
+    source = tmp_path / os.path.basename(fixture)
+    source.write_bytes(Path(fixture).read_bytes())
+    out = _run(source, "--structure-only")
+
+    with pdfplumber.open(fixture) as pdf:
+        before = detect_and_parse(pdf.pages)
+    with pdfplumber.open(out) as pdf:
+        after = detect_and_parse(pdf.pages)
+
+    assert len(after.accounts) == len(before.accounts)
+    for original, rebuilt in zip(before.accounts, after.accounts):
+        assert [t.transaction_date for t in rebuilt.transactions] == [t.transaction_date for t in original.transactions]
+        assert [t.amount for t in rebuilt.transactions] == [t.amount for t in original.transactions]
+        assert [t.balance for t in rebuilt.transactions] == [t.balance for t in original.transactions]
+
+
+def test_structure_only_keeps_the_banks_wording_and_destroys_the_customers(tmp_path):
+    source = tmp_path / "uob.pdf"
+    source.write_bytes(Path(UOB_SAMPLE).read_bytes())
+    text = _text_of(_run(source, "--structure-only"))
+
+    # The template survives, or nothing can find the table.
+    for chrome in ("United Overseas Bank", "Statement of Account", "Description", "Withdrawals", "BALANCE B/F", "Total"):
+        assert chrome in text, f"{chrome!r} is chrome and must survive"
+    # The descriptions do not.
+    for content in ("SAMPLE MART", "SAMPLE PAYEE", "SAMPLE EMPLOYER", "SAMPLE ONLINE STORE"):
+        assert content not in text, f"{content!r} is customer content and must not survive"
+    # Figures and dates still do, so the sample still reconciles.
+    assert "5,000.00" in text
+    assert "01 Feb" in text
+
+
+def test_structure_only_can_be_told_to_keep_wording_it_does_not_recognize(tmp_path):
+    """No built-in vocabulary knows every bank's headings. The failure mode is
+    a sample that won't parse, not a leak - and --keep is the fix."""
+    source = tmp_path / "uob.pdf"
+    source.write_bytes(Path(UOB_SAMPLE).read_bytes())
+    assert "SAMPLE MART" not in _text_of(_run(source, "--structure-only"))
+    assert "SAMPLE MART" in _text_of(_run(source, "--structure-only", "--keep", "SAMPLE MART"))
 
 
 # --- the command line -----------------------------------------------------
