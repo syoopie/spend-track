@@ -154,7 +154,7 @@ def test_ocbc_account_statement_parses_past_the_value_date_column():
 
 
 def test_ocbc_account_statement_excludes_balance_bf_and_cf():
-    result = _parse(f"{OCBC_DIR}/Account Statements/SampleAccountStatement_Apr2024.pdf")
+    result = _parse(f"{OCBC_DIR}/Account Statements/SampleAccountStatement_Mar2024.pdf")
     for txn in result.accounts[0].transactions:
         assert "BALANCE B/F" not in txn.raw_description
         assert "BALANCE C/F" not in txn.raw_description

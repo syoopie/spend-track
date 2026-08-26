@@ -229,7 +229,7 @@ def _statement_date(pages, spec: TableSpec) -> YearResolver:
         match = spec.statement_date_pattern.search(page.extract_text() or "")
         if not match:
             continue
-        _day, month_text, year = match.group(1), match.group(2), match.group(3)
+        month_text, year = match.group(2), match.group(3)
         month = MONTHS.get(month_text.upper()) if not month_text.isdigit() else int(month_text)
         if month:
             return YearResolver(statement_year=int(year), statement_month=month)

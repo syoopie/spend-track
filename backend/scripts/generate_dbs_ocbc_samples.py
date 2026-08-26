@@ -539,29 +539,6 @@ def main():
             )
         ],
     )
-    generate_account_statement(
-        dbs_dir / "Account Statements" / "SampleAccountStatement_Apr2024.pdf",
-        DBS_ACCOUNT,
-        statement_date="30 Apr 2024",
-        period_start="01 Apr",
-        sections=[
-            AccountSection(
-                name="DBS Multiplier Account",
-                number="123-456789-0",
-                opening_balance=6475.70,
-                txns=[
-                    dbs_salary("01 Apr", 3200.00),
-                    dbs_giro("04 Apr", "INCOME INSURANCE LTD", 96.00),
-                    dbs_card_purchase("06 Apr", "COLD STORAGE", 74.85),
-                    dbs_paynow_out("09 Apr", "SAMPLE HOUSEMATE", 450.00),
-                    dbs_card_purchase("13 Apr", "STARBUCKS", 8.90),
-                    dbs_paynow_in("17 Apr", "SAMPLE COLLEAGUE", "7654321", 28.50),
-                    dbs_giro("21 Apr", "SP SERVICES LTD", 134.20),
-                    dbs_card_purchase("25 Apr", "DON DON DONKI", 62.30),
-                ],
-            )
-        ],
-    )
 
     # --- DBS consolidated statement: two accounts in one document --------
     # The consolidated eStatement is DBS's default, and it is the only
@@ -659,28 +636,6 @@ def main():
                     ocbc_paynow_in("16 Mar", "SAMPLE FRIEND", 62.00),
                     ocbc_giro("21 Mar", "SP SERVICES LTD", 121.44),
                     ocbc_nets("28 Mar", "TOAST BOX", 9.40),
-                ],
-            )
-        ],
-    )
-    generate_account_statement(
-        ocbc_dir / "Account Statements" / "SampleAccountStatement_Apr2024.pdf",
-        OCBC_ACCOUNT,
-        statement_date="30 Apr 2024",
-        period_start="01 Apr",
-        sections=[
-            AccountSection(
-                name="OCBC 360 Account",
-                number="501-234567-001",
-                opening_balance=7736.90,
-                txns=[
-                    ocbc_salary("01 Apr", 3200.00),
-                    ocbc_paynow_out("04 Apr", "SAMPLE HOUSEMATE", 450.00),
-                    ocbc_nets("09 Apr", "KOPITIAM", 5.80),
-                    ocbc_giro("15 Apr", "SINGTEL MOBILE", 45.00),
-                    ocbc_paynow_in("18 Apr", "SAMPLE COLLEAGUE", 35.00),
-                    ocbc_nets("24 Apr", "GUARDIAN HEALTH & BEAUTY", 26.75),
-                    Txn("30 Apr", ["INTEREST CREDIT"], deposit=12.44),
                 ],
             )
         ],

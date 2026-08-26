@@ -28,64 +28,46 @@ So there are exactly three ways to get one, in descending order of usefulness.
 
 ### 1. Sanitize your own statement (best)
 
-There are two modes, and the difference is worth understanding before you pick.
-
-**`--structure-only` — use this unless you need the other one.**
-
 ```
-uv run python scripts/sanitize_statement.py ~/Downloads/statement.pdf --structure-only
+uv run python scripts/sanitize_statement.py ~/Downloads/statement.pdf --check-parse
 ```
 
-It keeps only what it positively recognizes as your bank's own template — the
-bank name, the column headings, the `BALANCE B/F` and `Total` rows, the
-statement date, the figures and the dates — and replaces every other word with
-its shape (`FAIRPRICE FINEST` becomes `XXXXXXXXX XXXXXX`). Default-deny: a word
-nobody anticipated is discarded rather than published, so it needs no
-`--redact` arguments and leaves no judgement calls to you.
+It keeps your statement's geometry, its figures and dates, and your bank's own
+wording — the bank name, the column headings, the `BALANCE B/F` and `Total`
+rows, the statement date — and replaces every other word with its shape
+(`FAIRPRICE FINEST` becomes `XXXXXXXXX XXXXXX`).
 
-This costs a parser author nothing, which is measured rather than assumed. A
-parser keys on the statement's chrome and never reads a transaction description
-for anything except passing it through — replacing every description across the
-whole fixture set leaves all three parsers returning identical dates, amounts
-and balances. What it does cost is the categorization engine, which *does* read
-descriptions: a structure-only sample can't exercise the PayNow handling or the
-merchant rule bank. If the built-in vocabulary doesn't know one of your bank's
-headings the sample won't parse — `--check-parse` says so, and `--keep "THAT
-HEADING"` fixes it. A loud failure, not a silent leak.
+That is default-deny: a word is kept only if it is positively recognized, so
+anything nobody anticipated is replaced rather than published. It needs no
+`--redact` arguments and leaves you no judgement calls, and its verification is
+exhaustive rather than heuristic — every word in a finished file must be
+template, a date, a figure, or something the script itself wrote.
 
-**The default mode — when the categorization engine needs testing too.**
+It costs a parser author nothing, which is measured rather than assumed: a
+parser keys on the statement's template and works out columns from geometry,
+and never reads a description for anything except passing it through.
+Sanitizing every committed fixture leaves all three parsers returning identical
+dates, amounts and balances. (Geometry *alone* is not enough, though — strip
+the bank's wording too and no parser can even tell which bank it is looking at.)
 
-```
-uv run python scripts/sanitize_statement.py ~/Downloads/statement.pdf \
-    --redact "YOUR NAME" --redact "ANY OTHER NAME ON IT"
-```
+Three flags matter:
 
-This rebuilds the PDF from scratch — it does not draw boxes over your data,
-which leaves the data in the file — keeping every word's exact position while
-replacing account numbers, references, NRIC/FIN, emails, phone numbers and
-transfer counterparties. Identifiers split across words (`4111 1111 1111 1234`)
-are handled too.
+- `--check-parse` runs the result through this app's parsers. If it doesn't
+  parse, the script didn't recognize one of your bank's headings — pass
+  `--keep "THAT HEADING"`. A loud failure, never a silent leak.
+- `--redact "TEXT"` covers the one case default-deny can't: a name that *is* a
+  banking word — someone called May, a merchant called Trust. The review file
+  it writes lists what was kept verbatim, so you can spot exactly that.
+- `--output` renames the result. The file name travels with the file, and
+  `JaneWong-Jan2024.pdf` identifies its owner as well as its contents do; the
+  script refuses to finish if the output name contains something you redacted.
 
-**It is a two-pass tool, and the second pass is not optional.** No rule can
-find a name that nothing introduces — yours in the address block, a joint
-holder's, a landlord's, a street. So it writes a `.review.txt` whose first
-section lists every name-shaped phrase that survived, with the line each came
-from. Read it, re-run with `--redact` for each one, repeat until that list
-holds nothing personal. The script's own checks confirm the rules did what
-they were asked; they are not a clean bill of health.
-
-Before finishing it re-reads its own output and refuses the file if anything it
-removed is still findable anywhere in it — including in the output's *name*,
-since `JaneWong-Jan2024.pdf` identifies its owner as well as its contents do.
-Pass `--output` to name the result something neutral.
-
-Amounts, dates and merchant names are kept on purpose. They are what a parser
-has to read correctly, and the reconciliation checks are written against them.
-`--redact-amounts` removes the figures if you'd rather not share them, at the
-cost of those checks.
-
-The script's own docstring covers the rest, including `--check-parse`, which
-runs the result through this app's parsers.
+What it does **not** hide is the figures. Amounts and balances survive, because
+they are what a parser has to read correctly and what its reconciliation checks
+are written against — the output shows what you spent, just not who you are or
+who you paid. `--redact-amounts` replaces them too, at the cost of those checks.
+It also means a sanitized sample can't exercise the categorization engine,
+which does read descriptions.
 
 ### 2. Run the parser yourself and report what breaks
 

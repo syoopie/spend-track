@@ -18,7 +18,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from statement_canvas import FONT, FONT_BOLD, FOOTER_TOP_CUTOFF, PAGE_H, PAGE_W, Doc, y_for_top  # noqa: F401
+from statement_canvas import FONT_BOLD, FOOTER_TOP_CUTOFF, Doc
 
 OUT_DIR = Path(__file__).resolve().parents[2] / "PDF Examples (Sanitized)" / "UOB"
 
