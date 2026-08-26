@@ -66,8 +66,6 @@ What it does **not** hide is the figures. Amounts and balances survive, because
 they are what a parser has to read correctly and what its reconciliation checks
 are written against — the output shows what you spent, just not who you are or
 who you paid. `--redact-amounts` replaces them too, at the cost of those checks.
-It also means a sanitized sample can't exercise the categorization engine,
-which does read descriptions.
 
 ### 2. Run the parser yourself and report what breaks
 
@@ -137,9 +135,37 @@ Each bank's test module should pin specific values for a couple of statements
 and then parameterize over *whatever is in the folder*, so a fixture added later
 is covered the day it lands.
 
+## Contributing merchant rules — no statement required
+
+The merchant rule bank in `engine/default_rules.py` is a separate contribution
+from a statement sample, and neither blocks the other. It is a list of merchant
+strings and the category each belongs to:
+
+```python
+"Food & Drink": [
+    ("KOPITIAM", "Kopitiam"),
+    ("FOUR LEAVES", "Four Leaves"),
+],
+```
+
+The first element is matched against a transaction's description; the second is
+the tidy name shown in the UI. Entries are reconciled into the `rules` table on
+every startup, so adding one reaches every existing database with no migration.
+
+**This needs no PDF and no sanitizing.** Send the merchant strings as they
+appear on your statement, with the category each belongs to — nothing else
+about the statement is relevant, and no sample has to exist for the rules to be
+useful. [Open a merchant-rules issue](https://github.com/syoopie/spend-track/issues/new?template=merchant-rules.yml).
+
+The reverse holds too, which is what makes the sanitizer viable: a parser reads
+the bank's template and works out columns from geometry, and never reads a
+description for anything except passing it through. So a shared statement can
+discard every description without costing a parser author anything, and the
+rule bank loses nothing by never seeing a statement.
+
 ## A new country
 
 A second `CountryProfile` in `app/localization.py` — currency, transfer scheme,
-contact-identifier hint, and which parsers belong to it — plus a starting
-merchant word bank in `engine/default_rules.py`. Not a rewrite; the Singapore
-profile is simply the one that exists.
+contact-identifier hint, and which parsers belong to it. Not a rewrite; the
+Singapore profile is simply the one that exists. Its merchant rules are the
+separate contribution above.

@@ -18,7 +18,7 @@
 
 Give it a statement PDF you downloaded from your bank, and it reads every transaction, sorts them into categories, cancels out refunds against the purchases they reverse, and shows you where your money actually went.
 
-Which banks it reads is a plugin layer: [one folder per bank](#adding-a-bank) implementing `detect()` and `parse()`, and a region profile carrying the currency, transfer scheme and starting merchant list. Nothing downstream of the parser — categorization, refund pairing, duplicate detection, the dashboard — knows or cares which country a statement came from. The profile that ships today is Singapore's (SGD, PayNow, a Singapore merchant word bank), because that's where the statements came from; a second one is a data change, not a rewrite.
+Which banks it reads is a plugin layer: [one folder per bank](#adding-a-bank) implementing `detect()` and `parse()`, and a region profile carrying the currency, transfer scheme and starting merchant list. Nothing downstream of the parser — categorization, refund pairing, duplicate detection, the dashboard — knows or cares which country a statement came from. The profile that ships today is Singapore's (SGD, PayNow), because that's where the statements came from; a second one is a data change, not a rewrite. The merchant word bank is its own layer again, contributed as plain data with no statement involved.
 
 **Using it** · [Download and run](#download-and-run) · [Try the sample data](#try-it-before-using-your-own-statements) · [The everyday routine](#the-everyday-routine) · [AI categorization](#optional-let-ai-sort-out-the-leftovers) · [Questions](#questions)
 
@@ -127,7 +127,9 @@ It keeps the layout, the figures, the dates and your bank's own wording — the 
 
 That's the contribution worth making: [open a bank support request](https://github.com/syoopie/spend-track/issues/new?template=bank-support.yml) and attach a sanitized sample — or just run the parsers against your own files locally and report what breaks, which needs no sanitizing at all. **[docs/adding-a-bank.md](docs/adding-a-bank.md)** has the details, including how DBS and OCBC were built from their published layouts when no statement was available, and why those parsers refuse to import figures that don't reconcile.
 
-A new **country** is a second `CountryProfile` in `backend/src/app/localization.py` — currency, transfer scheme, the contact-identifier hint, and which parsers belong to it — plus a starting merchant word bank in `engine/default_rules.py`. Neither is a rewrite; the Singapore profile is just the one that exists.
+**Merchant rules are a separate contribution, and need no statement at all.** The built-in word bank in `engine/default_rules.py` is just merchant strings and the category each belongs to — send yours and they reach every install on the next release. A parser never reads a description, so the two contributions are independent in both directions: rules need no sample, and a shared sample can drop every description without costing a parser anything. [Open a merchant-rules issue](https://github.com/syoopie/spend-track/issues/new?template=merchant-rules.yml).
+
+A new **country** is a second `CountryProfile` in `backend/src/app/localization.py` — currency, transfer scheme, the contact-identifier hint, and which parsers belong to it. Not a rewrite; the Singapore profile is just the one that exists.
 
 ## Run it from source
 

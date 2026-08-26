@@ -78,9 +78,10 @@ def test_dbs_account_statement_excludes_table_furniture():
 
 
 def test_dbs_account_statement_keeps_wrapped_descriptions_whole():
-    """A PayNow line wraps onto a second row with the date column empty. The
-    payee's name lands on that second row, and the categorization engine can't
-    match a contact it never sees."""
+    """A PayNow line wraps onto a second row with the date column empty. A
+    parser that stopped at the first row would return half a description and
+    call it complete, which is indistinguishable from a correct parse until
+    someone reads the output."""
     result = _parse(f"{DBS_DIR}/Account Statements/SampleAccountStatement_Mar2024.pdf")
     descriptions = [t.raw_description for t in result.accounts[0].transactions]
     payout = next(d for d in descriptions if "SAMPLE HOUSEMATE" in d)

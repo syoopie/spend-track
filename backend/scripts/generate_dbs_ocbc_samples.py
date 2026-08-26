@@ -452,10 +452,11 @@ def generate_card_statement(
 # --------------------------------------------------------------------------
 # Real DBS and OCBC descriptions are not free text: each transfer rail writes
 # its own fixed preamble ("FAST Payment / Receipt", "FAST PAYMENT via
-# PayNow-Mobile to ...") and the categorization engine keys off exactly those
-# markers. Fixtures with invented wording would parse fine and still fail to
-# exercise engine/paynow.py or the default rule bank, so these helpers keep to
-# the real formats.
+# PayNow-Mobile to ..."). The parsers do not read any of it - they pass
+# descriptions through untouched - so this is not fidelity a parser test
+# needs. It is here because a fixture that reads like a real statement is
+# easier to reason about when a parse goes wrong, and because these are the
+# lines whose wrapping exercises the continuation-row path below.
 
 
 def dbs_paynow_out(date: str, payee: str, amount: float) -> Txn:
