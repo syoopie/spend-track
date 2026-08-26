@@ -1,11 +1,17 @@
 """What the app claims about each bank has to match what its parser can do.
 
-The dashboard's first-run copy, the Settings → Region card and the user
-guide all say some banks parse and others are only recognized. Those claims
-are generated from `BankParser.parsing_implemented` rather than typed out,
-so these tests guard the flag itself: a stub that quietly starts claiming to
-be implemented (or a finished parser still marked as a stub) would make
-every one of those strings wrong at once.
+The dashboard's first-run copy, the Settings → Region card and the user guide
+all say which banks parse and which are only recognized. Those claims are
+generated from `BankParser.parsing_implemented` rather than typed out, so
+these tests guard the flag itself: a parser that quietly stopped claiming to
+be implemented (or a stub claiming it is) would make every one of those
+strings wrong at once.
+
+All three Singapore banks parse now, so no *real* parser exercises the
+detected-but-unimplemented path any more. That path is still live - it is what
+a newly-stubbed bank gets on the day someone adds one - so it is tested here
+against a stub defined for the purpose rather than deleted along with the last
+real stub that used it.
 
 Runs on any clone - the fixtures here are generated, not real statements.
 """
@@ -17,7 +23,7 @@ import pytest
 from reportlab.pdfgen import canvas
 
 from app.localization import ACTIVE_COUNTRY
-from app.parsing.base import UnparseableStatementError
+from app.parsing.base import BankParser, ParsedStatement, UnparseableStatementError
 from app.parsing.registry import detect_and_parse
 
 
@@ -31,38 +37,92 @@ def _pdf_with_text(*lines: str) -> bytes:
     return buf.getvalue()
 
 
-def _parse_bytes(data: bytes):
+def _multipage_pdf(*pages: list[str]) -> bytes:
+    """A PDF with one page per argument, each carrying the lines given."""
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf)
+    for lines in pages:
+        for i, line in enumerate(lines):
+            c.drawString(72, 750 - i * 16, line)
+        c.showPage()
+    c.save()
+    return buf.getvalue()
+
+
+def _parse_bytes(data: bytes, parsers=None):
     with pdfplumber.open(io.BytesIO(data)) as pdf:
-        return detect_and_parse(pdf.pages)
+        return detect_and_parse(pdf.pages, parsers=parsers)
 
 
-def test_only_uob_is_marked_implemented():
+class _StubBank(BankParser):
+    """A bank the app recognizes but cannot yet read - see parsing/base.py."""
+
+    bank_name = "STUBBANK"
+    parsing_implemented = False
+
+    def detect(self, pages: list) -> bool:
+        return "StubBank" in (pages[0].extract_text() or "")
+
+    def parse(self, pages: list) -> ParsedStatement:
+        raise UnparseableStatementError(
+            "STUBBANK statement detected, but STUBBANK parsing is not yet implemented "
+            "(no sample statements were available to build against)."
+        )
+
+
+def test_every_registered_singapore_bank_parses():
     implemented = [p.bank_name for p in ACTIVE_COUNTRY.bank_parsers if p.parsing_implemented]
     detected_only = [p.bank_name for p in ACTIVE_COUNTRY.bank_parsers if not p.parsing_implemented]
-    assert implemented == ["UOB"]
-    assert detected_only == ["DBS", "OCBC"]
+    assert implemented == ["UOB", "DBS", "OCBC"]
+    assert detected_only == []
+
+
+def test_unimplemented_bank_is_detected_and_named_in_the_error():
+    # The precise "detected, but not supported yet" message is the whole reason
+    # a stub is worth registering at all - without it the upload would come
+    # back as a generic unrecognized format, which is what the UI promises it
+    # won't do.
+    with pytest.raises(UnparseableStatementError) as excinfo:
+        _parse_bytes(
+            _pdf_with_text("StubBank Statement of Account", "01 Jan  SOMETHING  12.34"),
+            parsers=[_StubBank()],
+        )
+    message = str(excinfo.value)
+    assert "STUBBANK" in message
+    assert "not yet implemented" in message
 
 
 @pytest.mark.parametrize(
-    ("bank", "anchor"),
-    [("DBS", "DBS Bank"), ("DBS", "POSB"), ("OCBC", "OCBC Bank")],
+    "anchor",
+    [
+        "United Overseas Bank Limited",
+        "Email customer.service@uobgroup.com",
+        "Email card.centre@uobgroup.com",
+    ],
 )
-def test_unimplemented_bank_is_detected_and_named_in_the_error(bank, anchor):
-    # The precise "detected, but not supported yet" message is the whole
-    # reason these stubs exist - without it the upload would come back as a
-    # generic unrecognized format, which is what the UI promises it won't do.
+def test_uob_is_detected_from_any_of_its_anchors(anchor):
+    """UOB renders account and credit card statements through different
+    pipelines, and not every variant leads with the full legal name. Matching
+    only on that would report a readable statement as an unknown format."""
     with pytest.raises(UnparseableStatementError) as excinfo:
-        _parse_bytes(_pdf_with_text(f"{anchor} Statement of Account", "01 Jan  SOMETHING  12.34"))
-    message = str(excinfo.value)
-    assert bank in message
-    assert "not yet implemented" in message
+        _parse_bytes(_pdf_with_text(anchor, "some other page text"))
+    # Detected as UOB, then rejected for its subtype - not "unrecognized bank".
+    assert "not its subtype" in str(excinfo.value)
+
+
+def test_uob_is_detected_when_the_anchor_is_on_the_second_page():
+    """Some statements lead with a cover sheet, putting the identifying text
+    on the page after the one a first-page-only check would look at."""
+    with pytest.raises(UnparseableStatementError) as excinfo:
+        _parse_bytes(_multipage_pdf(["Statement cover page"], ["United Overseas Bank Limited"]))
+    assert "not its subtype" in str(excinfo.value)
 
 
 def test_unrecognized_pdf_error_names_only_banks_that_parse():
     with pytest.raises(UnparseableStatementError) as excinfo:
-        _parse_bytes(_pdf_with_text("Some Other Bank Pte Ltd", "Statement"))
+        _parse_bytes(_pdf_with_text("Some Other Bank Pte Ltd", "Statement"), parsers=[*ACTIVE_COUNTRY.bank_parsers, _StubBank()])
     message = str(excinfo.value)
-    assert "UOB" in message
+    for bank in ("UOB", "DBS", "OCBC"):
+        assert bank in message
     # Naming a stub here would tell the user to try a bank that can't be read.
-    assert "DBS" not in message
-    assert "OCBC" not in message
+    assert "STUBBANK" not in message

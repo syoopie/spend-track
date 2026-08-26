@@ -38,4 +38,9 @@ build = [
 ]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+# `scripts` is on the path so tests can import the contributor-facing tools
+# (sanitize_statement, the sample generators) directly. They are scripts
+# rather than package modules on purpose - a contributor runs them from a
+# clone without installing anything - but the redaction rules in
+# sanitize_statement are exactly the kind of thing that must not go untested.
+pythonpath = ["src", "scripts"]

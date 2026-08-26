@@ -12,13 +12,13 @@
 [![Python 3.12](https://img.shields.io/badge/python-3.12-3776ab?style=flat-square&logo=python&logoColor=white)](backend/pyproject.toml)
 [![React 19](https://img.shields.io/badge/react-19-61dafb?style=flat-square&logo=react&logoColor=white)](frontend/package.json)
 
-<sub>**A bank becomes supported the moment there are sample statements to build a parser against — that's the whole blocker.** Reads today: **UOB**. Recognized but not parsed yet: **DBS**, **OCBC**. Yours not listed? [Say what you have](https://github.com/syoopie/spend-track/issues/new?template=bank-support.yml) — never a real statement; a redacted sample, or an offer to test on your own machine, is what's needed.</sub>
+<sub>**A bank becomes supported the moment there's a statement to build a parser against — that's the whole blocker.** Reads today: **UOB**, **DBS**/**POSB**, **OCBC**. Yours not listed? [Say what you have](https://github.com/syoopie/spend-track/issues/new?template=bank-support.yml) — and never attach a real statement: `scripts/sanitize_statement.py` turns one into a shareable sample that keeps the layout and drops your name, account number and references.</sub>
 
 </div>
 
 Give it a statement PDF you downloaded from your bank, and it reads every transaction, sorts them into categories, cancels out refunds against the purchases they reverse, and shows you where your money actually went.
 
-Which banks it reads is a plugin layer: [one folder per bank](#adding-a-bank) implementing `detect()` and `parse()`, and a region profile carrying the currency, transfer scheme and starting merchant list. Nothing downstream of the parser — categorization, refund pairing, duplicate detection, the dashboard — knows or cares which country a statement came from. The profile that ships today is Singapore's (SGD, PayNow, a Singapore merchant word bank), because that's where the statements came from; a second one is a data change, not a rewrite.
+Which banks it reads is a plugin layer: [one folder per bank](#adding-a-bank) implementing `detect()` and `parse()`, and a region profile carrying the currency, transfer scheme and starting merchant list. Nothing downstream of the parser — categorization, refund pairing, duplicate detection, the dashboard — knows or cares which country a statement came from. The profile that ships today is Singapore's (SGD, PayNow), because that's where the statements came from; a second one is a data change, not a rewrite. The merchant word bank is its own layer again, contributed as plain data with no statement involved.
 
 **Using it** · [Download and run](#download-and-run) · [Try the sample data](#try-it-before-using-your-own-statements) · [The everyday routine](#the-everyday-routine) · [AI categorization](#optional-let-ai-sort-out-the-leftovers) · [Questions](#questions)
 
@@ -32,7 +32,7 @@ There is no account to create, no website to log into, and nothing is uploaded. 
 
 ## What it does
 
-- **Reads statement PDFs** — bank account and credit card, including password-protected ones. Upload one, or a whole year's worth at once, mixing months and statement types freely. UOB parses today; DBS and OCBC are recognized but not read yet, and say so plainly instead of guessing. Any other bank is [one parser away](#adding-a-bank).
+- **Reads statement PDFs** — bank account and credit card, including password-protected ones. Upload one, or a whole year's worth at once, mixing months and statement types freely. UOB, DBS/POSB and OCBC parse today. Any other bank is [one parser away](#adding-a-bank), and an unrecognized file says so plainly instead of guessing.
 - **Sorts transactions into categories automatically**, using rules you can see and edit, plus a built-in merchant list for your region (Singapore's ships today). Your own rules always take priority.
 - **Lets you check before anything is saved.** Every upload lands in a review screen first, with anything the app wasn't sure about — an unfamiliar PayNow transfer, say — flagged for you to decide.
 - **Doesn't double-count.** Uploading the same statement twice is safe: repeats are spotted and skipped. And if you upload both a credit card statement and the bank account that pays that card's bill, the bill payment isn't counted as extra spending on top of the purchases themselves.
@@ -62,7 +62,7 @@ Both warnings mean the same thing: the download isn't signed with a paid develop
 
 ### Try it before using your own statements
 
-You don't need real statements to look around. The folder `PDF Examples (Sanitized)/UOB/` holds a full year of made-up statements for a fictional customer — twelve months of account statements and twelve of credit card statements, 300-odd transactions in all. Select the whole folder and upload it in one go; that's the dataset every screenshot on this page was taken from. They're processed by the same code as a genuine statement, so what you see is the real behaviour, just with invented numbers. When you're done, **Settings** has options to clear everything out.
+You don't need real statements to look around. The folder `PDF Examples (Sanitized)/` holds made-up statements for a fictional customer — a full year of UOB ones, twelve months of account statements and twelve of credit card statements, 300-odd transactions in all. Select the whole folder and upload it in one go; that's the dataset every screenshot on this page was taken from. There are smaller DBS and OCBC sets alongside it, including a DBS consolidated statement carrying two accounts at once. They're processed by the same code as a genuine statement, so what you see is the real behaviour, just with invented numbers. When you're done, **Settings** has options to clear everything out.
 
 ### The everyday routine
 
@@ -95,7 +95,7 @@ If the model isn't reachable, the app tells you with a warning instead of leavin
 
 **Does it need my bank login?** No. It only reads statement PDFs you've already downloaded yourself, and never connects to your bank.
 
-**My statement won't upload.** Make sure it's the e-statement PDF downloaded from the bank, not a scan, a photo, or a printed-then-re-saved copy — the app reads the text inside the file, which those versions don't have. Also check the bank is one that reads today — **Settings → Region** lists which banks parse and which are only recognized.
+**My statement won't upload.** Make sure it's the e-statement PDF downloaded from the bank, not a scan, a photo, or a printed-then-re-saved copy — the app reads the text inside the file, which those versions don't have. Also check the bank is one that reads today — **Settings → Region** lists which banks parse. If it's a DBS or OCBC statement that reads as "did not reconcile", that's the parser refusing to import figures it can't check against the statement's own totals rather than guessing; [please report it](https://github.com/syoopie/spend-track/issues/new?template=bank-support.yml).
 
 **My browser didn't open.** The small window the app opens shows its address (`http://127.0.0.1:8123` by default) — type that into your browser yourself.
 
@@ -113,11 +113,23 @@ If the model isn't reachable, the app tells you with a warning instead of leavin
 
 ## Adding a bank
 
-The goal is to read statements from any bank, anywhere. UOB is simply the one there were real statements to build a parser against. DBS and OCBC already have detection in place — the app can tell a DBS statement from an unreadable file — so what's missing for each is the parser itself, which has to be written against real sample statements. Everything downstream (categorization, refunds, duplicate detection, the dashboard) is bank-agnostic and needs no changes.
+The goal is to read statements from any bank, anywhere. Everything downstream of a parser — categorization, refunds, duplicate detection, the dashboard — is bank-agnostic, so a new bank is one folder under `backend/src/app/parsing/` implementing `detect()` and `parse()`, registered in one list. **Settings → Region** always shows the live state.
 
-A new **country** is a second `CountryProfile` in `backend/src/app/localization.py` — currency, transfer scheme, the contact-identifier hint, and which parsers belong to it — plus a starting merchant word bank in `engine/default_rules.py`. Neither is a rewrite; the Singapore profile is just the one that exists.
+The hard part is never the code. A parser is written against a real statement, and a real statement carries your name, address, account number and a year of spending — which is why nobody can simply send one. No bank publishes a specimen, the "statement template" sites a search turns up are forgery tools, and even [monopoly](https://github.com/benjamin-awd/monopoly), the most complete open-source Singapore parser, keeps its own test statements encrypted in its repository.
 
-If you have statements from a bank you'd like read, that's the blocker worth removing: [open a bank support request](https://github.com/syoopie/spend-track/issues/new?template=bank-support.yml) (don't attach a real statement — it has your account number in it), or see `backend/src/app/parsing/` for how a parser plugs in — each is one folder implementing `detect()` and `parse()`, registered in one list. **Settings → Region** always shows the live state: which banks parse, and which are recognized but waiting on a parser.
+**So there's a script for it.** `scripts/sanitize_statement.py` rebuilds your statement into a shareable one — rebuilds, rather than drawing boxes over it, since a box leaves the text underneath.
+
+```
+uv run python scripts/sanitize_statement.py statement.pdf --check-parse
+```
+
+It keeps the layout, the figures, the dates and your bank's own wording — the headings, the `BALANCE B/F` and `Total` rows — and replaces every other word with its shape. Default-deny, so it needs no decisions from you: anything it doesn't positively recognize is replaced rather than published. And it costs a parser nothing, because a parser reads the statement's template and its geometry, never the descriptions.
+
+That's the contribution worth making: [open a bank support request](https://github.com/syoopie/spend-track/issues/new?template=bank-support.yml) and attach a sanitized sample — or just run the parsers against your own files locally and report what breaks, which needs no sanitizing at all. **[docs/adding-a-bank.md](docs/adding-a-bank.md)** has the details, including how DBS and OCBC were built from their published layouts when no statement was available, and why those parsers refuse to import figures that don't reconcile.
+
+**Merchant rules are a separate contribution, and need no statement at all.** The built-in word bank in `engine/default_rules.py` is just merchant strings and the category each belongs to — send yours and they reach every install on the next release. A parser never reads a description, so the two contributions are independent in both directions: rules need no sample, and a shared sample can drop every description without costing a parser anything. [Open a merchant-rules issue](https://github.com/syoopie/spend-track/issues/new?template=merchant-rules.yml).
+
+A new **country** is a second `CountryProfile` in `backend/src/app/localization.py` — currency, transfer scheme, the contact-identifier hint, and which parsers belong to it. Not a rewrite; the Singapore profile is just the one that exists.
 
 ## Run it from source
 
@@ -184,7 +196,7 @@ PyInstaller freezes the interpreter it runs under, so each platform's build has 
 cd backend && uv run pytest
 ```
 
-Parser regression tests run against every committed sanitized sample PDF, alongside full API integration tests via FastAPI's `TestClient` — all pass on a fresh clone with no setup beyond `uv sync`. A few extra tests run only if you've dropped your own real UOB statements into a local, gitignored `PDF Examples/UOB/` folder (they cross-validate against each statement's own printed totals) and are skipped, not failed, when it doesn't exist.
+Parser regression tests run against every committed sanitized sample PDF, alongside full API integration tests via FastAPI's `TestClient` — all pass on a fresh clone with no setup beyond `uv sync`. A few extra tests run only if you've dropped your own real statements into a local, gitignored `PDF Examples/<BANK>/` folder (they cross-validate against each statement's own printed totals) and are skipped, not failed, when it doesn't exist.
 
 The synthetic samples are generated by `backend/scripts/generate_sample_pdfs.py` at the exact column positions the real parser expects, so they exercise the genuine parsing path. `backend/scripts/seed_demo_data.py` rebuilds the exact database the screenshots above were taken from — a throwaway `SPENDTRACK_DB_PATH`, the whole sample folder uploaded in one batch, plus placeholder contacts and rules.
 

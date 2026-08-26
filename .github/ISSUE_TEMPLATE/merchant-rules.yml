@@ -1,0 +1,42 @@
+name: Merchant rules
+description: Add merchants to the built-in categorization word bank
+title: "Merchant rules: <CATEGORY or BANK>"
+labels: ["merchant-rules"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The built-in word bank is just merchant strings and the category each
+        belongs to. **No statement is needed** — nothing else about your
+        statement is relevant here, and you do not have to sanitize or attach
+        anything.
+
+        Paste the merchant text as it appears in the description column, with
+        whatever prefix the terminal adds (`SMP*`, `NETS QR PURCHASE`), since
+        that is what a rule matches against. Leave out anything that identifies
+        you: a reference number, a person's name, an account number.
+  - type: textarea
+    id: merchants
+    attributes:
+      label: Merchants
+      description: One per line, as `MERCHANT STRING | Tidy Name | Category`.
+      placeholder: |
+        KOPITIAM | Kopitiam | Food & Drink
+        SMP*OTTIE PANCAKES | Ottie Pancakes | Food & Drink
+        SP SERVICES | SP Services | Bills & Fees
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: country
+    attributes:
+      label: Country
+      description: Which region profile these belong to.
+      value: Singapore
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else
+      description: e.g. a merchant that should categorize differently by direction, or one whose string varies between banks.
