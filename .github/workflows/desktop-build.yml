@@ -7,6 +7,15 @@ name: Desktop build
 # Pushing a tag like v0.1.0 also publishes them as a GitHub Release, which
 # is the link the README's "Download" section points at.
 #
+# Every action here is pinned to a major that runs on Node 24. The GitHub
+# runners now force Node-20 actions onto Node 24 and warn about it, and Node
+# 20 is removed from runners in September 2026. The lowest node24 major
+# differs per action (checkout/setup-node v5, upload-artifact v6,
+# download-artifact v7), but the pair of artifact actions is kept on the same
+# major deliberately - the release job below depends on download-artifact
+# writing each artifact into its own `artifacts/<name>/` directory, which is
+# the default only while `merge-multiple` stays false.
+#
 # Deliberately not run on pull requests: three runners spending a minute
 # each on every PR is a lot of machine time for a build whose output nobody
 # downloads. The safety net is that `release` needs `build`, so a packaging
@@ -45,15 +54,18 @@ jobs:
             path: backend/dist/SpendTrack.app
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - uses: astral-sh/setup-uv@v5
+      # Exact version, not a floating major: astral-sh stopped publishing
+      # major tags after v7 (there is no `v10`), and their own README pins
+      # by SHA for the same reason.
+      - uses: astral-sh/setup-uv@v10.0.1
         with:
           enable-cache: true
 
@@ -113,7 +125,7 @@ jobs:
         if: runner.os == 'macOS'
         run: ditto -c -k --keepParent backend/dist/SpendTrack.app backend/dist/SpendTrack-macos.zip
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
           path: ${{ runner.os == 'macOS' && 'backend/dist/SpendTrack-macos.zip' || matrix.path }}
@@ -128,7 +140,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           path: artifacts
 
@@ -140,7 +152,7 @@ jobs:
           cp artifacts/SpendTrack-macos-arm64/SpendTrack-macos.zip release/SpendTrack-macos-arm64.zip
           ls -lh release
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ inputs.release_tag || github.ref_name }}
           files: release/*

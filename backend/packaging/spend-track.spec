@@ -86,7 +86,7 @@ if sys.platform == "darwin":
         info_plist={
             "CFBundleName": "SpendTrack",
             "CFBundleDisplayName": "SpendTrack",
-            "CFBundleShortVersionString": "0.1.1",  # keep in step with pyproject.toml and the release tag
+            "CFBundleShortVersionString": "0.2.0",  # keep in step with pyproject.toml and the release tag
             "LSMinimumSystemVersion": "12.0",
             "LSBackgroundOnly": False,
         },
