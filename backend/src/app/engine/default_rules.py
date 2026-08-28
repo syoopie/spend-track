@@ -88,6 +88,36 @@ DEFAULT_RULE_BANK: dict[str, list[tuple[str, str]]] = {
         ("BREADTALK", "BreadTalk"),
         ("POLAR PUFFS", "Polar Puffs & Cakes"),
         ("TIONG BAHRU BAKERY", "Tiong Bahru Bakery"),
+        # Chains and vending operators that showed up as "Others" in a
+        # contributed statement - see docs/adding-a-bank.md's merchant-rules
+        # issue template, which is where entries like these come from.
+        ("MIXUE", "Mixue"),
+        ("CHICK-FIL-A", "Chick-fil-A"),
+        ("STUFF'D", "Stuff'd"),
+        ("SANPOUTEI", "Sanpoutei Ramen"),
+        ("GENKI SUSHI", "Genki Sushi"),
+        ("SUSHIRO", "Sushiro"),
+        ("TSUKIJI KAISENDON", "Tsukiji Kaisendon"),
+        ("TSUKADA NOJO", "Tsukada Nojo"),
+        ("YANG GUO FU", "Yang Guo Fu Mala Tang"),
+        ("TAI ER", "Tai Er"),
+        ("PAIKS", "Paik's Noodle"),
+        ("THE RAMEN HOUSE", "The Ramen House"),
+        ("PEPPERCORN MALA", "Peppercorn Mala"),
+        ("AL-AMEEN", "Al-Ameen Eating House"),
+        ("KIMLY", "Kimly"),
+        ("ANNABELLA PATISSERIE", "Annabella Patisserie"),
+        ("KODAWARI", "Kodawari Katsuya"),
+        ("TOM'S PALETTE", "Tom's Palette"),
+        ("SCOOT CAFE", "Scoot Cafe"),
+        # Vending and beverage operators - the terminal name is the operator,
+        # not the machine's location, so these match wherever the machine is.
+        ("LE TACH VENDING", "Le Tach Vending"),
+        ("ACHIEVA VENDING", "Achieva Vending"),
+        ("COFFEEBOT", "Coffeebot"),
+        ("COCA-COLA", "Coca-Cola"),
+        ("YHS(SINGAPORE)", "Yeo Hiap Seng"),
+        ("CHUAN SENG LEE", "Chuan Seng Lee Beverages"),
         ("KOPITIAM", "Kopitiam"),
         ("HAWKER", "Hawker Centre"),
     ],
@@ -114,6 +144,7 @@ DEFAULT_RULE_BANK: dict[str, list[tuple[str, str]]] = {
         ("SPC", "SPC"),
         ("TADA", "TADA"),
         ("RYDE", "Ryde"),
+        ("MOBILE SUICA", "Mobile Suica"),
         ("GRAB", "Grab"),
     ],
     "Groceries": [
@@ -128,6 +159,12 @@ DEFAULT_RULE_BANK: dict[str, list[tuple[str, str]]] = {
         ("MUSTAFA", "Mustafa Centre"),
         ("DON DON DONKI", "Don Don Donki"),
         ("REDMART", "RedMart"),
+        ("7-ELEVEN", "7-Eleven"),
+        # Trailing space, so this can't fire on a longer word that merely
+        # starts with "CHEERS" - every outlet prints as "CHEERS - <place>".
+        ("CHEERS ", "Cheers"),
+        ("SCARLETT", "Scarlett Supermarket"),
+        ("KURIYA JAPANESE MKT", "Kuriya Japanese Market"),
         ("JASONS", "Jasons"),
     ],
     "Shopping": [
@@ -146,6 +183,7 @@ DEFAULT_RULE_BANK: dict[str, list[tuple[str, str]]] = {
         ("BEST DENKI", "Best Denki"),
         ("AMAZON", "Amazon"),
         ("DAISO", "Daiso"),
+        ("ALIEXPRESS", "AliExpress"),
         ("MARKS & SPENCER", "Marks & Spencer"),
     ],
     "Bills & Fees": [
@@ -226,6 +264,13 @@ DEFAULT_RULE_BANK: dict[str, list[tuple[str, str]]] = {
         ("SENTOSA", "Sentosa"),
         ("TIMEZONE", "Timezone"),
         ("ZOUK", "Zouk"),
+        ("COW PLAY COW MOO", "Cow Play Cow Moo"),
+        ("FUNCLAW", "Funclaw Amusement"),
+        ("BLIZZARD ENTERTAINMENT", "Blizzard Entertainment"),
+        # Golden Village prints as "GV <venue>", never as the full brand, so
+        # the spelled-out rule above never fires on a real statement line.
+        # Sorted last by length, after every longer pattern.
+        ("GV ", "Golden Village"),
         ("MARINA BAY SANDS", "Marina Bay Sands"),
     ],
     "Beauty": [
@@ -261,6 +306,7 @@ DEFAULT_RULE_BANK: dict[str, list[tuple[str, str]]] = {
         ("BADMINTON", "Badminton"),
         ("BOWLING", "Bowling"),
         ("YOGA", "Yoga Studio"),
+        ("FIT BLOC", "Fit Bloc"),
         ("GYM", "Gym"),
     ],
     "Home": [
@@ -323,6 +369,7 @@ DEFAULT_RULE_BANK: dict[str, list[tuple[str, str]]] = {
         ("SMU", "Singapore Management University"),
         ("SUSS", "Singapore University of Social Sciences"),
         ("TUITION", "Tuition"),
+        ("NLB.GOV.SG", "National Library Board"),
         ("ENRICHMENT", "Enrichment Classes"),
     ],
 }

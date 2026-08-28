@@ -1,32 +1,61 @@
-name: Merchant rules
-description: Add merchants to the built-in categorization word bank
-title: "Merchant rules: <CATEGORY or BANK>"
+name: Add a merchant to the default rules
+description: A shop the built-in word bank doesn't recognise yet — no statement, no sanitizing, no setup
+title: "Default rules: <MERCHANT or CATEGORY>"
 labels: ["merchant-rules"]
 body:
   - type: markdown
     attributes:
       value: |
-        The built-in word bank is just merchant strings and the category each
-        belongs to. **No statement is needed** — nothing else about your
-        statement is relevant here, and you do not have to sanitize or attach
-        anything.
+        ### This is the easiest way to contribute to SpendTrack
 
-        Paste the merchant text as it appears in the description column, with
-        whatever prefix the terminal adds (`SMP*`, `NETS QR PURCHASE`), since
-        that is what a rule matches against. Leave out anything that identifies
-        you: a reference number, a person's name, an account number.
+        The default rule bank is nothing but a list of merchant strings and
+        the category each belongs to. It needs **no statement, no PDF, and no
+        sanitizing** — it is completely independent of the statement samples
+        the parsers are built from, so filling this in costs you nothing but
+        a copy-paste.
+
+        **Where to find the text to paste:** anything sitting in
+        **Others** on your dashboard is a merchant no rule matched. Click the
+        row, and the grey line under the tidy name is the raw description
+        printed on your statement — that's the text a rule matches against.
+        The **Default Rules** page in the app lists everything already
+        covered, so you can check before filing.
+
+        **Leave out anything that identifies you.** Statement lines often
+        carry a reference number, a terminal ID, or a masked card number
+        around the merchant name. Only the merchant part is useful here —
+        please trim the rest.
+
+        ```
+        Misc DR-Debit Card 05 MAY 1634 4883085 7-ELEVEN - DUO GALLERIA Singapore SG
+                                               ^^^^^^^^^ this part only
+        ```
   - type: textarea
     id: merchants
     attributes:
       label: Merchants
-      description: One per line, as `MERCHANT STRING | Tidy Name | Category`.
+      description: >-
+        One per line, as `MERCHANT STRING | Tidy Name | Category`. The
+        merchant string is matched case-insensitively anywhere in a
+        description, so keep it short and distinctive — a whole statement
+        line will never match anything.
       placeholder: |
-        KOPITIAM | Kopitiam | Food & Drink
-        SMP*OTTIE PANCAKES | Ottie Pancakes | Food & Drink
+        7-ELEVEN | 7-Eleven | Groceries
+        MIXUE | Mixue | Food & Drink
         SP SERVICES | SP Services | Bills & Fees
       render: text
     validations:
       required: true
+  - type: dropdown
+    id: category-known
+    attributes:
+      label: Not sure which category?
+      description: Pick one — a merchant we can't place is still worth having.
+      options:
+        - The categories above are what I want
+        - Some of these I'm unsure about — see notes
+    validations:
+      required: false
   - type: input
     id: country
     attributes:

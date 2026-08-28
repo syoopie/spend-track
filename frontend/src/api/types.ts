@@ -333,6 +333,12 @@ export interface AiStatus {
   error: string | null
 }
 
+export interface RevealResult {
+  opened: boolean
+  path: string
+  error: string | null
+}
+
 export interface PathCheckResult {
   valid: boolean
   resolved_path: string

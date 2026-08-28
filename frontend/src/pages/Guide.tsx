@@ -321,9 +321,18 @@ export function Guide() {
                   restored later.
                 </>,
                 <>
-                  <strong className="text-text">Where it runs:</strong> a local Ollama model by default, so nothing
-                  leaves this device. An OpenAI-compatible or Anthropic provider instead sends those transactions'
-                  descriptions and amounts to that company's servers.
+                  <strong className="text-text">Where it runs:</strong> a local{' '}
+                  <a
+                    href="https://ollama.com"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-accent no-underline hover:underline"
+                  >
+                    Ollama
+                  </a>{' '}
+                  model by default, so nothing leaves this device — install Ollama, pull a model, and point Settings
+                  at it. An OpenAI-compatible or Anthropic provider instead sends those transactions' descriptions
+                  and amounts to that company's servers.
                 </>,
               ]}
             />

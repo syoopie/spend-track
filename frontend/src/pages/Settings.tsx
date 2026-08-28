@@ -1,4 +1,4 @@
-import { Download, FileX2, Loader2, Settings as SettingsIcon, Trash2 } from 'lucide-react'
+import { Download, FileX2, FolderOpen, Loader2, Settings as SettingsIcon, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -10,6 +10,7 @@ import {
   useDeleteTransactionsByFile,
   useRelocateDb,
   useResetDb,
+  useRevealDbFolder,
   useRules,
   useSettings,
   useSourceFiles,
@@ -273,6 +274,18 @@ function NuclearResetModal({ onClose }: { onClose: () => void }) {
 
 type DeleteScope = 'rules' | 'contacts' | 'transactions' | null
 
+// The button reads "Show in Finder" / "Show in Explorer" / "Show in Files"
+// rather than a generic "Open Folder", because naming the app is what makes
+// it obvious the click leaves the browser. Sniffing the UA is fine here: a
+// wrong guess costs a slightly odd label, nothing more, and the backend
+// picks the real command from sys.platform regardless.
+function fileManagerName(): string {
+  const platform = typeof navigator === 'undefined' ? '' : navigator.userAgent
+  if (/Mac|iPhone|iPad/.test(platform)) return 'Finder'
+  if (/Win/.test(platform)) return 'Explorer'
+  return 'Files'
+}
+
 export function Settings() {
   const settingsQ = useSettings()
   const [relocateOpen, setRelocateOpen] = useState(false)
@@ -284,6 +297,7 @@ export function Settings() {
   const deleteContacts = useDeleteAllContacts()
   const deleteTransactions = useDeleteAllTransactions()
   const sourceFilesQ = useSourceFiles()
+  const revealDbFolder = useRevealDbFolder()
 
   // Live counts for the Danger Zone (SET-3) - "This deletes 23 rules" beats
   // an undifferentiated "This permanently deletes every rule" regardless of
@@ -371,6 +385,15 @@ export function Settings() {
             <Download size={14} />
             Download Backup
           </a>
+          <Button
+            variant="secondary"
+            className="font-semibold flex items-center gap-1.5"
+            onClick={() => revealDbFolder.mutate()}
+            disabled={revealDbFolder.isPending}
+          >
+            <FolderOpen size={14} />
+            Show in {fileManagerName()}
+          </Button>
           <Button variant="secondary" className="font-semibold" onClick={() => setRelocateOpen(true)}>
             Change Database Path
           </Button>

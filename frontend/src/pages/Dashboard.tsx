@@ -1,6 +1,6 @@
 import { ArrowDown, ArrowUp, FileUp, LayoutGrid, Loader2, Pencil, Receipt, RefreshCw, SearchX, SlidersHorizontal, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
   useAccounts,
   useCategories,
@@ -12,9 +12,9 @@ import {
   useTransactions,
 } from '../api/hooks'
 import { ElapsedTimer } from '../components/ElapsedTimer'
-import { useToast } from '../components/Toast'
 import { fmtDate, fmtMonthRangeLabel, fmtMonthYearLabel, fmtPlain, fmtSigned, shiftMonth } from '../lib/format'
 import { loadDashboardFilters, saveDashboardFilters, type DashboardFilters, type DirectionFilter } from '../lib/dashboardFilters'
+import { useUndoableDelete } from '../lib/useUndoableDelete'
 import { useScrolledUnder } from '../lib/useScrolledUnder'
 import { CashFlowChart, cashFlowQualifier } from '../components/CashFlowChart'
 import { CategoryBadge, CategoryLabel } from '../components/CategoryBadge'
@@ -173,12 +173,6 @@ function bankListLabel(banks: string[]): string {
   return `a ${banks.slice(0, -1).join(', ')}, or ${banks[banks.length - 1]}`
 }
 
-// Undo window for a feed row's delete action - mirrors Rules.tsx's
-// DELETE_UNDO_MS (row hidden immediately, real DELETE deferred so a
-// misclick is recoverable). Kept as its own copy rather than a shared
-// constant since the two screens have no other coupling.
-const DELETE_UNDO_MS = 6000
-
 // A three-way All/In/Out segmented control, not a third <Select> - it's the
 // filter the user reaches for most often alongside search/category, so it
 // stays a single click rather than a dropdown open+pick.
@@ -326,18 +320,10 @@ export function Dashboard() {
       editorRowRefs.current.get(editingTxId)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
     }
   }, [editingTxId])
-  const toast = useToast()
   const deleteTransaction = useDeleteTransaction()
   // Optimistically-hidden rows whose real DELETE is still deferred behind
-  // the undo toast - same pattern as Rules.tsx's pendingDeleteIds.
-  const [pendingDeleteIds, setPendingDeleteIds] = useState<Set<number>>(new Set())
-  const deleteTimers = useRef(new Map<number, ReturnType<typeof setTimeout>>())
-  useEffect(() => {
-    const timers = deleteTimers
-    return () => {
-      for (const t of timers.current.values()) clearTimeout(t)
-    }
-  }, [])
+  // the undo toast - see lib/useUndoableDelete.ts.
+  const { pendingIds: pendingDeleteIds, requestDelete } = useUndoableDelete('Transaction', deleteTransaction.mutate)
   const [recategorizeOpen, setRecategorizeOpen] = useState(false)
   const [chartsTab, setChartsTab] = useState<'cashflow' | 'velocity'>('cashflow')
   const [breakdownTab, setBreakdownTab] = useState<'category' | 'merchants' | 'paynow'>('category')
@@ -621,6 +607,19 @@ export function Dashboard() {
             <Button variant="primary" onClick={openDialog} disabled={hasPendingBatch}>
               + Upload Bank Statement
             </Button>
+            {/* This screen is the whole of a first run - there are no
+                accounts, so there is nothing else on it to explore. The
+                Guide is otherwise only reachable from a rail icon whose
+                label isn't visible until hover, which is a poor place to
+                discover the one page that explains what happens to a
+                statement after you drop it in. */}
+            <div className="text-md text-muted mt-6 pt-5 border-t border-border">
+              First time here?{' '}
+              <Link to="/guide" className="text-accent no-underline hover:underline font-semibold">
+                Read the guide
+              </Link>{' '}
+              — what a statement upload actually does, how categorization decides, and what's stored where.
+            </div>
           </div>
         </div>
       </div>
@@ -641,41 +640,6 @@ export function Dashboard() {
     setEditingTxId((prev) => (prev === tx.id ? null : tx.id))
   }
 
-  // Removes the row immediately and shows an undo toast; the real DELETE
-  // only fires once the undo window passes - see Rules.tsx's identical
-  // handleDelete, which this mirrors.
-  function handleDeleteTransaction(tx: Transaction) {
-    if (editingTxId === tx.id) setEditingTxId(null)
-    setPendingDeleteIds((prev) => new Set(prev).add(tx.id))
-    const timer = setTimeout(() => {
-      deleteTimers.current.delete(tx.id)
-      deleteTransaction.mutate(tx.id, {
-        onError: () => {
-          setPendingDeleteIds((prev) => {
-            const next = new Set(prev)
-            next.delete(tx.id)
-            return next
-          })
-        },
-      })
-    }, DELETE_UNDO_MS)
-    deleteTimers.current.set(tx.id, timer)
-    toast.success(`Transaction deleted — "${tx.matched_label ?? tx.raw_description}"`, {
-      durationMs: DELETE_UNDO_MS,
-      action: {
-        label: 'Undo',
-        onClick: () => {
-          clearTimeout(deleteTimers.current.get(tx.id))
-          deleteTimers.current.delete(tx.id)
-          setPendingDeleteIds((prev) => {
-            const next = new Set(prev)
-            next.delete(tx.id)
-            return next
-          })
-        },
-      },
-    })
-  }
 
   // A background refetch (filter changed, or a stale query refetched on
   // remount) while data from a previous fetch is still on screen - distinct
@@ -1138,7 +1102,8 @@ export function Dashboard() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
-                          handleDeleteTransaction(tx)
+                          if (editingTxId === tx.id) setEditingTxId(null)
+                          requestDelete(tx.id, tx.matched_label ?? tx.raw_description)
                         }}
                         title="Delete transaction"
                         className="border-none bg-transparent cursor-pointer text-muted-2 hover:text-danger-text opacity-40 group-hover:opacity-100 group-focus-within:opacity-100"

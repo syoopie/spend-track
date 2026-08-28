@@ -1,4 +1,4 @@
-import { ChevronDown, ListChecks, SearchX } from 'lucide-react'
+import { ChevronDown, ListChecks, Plus, SearchX } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useCategories, useRules } from '../api/hooks'
 import { categoryColor, categoryIcon } from '../lib/categoryColor'
@@ -126,13 +126,31 @@ export function DefaultRules() {
       subtitle="Built-in word bank used to auto-categorize transactions — read-only, and always evaluated after your own rules so anything you set up takes precedence"
       icon={ListChecks}
       actions={
-        <Input
-          fullWidth={false}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search merchant or category…"
-          className="w-[240px]"
-        />
+        <>
+          <Input
+            fullWidth={false}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search merchant or category…"
+            className="w-[240px]"
+          />
+          {/* This page is where someone actually notices a merchant is
+              missing - it's the list of everything that isn't. The issue
+              template needs no statement and no sanitizing, so the whole
+              contribution is the copy-paste this link leads to. */}
+          <a
+            href="https://github.com/syoopie/spend-track/issues/new?template=merchant-rules.yml"
+            target="_blank"
+            rel="noreferrer"
+            title="Suggest a merchant for the built-in word bank"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-border bg-input text-text text-md font-semibold no-underline whitespace-nowrap
+              transition-colors hover:border-accent cursor-pointer
+              focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2"
+          >
+            <Plus size={14} />
+            Suggest a merchant
+          </a>
+        </>
       }
     >
       {rulesQ.isLoading && <div className="text-muted text-sm">Loading…</div>}
