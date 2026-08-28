@@ -94,3 +94,36 @@ def test_short_merchant_patterns_do_not_fire_on_a_longer_word(description):
     groceries and anything containing "...GV..." would be a cinema."""
     match = _first_match(description)
     assert match is None or match[0].strip() not in ("CHEERS", "GV")
+
+
+TRAVEL_CASES = [
+    ("Misc DR-Debit Card 16 MAY 1634 6594052 AIRBNB * HMT8PKY8J8 653-163-1004 GB", "Airbnb"),
+    ("Misc DR-Debit Card 20 MAY 1634 4062040 AGODA.COM NARITA TOB Internet SG", "Agoda"),
+    ("Misc DR-Debit Card 02 JAN 1634 1111111 FLYSCOOT.COM SINGAPORE SG", "Scoot"),
+    ("Misc DR-Debit Card 02 JAN 1634 1111112 SINGAPORE AIRLINES SINGAPORE SG", "Singapore Airlines"),
+    ("Misc DR-Debit Card 02 JAN 1634 1111113 HILTON GARDEN INN TOKYO JP", "Hilton"),
+]
+
+
+@pytest.mark.parametrize("description, expected_label", TRAVEL_CASES)
+def test_travel_merchants_categorize_as_travel(description, expected_label):
+    match = _first_match(description)
+    assert match is not None, description
+    assert match[1] == "Travel"
+    assert match[2] == expected_label
+
+
+def test_scoot_cafe_is_food_not_travel():
+    """A boarding-pass cafe purchase is food. It stays Food & Drink because
+    "SCOOT CAFE" is longer than any travel pattern and iter_default_rules
+    sorts longest-first - and there is no bare "SCOOT" rule to fight it,
+    since SCOOT is a substring of SCOOTER."""
+    match = _first_match("Misc DR-Debit Card 27 MAY 1634 1023636 SCOOT CAFE_SATS APS SINGAPORE SG")
+    assert match is not None
+    assert match[1] == "Food & Drink"
+
+
+def test_no_travel_pattern_fires_on_a_scooter_or_a_hibiscus():
+    for description in ("GRAB SCOOTER RENTAL SINGAPORE", "HIBISCUS FLORIST SINGAPORE SG"):
+        match = _first_match(description)
+        assert match is None or match[1] != "Travel", description

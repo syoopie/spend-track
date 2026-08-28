@@ -42,7 +42,7 @@ def test_categories_seeded_with_defaults(client):
     cats = resp.json()
     names = [c["name"] for c in cats]
     assert names == [
-        "Sports & Hobbies", "Beauty", "Food & Drink", "Shopping", "Transport", "Home", "Bills & Fees",
+        "Sports & Hobbies", "Beauty", "Food & Drink", "Shopping", "Transport", "Travel", "Home", "Bills & Fees",
         "Entertainment", "Healthcare", "Education", "Groceries", "Investing", "Paynow",
         "Salary", "Refunds & Reimbursements", "Investment Income", "Paynow Received",
     ]
@@ -60,13 +60,45 @@ def test_categories_hidden_others_excluded_unless_requested(client):
     names = [c["name"] for c in resp_all.json()]
     assert "Others" in names
     assert "Other Income" in names
-    assert len(names) == 19
+    assert len(names) == 20
 
 
 def test_create_category(client):
-    resp = client.post("/api/categories", json={"name": "Travel", "hue": 100})
+    # Deliberately a name the app does not ship: a user-created category that
+    # collides with a built-in one is a different case, covered below.
+    resp = client.post("/api/categories", json={"name": "Pets", "hue": 100})
     assert resp.status_code == 200
-    assert resp.json()["name"] == "Travel"
+    assert resp.json()["name"] == "Pets"
+
+
+def test_a_user_category_matching_a_new_default_is_restyled_not_duplicated(client, tmp_path, monkeypatch):
+    """Adding a category to DEFAULT_CATEGORIES has to cope with a user who
+    already made one by that name - reconcile_categories upserts on `name`,
+    so theirs is adopted (hue/icon/sort_order taken over) rather than
+    duplicated or rejected, and every transaction already filed under it
+    keeps its category string untouched."""
+    import sqlite3
+
+    from app.db import get_conn
+    from app.migrations import reconcile_categories
+
+    client.post("/api/categories", json={"name": "Pets", "hue": 12, "icon": "tag"})
+
+    with get_conn() as conn:
+        before = conn.execute("SELECT COUNT(*) FROM categories WHERE name = 'Pets'").fetchone()[0]
+        assert before == 1
+        # Stand in for "Pets shipped as a default in the next release".
+        monkeypatch.setattr(
+            "app.migrations.DEFAULT_CATEGORIES",
+            [("Pets", 205, "plane", False, "outflow")],
+        )
+        try:
+            reconcile_categories(conn)
+        except sqlite3.IntegrityError:  # pragma: no cover - the failure this test exists to catch
+            raise AssertionError("a user's own category collided with a new default instead of being adopted")
+        row = conn.execute("SELECT hue, icon FROM categories WHERE name = 'Pets'").fetchone()
+        assert conn.execute("SELECT COUNT(*) FROM categories WHERE name = 'Pets'").fetchone()[0] == 1
+        assert (row["hue"], row["icon"]) == (205, "plane")
 
 
 # --- accounts + transactions -------------------------------------------

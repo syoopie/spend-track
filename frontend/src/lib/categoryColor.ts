@@ -9,6 +9,7 @@ import {
   Home,
   MoreHorizontal,
   PiggyBank,
+  Plane,
   Receipt,
   Send,
   ShoppingBag,
@@ -52,6 +53,7 @@ const ICON_COMPONENTS: Record<string, LucideIcon> = {
   'more-horizontal': MoreHorizontal,
   'undo-2': Undo2,
   'piggy-bank': PiggyBank,
+  plane: Plane,
   download: Download,
   wallet: Wallet,
 }

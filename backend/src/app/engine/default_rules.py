@@ -147,6 +147,45 @@ DEFAULT_RULE_BANK: dict[str, list[tuple[str, str]]] = {
         ("MOBILE SUICA", "Mobile Suica"),
         ("GRAB", "Grab"),
     ],
+    "Travel": [
+        # Airbnb, Agoda and Scoot were the reason this category exists - they
+        # had no honest home before it, and filing accommodation under
+        # Entertainment would have put a wrong number on the dashboard rather
+        # than an absent one.
+        ("AIRBNB", "Airbnb"),
+        ("AGODA", "Agoda"),
+        ("BOOKING.COM", "Booking.com"),
+        ("EXPEDIA", "Expedia"),
+        ("TRIP.COM", "Trip.com"),
+        ("HOTELS.COM", "Hotels.com"),
+        ("KLOOK", "Klook"),
+        ("TRAVELOKA", "Traveloka"),
+        ("SKYSCANNER", "Skyscanner"),
+        # Airlines. "FLYSCOOT" rather than a bare "SCOOT", which is a
+        # substring of SCOOTER; the "SCOOT CAFE" line on a boarding pass is
+        # food and stays Food & Drink, where its longer pattern wins anyway.
+        ("SINGAPORE AIRLINES", "Singapore Airlines"),
+        ("FLYSCOOT", "Scoot"),
+        ("JETSTAR", "Jetstar"),
+        ("AIRASIA", "AirAsia"),
+        ("CATHAY PACIFIC", "Cathay Pacific"),
+        ("MALAYSIA AIRLINES", "Malaysia Airlines"),
+        ("BRITISH AIRWAYS", "British Airways"),
+        ("EMIRATES", "Emirates"),
+        ("QANTAS", "Qantas"),
+        ("CHANGI AIRPORT", "Changi Airport"),
+        # Hotel groups. No IBIS - it is a substring of HIBISCUS.
+        ("MARRIOTT", "Marriott"),
+        ("HILTON", "Hilton"),
+        ("HYATT", "Hyatt"),
+        ("SHANGRI-LA", "Shangri-La"),
+        # Generic catch-alls, and genuinely last: iter_default_rules sorts
+        # longest-first, so these only get a turn once every named merchant
+        # above has missed.
+        ("AIRLINES", "Airline"),
+        ("AIRWAYS", "Airway"),
+        ("HOTEL", "Hotel"),
+    ],
     "Groceries": [
         # From the user's real transaction history
         ("SHENG SIONG", "Sheng Siong"),
