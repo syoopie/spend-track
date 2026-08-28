@@ -155,7 +155,16 @@ every startup, so adding one reaches every existing database with no migration.
 **This needs no PDF and no sanitizing.** Send the merchant strings as they
 appear on your statement, with the category each belongs to — nothing else
 about the statement is relevant, and no sample has to exist for the rules to be
-useful. [Open a merchant-rules issue](https://github.com/syoopie/spend-track/issues/new?template=merchant-rules.yml).
+useful.
+
+The in-app entry point is **Default Rules → Suggest a merchant**, since that
+page is the list of everything already covered and therefore where a gap gets
+noticed; it links straight to
+[the merchant-rules issue template](https://github.com/syoopie/spend-track/issues/new?template=merchant-rules.yml).
+Anything sitting in **Others** on the dashboard is a merchant no rule matched,
+and the grey line under a transaction's tidy name is the raw text a rule would
+have to match — trim the reference numbers and terminal IDs around it before
+pasting.
 
 The reverse holds too, which is what makes the sanitizer viable: a parser reads
 the bank's template and works out columns from geometry, and never reads a

@@ -53,6 +53,24 @@ Non-obvious stuff learned while building this. Don't re-derive these the hard wa
 - `scripts/seed_demo_data.py` rebuilds the screenshot database from those PDFs (contacts and rules first - categorization runs at upload time, so a contact created afterwards owns nothing and reads $0 spend). Re-shoot `docs/screenshots/` from it at 1440x750 @2x, which is the 2880x1500 the committed images already use.
 - Regenerate with `uv run python scripts/generate_sample_pdfs.py` (`reportlab` is a dev dependency). If you change a parser's column x-ranges, the generator's constants (`ACC_*`/`CARD_*` at the top of the script) need to move with them or the round-trip test breaks.
 
+## Adding a category to `DEFAULT_CATEGORIES` (`migrations.py`)
+
+- **It needs no migration, but it does need an icon on the frontend.** `reconcile_categories` upserts the whole list on every startup, so a new entry reaches every existing database - but `lib/categoryColor.ts`'s `ICON_COMPONENTS` is a hand-maintained string-to-lucide map, and an icon name missing from it silently falls back to a generic `Tag`. Add both halves in the same change (Travel = `plane`).
+- **The hue wheel is nearly full, and two of its widest gaps are spoken for.** The category hues plus `index.css`'s semantic tokens (warning 70, review 250, ai 285, danger 25, success 150) leave only ~30-degree gaps at 205 and 45. Both put a new category 15 degrees from each neighbour; pick on which neighbours it's worse to be confusable with. Don't take 70 or 250 - the needs-review token was moved off amber precisely because it sat next to a category hue.
+- **A user may already have created a category by that name.** The upsert is keyed on `name`, so theirs is adopted (hue/icon/sort_order/direction overwritten) rather than duplicated - `tests/test_crud_routers.py` pins that. One sharp edge: if they had created it as an *inflow* category and it becomes an outflow default, `_migrate_direction_mismatched_transactions` moves their inflow rows in it to "Other Income" on the next startup. Inherent to adding any default category, not to any particular one, but worth knowing before picking a name people plausibly use.
+
+## The default rule bank's short patterns (`engine/default_rules.py`)
+
+- **A rule matches by plain case-insensitive substring** (`engine/rules.py`: `rule["match_pattern"].upper() in desc_upper`), so a short pattern is only safe if its *shape* makes it safe. Two entries rely on a trailing space for that: `"CHEERS "` and `"GV "`. Neither brand's own name appears on a statement - Golden Village prints as `GV PLAZA SINGAPURA`, Cheers as `CHEERS - STEVENS MRT` - and without the space they would fire inside longer words (`CHEERSFUL HOLDINGS`, anything containing `...GV...`). `tests/test_default_rules.py` pins both directions.
+- `iter_default_rules()` sorts longest-pattern-first, so a short pattern only ever gets a turn after every more specific one has missed. That is what makes adding one low-risk - but it is not a substitute for the trailing space, which is what stops a *mid-word* match.
+- **Skip anything that could be a person.** UOB's NETS lines truncate the merchant and glue a terminal ID on (`THRIVE FOOD18399883`), and some of those truncations read as names. The bank is public and shared; a business name is fine, a person's is not, and an ambiguous one is not worth the rule.
+
+## Opening a folder in the OS file manager (`routers/data_lifecycle.py::reveal_database`)
+
+- **It is the only endpoint in the app that shells out, and it takes no path.** The argv is built from `get_db_path()` alone, as a list (never a shell string), so there is nothing user-supplied anywhere near it. Don't add a path parameter "for flexibility" - that is the whole reason this is safe.
+- **It returns `{opened: false, error}` instead of raising.** A container or server-hosted copy has no desktop session and no `xdg-open`; that is a legitimate answer, not a 500. Settings already prints the path, so the fallback is "open it yourself".
+- macOS and Windows select the file (`open -R`, `explorer /select,<path>` - no space after the comma); everything else opens the parent directory via `xdg-open`, which has no select verb. `subprocess.Popen`, not `run`: `explorer.exe` exits non-zero even on success.
+
 ## Schema quirk
 
 `rules.target_category` is `NOT NULL` in the spec's schema even though exclusion rules don't logically use it. Creating an exclusion rule without a category will hit an `IntegrityError` unless you default it (the API defaults to `"Others"` — see `routers/rules.py::create_rule`).

@@ -11,6 +11,8 @@ import json
 import os
 import shutil
 import sqlite3
+import subprocess
+import sys
 import tempfile
 import zipfile
 from datetime import date
@@ -22,7 +24,7 @@ from fastapi.responses import Response
 from app.config import SECRET_CONFIG_KEYS, config_file_path, get_db_path, set_db_path
 from app.db import get_conn, init_db
 from app.errors import api_error
-from app.models import DeleteScopeResult, PathCheckRequest, PathCheckResult, RelocateRequest, ResetRequest, SettingsOut
+from app.models import DeleteScopeResult, PathCheckRequest, PathCheckResult, RelocateRequest, ResetRequest, RevealResult, SettingsOut
 from app.routers.settings import build_settings_out
 
 router = APIRouter(prefix="/api/data-lifecycle", tags=["data-lifecycle"])
@@ -31,6 +33,49 @@ router = APIRouter(prefix="/api/data-lifecycle", tags=["data-lifecycle"])
 def _require_delete_confirmation(body: ResetRequest) -> None:
     if body.confirm != "DELETE":
         raise api_error(400, "RESET_CONFIRMATION_MISMATCH", "Type DELETE to confirm.")
+
+
+def _reveal_command(path: Path) -> list[str]:
+    """The platform's "show me this file in the file manager" invocation.
+
+    macOS and Windows can select the file itself; every other platform gets
+    the containing folder opened via xdg-open, which has no select verb.
+    """
+    if sys.platform == "darwin":
+        return ["open", "-R", str(path)]
+    if sys.platform.startswith("win"):
+        # explorer's /select, takes the path glued to the comma, no space.
+        return ["explorer", f"/select,{path}"]
+    return ["xdg-open", str(path.parent)]
+
+
+@router.post("/reveal", response_model=RevealResult)
+def reveal_database():
+    """Open the database's folder in Finder/Explorer/the desktop file
+    manager. Takes no path: the only thing it can ever open is whatever
+    get_db_path() currently returns, so there is no user-supplied string
+    anywhere near the argv (and no shell - the command is a list).
+
+    Answers with `opened: false` plus a reason rather than raising, because
+    the interesting failure is environmental (a headless machine, no
+    xdg-open installed) and the Settings page can just say so inline.
+    """
+    db_path = get_db_path()
+    folder = db_path.parent
+    if not folder.exists():
+        return RevealResult(opened=False, path=str(folder), error="That folder doesn't exist yet.")
+    command = _reveal_command(db_path)
+    try:
+        # Popen, not run: explorer.exe returns a non-zero exit code even on
+        # success, and none of these need to be waited on anyway.
+        subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except (OSError, ValueError) as exc:
+        return RevealResult(
+            opened=False,
+            path=str(folder),
+            error=f"Couldn't open a file manager here ({exc}). The path is above - open it yourself.",
+        )
+    return RevealResult(opened=True, path=str(folder), error=None)
 
 
 @router.post("/check-path", response_model=PathCheckResult)

@@ -19,6 +19,7 @@ import type {
   MatchCount,
   MonthlyTotal,
   PathCheckResult,
+  RevealResult,
   RecategorizeBatch,
   RecategorizeCommitResult,
   RecategorizeRequest,
@@ -642,6 +643,21 @@ export function useTestAiSettings() {
 export function useCheckPath() {
   return useMutation({
     mutationFn: (path: string) => api.post<PathCheckResult>('/data-lifecycle/check-path', { path }),
+  })
+}
+
+/** Opens the database's containing folder in the OS file manager. The
+ * backend takes no path - it can only ever reveal the DB it is currently
+ * using - and answers `opened: false` with a reason rather than failing,
+ * since "this machine has no desktop session" is a legitimate answer. */
+export function useRevealDbFolder() {
+  const toast = useToast()
+  return useMutation({
+    mutationFn: () => api.post<RevealResult>('/data-lifecycle/reveal', {}),
+    onSuccess: (data) => {
+      if (!data.opened) toast.error(data.error ?? "Couldn't open that folder.")
+    },
+    onError: (err) => toast.error(errMsg(err, "Couldn't open that folder.")),
   })
 }
 

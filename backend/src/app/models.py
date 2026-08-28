@@ -427,6 +427,17 @@ class PathCheckRequest(BaseModel):
     path: str
 
 
+class RevealResult(BaseModel):
+    """Whether the OS file manager actually got launched. `error` is a
+    human-readable reason to show inline rather than an exception, because
+    "no desktop session on this machine" is a legitimate way for a
+    server-hosted copy of the app to answer, not a bug."""
+
+    opened: bool
+    path: str
+    error: str | None = None
+
+
 class PathCheckResult(BaseModel):
     valid: bool
     resolved_path: str

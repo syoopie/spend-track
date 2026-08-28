@@ -1,6 +1,6 @@
-import { Pencil, Users } from 'lucide-react'
+import { Pencil, Trash2, Users } from 'lucide-react'
 import { useRef, useState } from 'react'
-import { useCategories, useContacts, useCreateContact, useImportContactsCsv, useUpdateContact } from '../api/hooks'
+import { useCategories, useContacts, useCreateContact, useDeleteContact, useImportContactsCsv, useUpdateContact } from '../api/hooks'
 import type { Contact } from '../api/types'
 import { Button } from '../components/Button'
 import { Card } from '../components/Card'
@@ -10,6 +10,7 @@ import { DataTableCell, DataTableHeader, DataTableRow, dataTableGridTemplate, ty
 import { EmptyState, ErrorState } from '../components/EmptyState'
 import { PageShell } from '../components/PageShell'
 import { fmtPlain } from '../lib/format'
+import { useUndoableDelete } from '../lib/useUndoableDelete'
 
 // contact === undefined -> "Add Contact"; contact set -> "Edit Contact",
 // pre-filled and saving via PATCH instead of POST.
@@ -41,7 +42,7 @@ const CONTACT_COLUMNS: DataTableColumn[] = [
   { key: 'category', header: 'Default Category', width: '160px' },
   { key: 'spend', header: 'Spent', width: '110px', align: 'right' },
   { key: 'received', header: 'Received', width: '110px', align: 'right' },
-  { key: 'actions', header: '', width: '36px' },
+  { key: 'actions', header: '', width: '64px' },
 ]
 const CONTACT_GRID_TEMPLATE = dataTableGridTemplate(CONTACT_COLUMNS)
 
@@ -52,6 +53,8 @@ export function Contacts() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   // 'new' opens the modal in Add mode; a Contact opens it pre-filled in Edit mode.
   const [formTarget, setFormTarget] = useState<Contact | 'new' | null>(null)
+  const deleteContact = useDeleteContact()
+  const { pendingIds, requestDelete } = useUndoableDelete('Contact', deleteContact.mutate)
 
   return (
     <PageShell
@@ -102,7 +105,7 @@ export function Contacts() {
             }
           />
         )}
-        {(contactsQ.data ?? []).map((c) => (
+        {(contactsQ.data ?? []).filter((c) => !pendingIds.has(c.id)).map((c) => (
           <DataTableRow key={c.id} gridTemplate={CONTACT_GRID_TEMPLATE} className="items-center px-5 py-3.5 text-md border-b border-divider">
             <DataTableCell className="font-semibold">{c.name}</DataTableCell>
             <DataTableCell>
@@ -138,13 +141,28 @@ export function Contacts() {
               {fmtPlain(c.historical_received)}
             </DataTableCell>
             <DataTableCell align="right">
-              <button
-                onClick={() => setFormTarget(c)}
-                title="Edit contact"
-                className="text-muted hover:text-text bg-transparent border-none cursor-pointer p-1 rounded-md"
-              >
-                <Pencil size={14} />
-              </button>
+              <div className="flex items-center justify-end gap-0.5">
+                <button
+                  onClick={() => setFormTarget(c)}
+                  title="Edit contact"
+                  aria-label={`Edit ${c.name}`}
+                  className="text-muted hover:text-text bg-transparent border-none cursor-pointer p-1 rounded-md"
+                >
+                  <Pencil size={14} />
+                </button>
+                {/* Deleting a contact drops the identifier mapping only - the
+                    transactions it categorized keep the category they were
+                    given, since those are committed values on the row rather
+                    than something re-derived from the contact at read time. */}
+                <button
+                  onClick={() => requestDelete(c.id, c.name)}
+                  title="Delete contact"
+                  aria-label={`Delete ${c.name}`}
+                  className="text-muted-2 hover:text-danger-text bg-transparent border-none cursor-pointer p-1 rounded-md"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
             </DataTableCell>
           </DataTableRow>
         ))}

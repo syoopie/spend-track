@@ -22,6 +22,19 @@ DEFAULT_CATEGORIES = [
     ("Food & Drink", 30, "utensils", False, "outflow"),
     ("Shopping", 280, "shopping-bag", False, "outflow"),
     ("Transport", 190, "bus", False, "outflow"),
+    # Only two ~30-degree gaps were left in the wheel: 205 (between Transport
+    # and Education) and 45 (between Food & Drink and Bills & Fees). Both put
+    # the new hue 15 degrees from each neighbour, so the tie breaks on which
+    # pair of neighbours it is worse to sit between - and Food & Drink and
+    # Bills & Fees are on far more rows than Transport and Education are.
+    # The wider gaps at 70 and 250 aren't available: index.css spends those
+    # on the warning and needs-review tokens, which appear alongside category
+    # badges (see the note there on why review-blue is not warning-amber).
+    # 15 degrees is a subtle separation, which is survivable here because
+    # colour has never been the only channel - every badge carries its icon
+    # and its name, and the plane/bus and plane/graduation-cap pairs are not
+    # confusable at all.
+    ("Travel", 205, "plane", False, "outflow"),
     ("Home", 90, "home", False, "outflow"),
     ("Bills & Fees", 60, "receipt", False, "outflow"),
     ("Entertainment", 260, "clapperboard", False, "outflow"),

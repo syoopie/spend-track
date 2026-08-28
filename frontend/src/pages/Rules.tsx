@@ -1,5 +1,5 @@
-import { ListChecks, Pencil, SlidersHorizontal } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { ListChecks, Pencil, SlidersHorizontal, Trash2 } from 'lucide-react'
+import { useState } from 'react'
 import { useCategories, useCreateRule, useDeleteRule, useReorderRules, useRules, useUpdateRule } from '../api/hooks'
 import { Button } from '../components/Button'
 import { Card } from '../components/Card'
@@ -7,14 +7,8 @@ import { CategoryBadge } from '../components/CategoryBadge'
 import { EmptyState, ErrorState } from '../components/EmptyState'
 import { PageShell } from '../components/PageShell'
 import { RuleFormModal, type RuleFormSubmitValues } from '../components/RuleFormModal'
-import { useToast } from '../components/Toast'
 import type { Rule } from '../api/types'
-
-// How long a deleted rule stays hidden-but-recoverable before the delete
-// actually reaches the backend (X-2 in UI Review.dc.html) - matches the
-// toast's own duration so the undo option and the row's disappearance
-// stay in sync.
-const DELETE_UNDO_MS = 6000
+import { useUndoableDelete } from '../lib/useUndoableDelete'
 
 function RuleModal({ rule, onClose }: { rule?: Rule; onClose: () => void }) {
   const createRule = useCreateRule()
@@ -53,27 +47,14 @@ export function Rules() {
   const categoriesQ = useCategories()
   const reorderRules = useReorderRules()
   const deleteRule = useDeleteRule()
-  const toast = useToast()
   // 'new' opens the modal in Add mode; a Rule opens it pre-filled in Edit mode.
   const [formTarget, setFormTarget] = useState<Rule | 'new' | null>(null)
   const [draggedId, setDraggedId] = useState<number | null>(null)
   const [dragOverId, setDragOverId] = useState<number | null>(null)
-  // Optimistically hidden rows whose actual delete is still deferred (see
-  // handleDelete below) - kept separate from the query cache itself so
-  // reorder's own ordered_ids composition (which the backend rejects
-  // unless it names every non-default rule, deleted-but-not-yet-committed
-  // included) stays correct.
-  const [pendingDeleteIds, setPendingDeleteIds] = useState<Set<number>>(new Set())
-  const deleteTimers = useRef(new Map<number, ReturnType<typeof setTimeout>>())
-  useEffect(() => {
-    const timers = deleteTimers
-    return () => {
-      for (const t of timers.current.values()) clearTimeout(t)
-    }
-  }, [])
+  const { pendingIds, requestDelete } = useUndoableDelete('Rule', deleteRule.mutate)
 
   const rules = rulesQ.data ?? []
-  const visibleRules = rules.filter((r) => !pendingDeleteIds.has(r.id))
+  const visibleRules = rules.filter((r) => !pendingIds.has(r.id))
 
   function handleDrop(targetId: number) {
     if (draggedId == null) return
@@ -96,43 +77,6 @@ export function Rules() {
     reorderRules.mutate(copy.map((r) => r.id))
   }
 
-  // Removes the row immediately and shows an undo toast; the real DELETE
-  // only fires after the undo window passes (X-2 in UI Review.dc.html) -
-  // before this, deleting was instant and unrecoverable.
-  function handleDelete(rule: Rule) {
-    setPendingDeleteIds((prev) => new Set(prev).add(rule.id))
-    const timer = setTimeout(() => {
-      deleteTimers.current.delete(rule.id)
-      deleteRule.mutate(rule.id, {
-        onError: () => {
-          // The optimistic removal turned out to be wrong - un-hide the
-          // row rather than lose it silently (useDeleteRule's onError
-          // already toasts the failure).
-          setPendingDeleteIds((prev) => {
-            const next = new Set(prev)
-            next.delete(rule.id)
-            return next
-          })
-        },
-      })
-    }, DELETE_UNDO_MS)
-    deleteTimers.current.set(rule.id, timer)
-    toast.success(`Rule deleted — "${rule.display_label ?? rule.match_pattern}"`, {
-      durationMs: DELETE_UNDO_MS,
-      action: {
-        label: 'Undo',
-        onClick: () => {
-          clearTimeout(deleteTimers.current.get(rule.id))
-          deleteTimers.current.delete(rule.id)
-          setPendingDeleteIds((prev) => {
-            const next = new Set(prev)
-            next.delete(rule.id)
-            return next
-          })
-        },
-      },
-    })
-  }
 
   return (
     <PageShell
@@ -233,15 +177,17 @@ export function Rules() {
               <button
                 onClick={() => setFormTarget(r)}
                 title="Edit rule"
-                className="text-muted-2 hover:text-text bg-transparent border-none cursor-pointer p-1 rounded-md opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
+                className="text-muted-2 hover:text-text bg-transparent border-none cursor-pointer p-1 rounded-md opacity-40 group-hover:opacity-100 group-focus-within:opacity-100"
               >
                 <Pencil size={13} />
               </button>
               <button
-                onClick={() => handleDelete(r)}
-                className="text-xs text-muted-2 hover:text-danger-text bg-transparent border-none cursor-pointer opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
+                onClick={() => requestDelete(r.id, r.display_label ?? r.match_pattern)}
+                title="Delete rule"
+                aria-label="Delete rule"
+                className="text-muted-2 hover:text-danger-text bg-transparent border-none cursor-pointer p-1 rounded-md opacity-40 group-hover:opacity-100 group-focus-within:opacity-100"
               >
-                Delete
+                <Trash2 size={13} />
               </button>
             </div>
           )
