@@ -16,6 +16,7 @@ import { fmtDate, fmtMonthRangeLabel, fmtMonthYearLabel, fmtPlain, fmtSigned, sh
 import { loadDashboardFilters, saveDashboardFilters, type DashboardFilters, type DirectionFilter } from '../lib/dashboardFilters'
 import { useUndoableDelete } from '../lib/useUndoableDelete'
 import { useScrolledUnder } from '../lib/useScrolledUnder'
+import { categoryFilterMatches, categoryPartner } from '../lib/categoryPairs'
 import { CashFlowChart, cashFlowQualifier } from '../components/CashFlowChart'
 import { CategoryBadge, CategoryLabel } from '../components/CategoryBadge'
 import { categoryOptionElements } from '../components/CategoryOptions'
@@ -411,7 +412,7 @@ export function Dashboard() {
   // Clicking the same category again clears the filter instead of being a
   // no-op re-select - lets the donut/legend double as a toggle.
   function selectCategoryFilter(category: string) {
-    const next = categoryFilter === category ? '' : category
+    const next = categoryFilterMatches(categoryFilter, category) ? '' : category
     updateCategoryFilter(next)
     // DASH-5: the donut is above the fold but the feed it filters can be
     // well below it - without this, picking a category silently changes a
@@ -470,7 +471,7 @@ export function Dashboard() {
   const filteredTransactions = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase()
     return visibleTransactions.filter((t) => {
-      if (categoryFilter && t.category !== categoryFilter) return false
+      if (categoryFilter && !categoryFilterMatches(categoryFilter, t.category)) return false
       if (direction === 'inflow' && t.amount <= 0) return false
       if (direction === 'outflow' && t.amount > 0) return false
       if (q) {
@@ -903,6 +904,20 @@ export function Dashboard() {
               >
                 Category:
                 <CategoryLabel category={categoryFilter} categories={categoriesQ.data} size={11} tinted />
+                {/* A paired category filters both halves (lib/categoryPairs.ts),
+                    so the chip names both - otherwise picking "Paynow" under
+                    Outflow and getting inflow rows back reads as a bug. */}
+                {categoryPartner(categoryFilter) && (
+                  <>
+                    <span className="text-muted-2">+</span>
+                    <CategoryLabel
+                      category={categoryPartner(categoryFilter)!}
+                      categories={categoriesQ.data}
+                      size={11}
+                      tinted
+                    />
+                  </>
+                )}
                 <span aria-hidden>×</span>
               </button>
             )}

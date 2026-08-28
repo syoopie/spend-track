@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Category, CategoryBreakdownSlice } from '../api/types'
 import { Card } from './Card'
 import { categoryDotColor, categoryIcon } from '../lib/categoryColor'
+import { categoryFilterMatches } from '../lib/categoryPairs'
 import { fmtCompact, fmtPlain } from '../lib/format'
 
 // Kept a few units short of the viewBox's edge (60 from center) so the
@@ -47,7 +48,7 @@ export function CategoryDonut({
     return { ...s, dash, offset }
   })
   const total = data.reduce((sum, s) => sum + s.amount, 0)
-  const activeSlice = data.find((s) => s.category === active)
+  const activeSlice = data.find((s) => active !== null && categoryFilterMatches(active, s.category))
 
   const head = data.slice(0, LEGEND_HEAD)
   const tail = data.slice(LEGEND_HEAD)
@@ -87,7 +88,7 @@ export function CategoryDonut({
                     strokeWidth={active === seg.category ? 24 : 20}
                     strokeDasharray={`${seg.dash} ${CIRCUMFERENCE - seg.dash}`}
                     strokeDashoffset={seg.offset}
-                    opacity={active && active !== seg.category ? 0.4 : 1}
+                    opacity={active && !categoryFilterMatches(active, seg.category) ? 0.4 : 1}
                     onMouseEnter={() => setHovered(seg.category)}
                     onMouseLeave={() => setHovered(null)}
                     onClick={() => onCategoryClick?.(seg.category)}
@@ -120,7 +121,7 @@ export function CategoryDonut({
           {data.length === 0 && <div className="text-muted-2">No spending yet</div>}
           {head.map((s) => {
             const Icon = categoryIcon(categories, s.category)
-            const isActive = active === s.category
+            const isActive = active !== null && categoryFilterMatches(active, s.category)
             const color = categoryDotColor(categories, s.category)
             return (
               <div
