@@ -49,6 +49,7 @@ No installers, no accounts, no command line. Grab the file for your computer fro
 |---|---|---|
 | **Windows** | `SpendTrack-windows-x86_64.exe` | Double-click it. Windows will warn that the publisher is unknown — click **More info** → **Run anyway**. |
 | **Mac** (Apple silicon) | `SpendTrack-macos-arm64.zip` | Unzip, then **right-click** the app → **Open** → **Open**. Double-clicking the first time gives a "cannot be opened" message; right-click → Open is what gets past it. |
+| **Mac** (Intel) | `SpendTrack-macos-x86_64.zip` | Same as above. Not sure which Mac you have? Apple menu → **About This Mac**: "Apple M1/M2/…" means Apple silicon, "Intel" means this one. |
 | **Linux** | `SpendTrack-linux-x86_64` | `chmod +x SpendTrack-linux-x86_64` once, then run it. |
 
 A small window opens showing where your data is stored and the address the app is running at, and your browser opens on the dashboard. **Closing that window closes the app.** Your data is saved as you go.

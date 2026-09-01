@@ -16,7 +16,7 @@ name: Desktop build
 # writing each artifact into its own `artifacts/<name>/` directory, which is
 # the default only while `merge-multiple` stays false.
 #
-# Deliberately not run on pull requests: three runners spending a minute
+# Deliberately not run on pull requests: four runners spending a minute
 # each on every PR is a lot of machine time for a build whose output nobody
 # downloads. The safety net is that `release` needs `build`, so a packaging
 # break fails the release run rather than shipping - and the serving layer
@@ -49,8 +49,16 @@ jobs:
           - os: windows-latest
             artifact: SpendTrack-windows-x86_64
             path: backend/dist/SpendTrack.exe
+          # macos-latest is Apple silicon (arm64); macos-13 is the last
+          # Intel runner GitHub offers. PyInstaller can't cross-compile, so
+          # an Intel Mac download needs its own Intel runner - a universal2
+          # binary isn't an option because not every dependency (pydantic-core,
+          # cffi) ships a universal2 wheel.
           - os: macos-latest
             artifact: SpendTrack-macos-arm64
+            path: backend/dist/SpendTrack.app
+          - os: macos-13
+            artifact: SpendTrack-macos-x86_64
             path: backend/dist/SpendTrack.app
     runs-on: ${{ matrix.os }}
     steps:
@@ -147,9 +155,10 @@ jobs:
       - name: Give each file a name that says what it is
         run: |
           mkdir -p release
-          cp artifacts/SpendTrack-linux-x86_64/SpendTrack       release/SpendTrack-linux-x86_64
-          cp artifacts/SpendTrack-windows-x86_64/SpendTrack.exe release/SpendTrack-windows-x86_64.exe
-          cp artifacts/SpendTrack-macos-arm64/SpendTrack-macos.zip release/SpendTrack-macos-arm64.zip
+          cp artifacts/SpendTrack-linux-x86_64/SpendTrack        release/SpendTrack-linux-x86_64
+          cp artifacts/SpendTrack-windows-x86_64/SpendTrack.exe  release/SpendTrack-windows-x86_64.exe
+          cp artifacts/SpendTrack-macos-arm64/SpendTrack-macos.zip  release/SpendTrack-macos-arm64.zip
+          cp artifacts/SpendTrack-macos-x86_64/SpendTrack-macos.zip release/SpendTrack-macos-x86_64.zip
           ls -lh release
 
       - uses: softprops/action-gh-release@v3
@@ -165,4 +174,5 @@ jobs:
 
             - **Windows** — `SpendTrack-windows-x86_64.exe`
             - **macOS (Apple silicon)** — `SpendTrack-macos-arm64.zip`
+            - **macOS (Intel)** — `SpendTrack-macos-x86_64.zip`
             - **Linux** — `SpendTrack-linux-x86_64`
