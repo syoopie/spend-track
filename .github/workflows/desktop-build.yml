@@ -49,15 +49,15 @@ jobs:
           - os: windows-latest
             artifact: SpendTrack-windows-x86_64
             path: backend/dist/SpendTrack.exe
-          # macos-latest is Apple silicon (arm64); macos-13 is the last
-          # Intel runner GitHub offers. PyInstaller can't cross-compile, so
-          # an Intel Mac download needs its own Intel runner - a universal2
-          # binary isn't an option because not every dependency (pydantic-core,
-          # cffi) ships a universal2 wheel.
+          # macos-latest is Apple silicon (arm64); macos-15-intel is GitHub's
+          # Intel runner. PyInstaller can't cross-compile, so an Intel Mac
+          # download needs its own Intel runner - a universal2 binary isn't an
+          # option because not every dependency (pydantic-core, cffi) ships a
+          # universal2 wheel.
           - os: macos-latest
             artifact: SpendTrack-macos-arm64
             path: backend/dist/SpendTrack.app
-          - os: macos-13
+          - os: macos-15-intel
             artifact: SpendTrack-macos-x86_64
             path: backend/dist/SpendTrack.app
     runs-on: ${{ matrix.os }}
