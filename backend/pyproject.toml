@@ -1,6 +1,6 @@
 [project]
 name = "spendtrack"
-version = "0.2.0"
+version = "0.2.1"
 description = "Local-first bank statement tracker - parsers are per-bank plugins"
 readme = "README.md"
 requires-python = ">=3.12"
