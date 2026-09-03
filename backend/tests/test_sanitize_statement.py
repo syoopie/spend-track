@@ -155,7 +155,7 @@ def test_the_verifier_refuses_a_file_with_an_unaccounted_word(tmp_path):
     c = canvas.Canvas(str(leaky))
     c.drawString(36, 800, "BALANCE Kamala 1,234.56")
     c.save()
-    problems = sanitize.verify(leaky, frozenset(), [], "leaky.pdf", written=set())
+    problems = sanitize.verify(leaky.read_bytes(), frozenset(), [], "leaky.pdf", written=set())
     assert any("Kamala" in p for p in problems)
     # ...and does not cry wolf over the template word or the figure beside it.
     assert not any("BALANCE" in p or "1,234.56" in p for p in problems)

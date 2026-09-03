@@ -893,6 +893,7 @@ dependencies = [
     { name = "pdfplumber" },
     { name = "pypdf" },
     { name = "python-multipart" },
+    { name = "reportlab" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -902,7 +903,6 @@ build = [
 ]
 dev = [
     { name = "pytest" },
-    { name = "reportlab" },
 ]
 
 [package.metadata]
@@ -913,15 +913,13 @@ requires-dist = [
     { name = "pdfplumber", specifier = ">=0.11" },
     { name = "pypdf", specifier = ">=5.0" },
     { name = "python-multipart", specifier = ">=0.0.12" },
+    { name = "reportlab", specifier = ">=4.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
 ]
 
 [package.metadata.requires-dev]
 build = [{ name = "pyinstaller", specifier = ">=6.11" }]
-dev = [
-    { name = "pytest", specifier = ">=8.3" },
-    { name = "reportlab", specifier = ">=4.0" },
-]
+dev = [{ name = "pytest", specifier = ">=8.3" }]
 
 [[package]]
 name = "starlette"
