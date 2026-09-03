@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 
 from app import rule_catalog
 from app.db import get_conn
+from app.engine.pattern_match import pattern_matches
 from app.errors import api_error, not_found_error
 from app.models import MatchCountOut, RuleCreateRequest, RuleOut, RuleReorderRequest, RuleUpdateRequest
 
@@ -49,25 +50,28 @@ def match_count(pattern: str):
     # count (REV-5 in UI Review.dc.html) - lets a user see, before creating
     # a rule, whether the pattern they typed is a reusable merchant keyword
     # or something so specific (the full raw bank description, say) it'll
-    # only ever match the one transaction it was copied from. Same
-    # case-insensitive substring match as engine/rules.py::categorize's
-    # own `rule["match_pattern"].upper() in desc_upper` check, so this
-    # count is never optimistic about what a real rule would actually
-    # match going forward.
+    # only ever match the one transaction it was copied from. Runs the same
+    # engine/pattern_match.py::pattern_matches check categorize() uses, so
+    # this count is never optimistic about what a real rule would actually
+    # match - in particular a short pattern like "NUS" is counted on
+    # alphanumeric word boundaries, not as a bare substring.
     pattern = pattern.strip()
     if not pattern:
         return MatchCountOut(count=0)
-    # Escape LIKE's own wildcard characters so a pattern that happens to
-    # contain a literal % or _ (rare, but bank descriptions do sometimes
-    # include promo text like "50% OFF") is matched literally, not as a
-    # wildcard.
+    # The LIKE query is a cheap superset prefilter (every boundary match is
+    # also a substring match); pattern_matches then does the exact check in
+    # Python. Escape LIKE's own wildcard characters so a pattern containing a
+    # literal % or _ (rare, but bank descriptions carry promo text like
+    # "50% OFF") is matched literally, not as a wildcard.
     escaped = pattern.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     with get_conn() as conn:
-        row = conn.execute(
-            "SELECT COUNT(*) AS n FROM transactions WHERE UPPER(raw_description) LIKE '%' || UPPER(?) || '%' ESCAPE '\\'",
+        rows = conn.execute(
+            "SELECT raw_description FROM transactions "
+            "WHERE UPPER(raw_description) LIKE '%' || UPPER(?) || '%' ESCAPE '\\'",
             (escaped,),
-        ).fetchone()
-        return MatchCountOut(count=row["n"])
+        ).fetchall()
+        count = sum(1 for r in rows if pattern_matches(pattern, r["raw_description"].upper()))
+        return MatchCountOut(count=count)
 
 
 @router.post("", response_model=RuleOut)

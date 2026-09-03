@@ -24,6 +24,7 @@ from typing import Any, Mapping, Sequence
 
 from app.engine import paynow
 from app.engine.card_payments import looks_like_card_bill_payment, looks_like_payment_received_on_card
+from app.engine.pattern_match import pattern_matches
 
 CARD_PAYMENT_EXCLUSION_REASON = (
     "Credit card bill payment - the actual spending is already counted on the card's own statement"
@@ -136,7 +137,7 @@ def categorize(request: CategorizationRequest, ruleset: CategorizationRuleset) -
     is_paynow = paynow.is_paynow_transfer(desc_upper)
 
     for rule in rules:  # must already be sorted by priority ASC
-        if rule["match_pattern"].upper() in desc_upper:
+        if pattern_matches(rule["match_pattern"], desc_upper):
             if rule["is_exclusion_rule"]:
                 if rule["direction"] != direction:
                     continue  # this exclusion rule was scoped to the other direction - keep looking

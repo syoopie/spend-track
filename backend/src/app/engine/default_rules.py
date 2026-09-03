@@ -161,9 +161,10 @@ DEFAULT_RULE_BANK: dict[str, list[tuple[str, str]]] = {
         ("KLOOK", "Klook"),
         ("TRAVELOKA", "Traveloka"),
         ("SKYSCANNER", "Skyscanner"),
-        # Airlines. "FLYSCOOT" rather than a bare "SCOOT", which is a
-        # substring of SCOOTER; the "SCOOT CAFE" line on a boarding pass is
-        # food and stays Food & Drink, where its longer pattern wins anyway.
+        # Airlines. "FLYSCOOT" rather than a bare "SCOOT": a boundary-matched
+        # "SCOOT" would be safe against SCOOTER now, but "SCOOT CAFE" on a
+        # boarding pass is food, and leaning on its longer pattern to win is
+        # less fragile than adding a bare "SCOOT" travel rule to race it.
         ("SINGAPORE AIRLINES", "Singapore Airlines"),
         ("FLYSCOOT", "Scoot"),
         ("JETSTAR", "Jetstar"),
@@ -174,7 +175,8 @@ DEFAULT_RULE_BANK: dict[str, list[tuple[str, str]]] = {
         ("EMIRATES", "Emirates"),
         ("QANTAS", "Qantas"),
         ("CHANGI AIRPORT", "Changi Airport"),
-        # Hotel groups. No IBIS - it is a substring of HIBISCUS.
+        # Hotel groups. IBIS is safe to add now (boundary-matched, so not a
+        # HIBISCUS), just not yet seen in a real statement.
         ("MARRIOTT", "Marriott"),
         ("HILTON", "Hilton"),
         ("HYATT", "Hyatt"),
@@ -192,6 +194,8 @@ DEFAULT_RULE_BANK: dict[str, list[tuple[str, str]]] = {
         ("COLD STORAGE", "Cold Storage"),
         # General SG knowledge
         ("NTUC FAIRPRICE", "NTUC FairPrice"),
+        # Card statements abbreviate it; "FAIRPRICE" alone would miss this.
+        ("NTUC FP", "NTUC FairPrice"),
         ("FAIRPRICE", "FairPrice"),
         ("GIANT", "Giant"),
         ("PRIME SUPERMARKET", "Prime Supermarket"),
@@ -199,9 +203,10 @@ DEFAULT_RULE_BANK: dict[str, list[tuple[str, str]]] = {
         ("DON DON DONKI", "Don Don Donki"),
         ("REDMART", "RedMart"),
         ("7-ELEVEN", "7-Eleven"),
-        # Trailing space, so this can't fire on a longer word that merely
-        # starts with "CHEERS" - every outlet prints as "CHEERS - <place>".
-        ("CHEERS ", "Cheers"),
+        # Short pattern: engine/pattern_match.py matches it on word
+        # boundaries, so it can't fire inside "CHEERSFUL". Every outlet
+        # prints as "CHEERS - <place>" anyway.
+        ("CHEERS", "Cheers"),
         ("SCARLETT", "Scarlett Supermarket"),
         ("KURIYA JAPANESE MKT", "Kuriya Japanese Market"),
         ("JASONS", "Jasons"),
@@ -249,7 +254,7 @@ DEFAULT_RULE_BANK: dict[str, list[tuple[str, str]]] = {
         ("INCOME INSURANCE", "Income Insurance"),
         ("MSIG", "MSIG"),
         ("AIA", "AIA"),
-        ("M1 ", "M1"),
+        ("M1", "M1"),
         # Insurance - general SG knowledge
         ("TOKIO MARINE", "Tokio Marine"),
         ("MANULIFE", "Manulife"),
@@ -308,8 +313,9 @@ DEFAULT_RULE_BANK: dict[str, list[tuple[str, str]]] = {
         ("BLIZZARD ENTERTAINMENT", "Blizzard Entertainment"),
         # Golden Village prints as "GV <venue>", never as the full brand, so
         # the spelled-out rule above never fires on a real statement line.
-        # Sorted last by length, after every longer pattern.
-        ("GV ", "Golden Village"),
+        # Short pattern: matched on word boundaries (engine/pattern_match.py),
+        # so "LOGVIEW" is not a cinema; sorted last by length regardless.
+        ("GV", "Golden Village"),
         ("MARINA BAY SANDS", "Marina Bay Sands"),
     ],
     "Beauty": [
