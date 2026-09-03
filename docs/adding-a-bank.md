@@ -28,11 +28,22 @@ So there are exactly three ways to get one, in descending order of usefulness.
 
 ### 1. Sanitize your own statement (best)
 
+**In the app: "Help add your bank", at the bottom of the sidebar.** Pick your
+statement, and it shows you the sanitized version before you do anything with
+it: a preview of the whole rebuilt file, the list of words that were kept
+exactly as they were, and a chip you can click to remove any of them. Then a
+download button and a link to the issue form. Nothing leaves the machine; you
+attach the file yourself. This is the path to point a contributor at, and it
+needs no clone, no Python and no flags.
+
+The command line does the same thing and is what a maintainer wants when
+iterating:
+
 ```
 uv run python scripts/sanitize_statement.py ~/Downloads/statement.pdf --check-parse
 ```
 
-It keeps your statement's geometry, its figures and dates, and your bank's own
+Either way it keeps your statement's geometry, its figures and dates, and your bank's own
 wording — the bank name, the column headings, the `BALANCE B/F` and `Total`
 rows, the statement date — and replaces every other word with its shape
 (`FAIRPRICE FINEST` becomes `XXXXXXXXX XXXXXX`).
@@ -50,17 +61,26 @@ Sanitizing every committed fixture leaves all three parsers returning identical
 dates, amounts and balances. (Geometry *alone* is not enough, though — strip
 the bank's wording too and no parser can even tell which bank it is looking at.)
 
-Three flags matter:
+Three flags matter on the command line, and the page does each of them for you:
 
 - `--check-parse` runs the result through this app's parsers. If it doesn't
   parse, the script didn't recognize one of your bank's headings — pass
-  `--keep "THAT HEADING"`. A loud failure, never a silent leak.
+  `--keep "THAT HEADING"`. A loud failure, never a silent leak. The page always
+  runs this and reports it as information: a statement it can't read yet is
+  exactly the one worth sending.
 - `--redact "TEXT"` covers the one case default-deny can't: a name that *is* a
   banking word — someone called May, a merchant called Trust. The review file
-  it writes lists what was kept verbatim, so you can spot exactly that.
+  it writes lists what was kept verbatim, so you can spot exactly that. The
+  page renders that same list as chips you click to remove.
 - `--output` renames the result. The file name travels with the file, and
   `JaneWong-Jan2024.pdf` identifies its owner as well as its contents do; the
   script refuses to finish if the output name contains something you redacted.
+  The page never uses the name of the file you picked.
+
+One thing neither can do: a statement that is a **scan or a photo** has no text
+to read, so there is nothing to keep and nothing to strip. The page says so
+rather than handing you a blank file; download the original PDF from your
+bank's website instead of a printout.
 
 What it does **not** hide is the figures. Amounts and balances survive, because
 they are what a parser has to read correctly and what its reconciliation checks

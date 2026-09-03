@@ -12,7 +12,7 @@
 [![Python 3.12](https://img.shields.io/badge/python-3.12-3776ab?style=flat-square&logo=python&logoColor=white)](backend/pyproject.toml)
 [![React 19](https://img.shields.io/badge/react-19-61dafb?style=flat-square&logo=react&logoColor=white)](frontend/package.json)
 
-<sub>**A bank becomes supported the moment there's a statement to build a parser against — that's the whole blocker.** Reads today: **UOB**, **DBS**/**POSB**, **OCBC**. Yours not listed? [Say what you have](https://github.com/syoopie/spend-track/issues/new?template=bank-support.yml) — and never attach a real statement: `scripts/sanitize_statement.py` turns one into a shareable sample that keeps the layout and drops your name, account number and references.</sub>
+<sub>**A bank becomes supported the moment there's a statement to build a parser against — that's the whole blocker.** Reads today: **UOB**, **DBS**/**POSB**, **OCBC**. Yours not listed? [Say what you have](https://github.com/syoopie/spend-track/issues/new?template=bank-support.yml) — and never attach a real statement. **Help add your bank**, at the bottom of the app's sidebar, turns one into a shareable sample that keeps the layout and drops your name, account number and references, without leaving your computer.</sub>
 
 </div>
 
@@ -114,13 +114,15 @@ The goal is to read statements from any bank, anywhere. Everything downstream of
 
 The hard part is never the code. A parser is written against a real statement, and a real statement carries your name, address, account number and a year of spending — which is why nobody can simply send one. No bank publishes a specimen, the "statement template" sites a search turns up are forgery tools, and even [monopoly](https://github.com/benjamin-awd/monopoly), the most complete open-source Singapore parser, keeps its own test statements encrypted in its repository.
 
-**So there's a script for it.** `scripts/sanitize_statement.py` rebuilds your statement into a shareable one — rebuilds, rather than drawing boxes over it, since a box leaves the text underneath.
+**So the app has a page for it: Help add your bank**, at the bottom of the sidebar. Pick your statement and it rebuilds it into a shareable one — rebuilds, rather than drawing boxes over it, since a box leaves the text underneath. Then it shows you the result before you do anything with it: a preview of the whole file, the list of words it kept, and a click to remove any of them. You get a download and a link to the issue form; nothing is uploaded, and you attach the file yourself.
+
+It keeps the layout, the figures, the dates and your bank's own wording — the headings, the `BALANCE B/F` and `Total` rows — and replaces every other word with its shape. Default-deny, so it needs no decisions from you: anything it doesn't positively recognize is replaced rather than published. And it costs a parser nothing, because a parser reads the statement's template and its geometry, never the descriptions.
+
+From a clone, `scripts/sanitize_statement.py` is the same thing on the command line:
 
 ```
 uv run python scripts/sanitize_statement.py statement.pdf --check-parse
 ```
-
-It keeps the layout, the figures, the dates and your bank's own wording — the headings, the `BALANCE B/F` and `Total` rows — and replaces every other word with its shape. Default-deny, so it needs no decisions from you: anything it doesn't positively recognize is replaced rather than published. And it costs a parser nothing, because a parser reads the statement's template and its geometry, never the descriptions.
 
 That's the contribution worth making: [open a bank support request](https://github.com/syoopie/spend-track/issues/new?template=bank-support.yml) and attach a sanitized sample — or just run the parsers against your own files locally and report what breaks, which needs no sanitizing at all. **[docs/adding-a-bank.md](docs/adding-a-bank.md)** has the details, including how DBS and OCBC were built from their published layouts when no statement was available, and why those parsers refuse to import figures that don't reconcile.
 
