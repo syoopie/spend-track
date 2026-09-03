@@ -16,9 +16,7 @@
 
 </div>
 
-Give it a statement PDF you downloaded from your bank, and it reads every transaction, sorts them into categories, cancels out refunds against the purchases they reverse, and shows you where your money actually went.
-
-Which banks it reads is a plugin layer: [one folder per bank](#adding-a-bank) implementing `detect()` and `parse()`, and a region profile carrying the currency, transfer scheme and starting merchant list. Nothing downstream of the parser — categorization, refund pairing, duplicate detection, the dashboard — knows or cares which country a statement came from. The profile that ships today is Singapore's (SGD, PayNow), because that's where the statements came from; a second one is a data change, not a rewrite. The merchant word bank is its own layer again, contributed as plain data with no statement involved.
+Give it a statement PDF from your bank. It reads every transaction, sorts them into categories, cancels refunds against the purchases they reverse, and shows you where your money went.
 
 **Using it** · [Download and run](#download-and-run) · [Try the sample data](#try-it-before-using-your-own-statements) · [The everyday routine](#the-everyday-routine) · [AI categorization](#optional-let-ai-sort-out-the-leftovers) · [Questions](#questions)
 
@@ -28,18 +26,18 @@ Which banks it reads is a plugin layer: [one folder per bank](#adding-a-bank) im
 
 ## Your data stays on your computer
 
-There is no account to create, no website to log into, and nothing is uploaded. Your transactions live in a single file on your own disk, and the app never talks to your bank — it only reads PDFs you already have. The one exception is the optional AI feature described further down, which stays off unless you switch it on yourself.
+No account, no login, nothing uploaded. Your transactions live in one file on your own disk. The app reads PDFs you already have and never contacts your bank. The one exception is the optional AI feature below, off until you switch it on.
 
 ## What it does
 
-- **Reads statement PDFs** — bank account and credit card, including password-protected ones. Upload one, or a whole year's worth at once, mixing months and statement types freely. UOB, DBS/POSB and OCBC parse today. Any other bank is [one parser away](#adding-a-bank), and an unrecognized file says so plainly instead of guessing.
-- **Sorts transactions into categories automatically**, using rules you can see and edit, plus a built-in merchant list for your region (Singapore's ships today). Your own rules always take priority.
-- **Lets you check before anything is saved.** Every upload lands in a review screen first, with anything the app wasn't sure about — an unfamiliar PayNow transfer, say — flagged for you to decide.
-- **Doesn't double-count.** Uploading the same statement twice is safe: repeats are spotted and skipped. And if you upload both a credit card statement and the bank account that pays that card's bill, the bill payment isn't counted as extra spending on top of the purchases themselves.
-- **Nets off refunds** against the original purchase, matching on the merchant name as well as the amount, so two unrelated transactions don't get paired by accident.
-- **Names the people you pay.** Save a PayNow number or UEN as a contact once, and future transfers to them are labelled and categorized on their own.
-- **Shows you the picture:** money in and out, spending by category, whether you're spending faster than last month, your top merchants and your most-paid PayNow contacts — all filterable by date range and account.
-- **Gives your data back in one click.** **Settings → Download Backup** produces a zip you can archive, carry to another computer, or open in any SQLite browser. Nothing here is a format you can only read inside this app.
+- **Reads statement PDFs** — bank and credit card, password-protected included. Drop in one or a year's worth at once. UOB, DBS/POSB and OCBC parse today; any other bank is [one parser away](#adding-a-bank). An unrecognized file says so instead of guessing.
+- **Categorizes automatically** from rules you can see and edit, plus a built-in merchant list. Your own rules win.
+- **Shows you everything before it's saved.** Each upload lands in a review screen, with anything uncertain flagged for you to decide.
+- **Doesn't double-count.** The same statement uploaded twice is skipped. A card bill paid from a linked account isn't counted on top of the purchases.
+- **Nets off refunds** against the purchase they reverse, matching merchant and amount so unrelated transactions aren't paired.
+- **Names who you pay.** Save a PayNow number or UEN once; later transfers to them label and categorize themselves.
+- **Charts the picture** — money in and out, spending by category, month-on-month pace, top merchants, most-paid contacts. All filterable by date and account.
+- **Exports in one click.** **Settings → Download Backup** gives a zip that opens in any SQLite browser.
 
 ## Download and run
 
@@ -63,7 +61,7 @@ Both warnings mean the same thing: the download isn't signed with a paid develop
 
 ### Try it before using your own statements
 
-You don't need real statements to look around. The folder `PDF Examples (Sanitized)/` holds made-up statements for a fictional customer — a full year of UOB ones, twelve months of account statements and twelve of credit card statements, 300-odd transactions in all. Select the whole folder and upload it in one go; that's the dataset every screenshot on this page was taken from. There are smaller DBS and OCBC sets alongside it, including a DBS consolidated statement carrying two accounts at once. They're processed by the same code as a genuine statement, so what you see is the real behaviour, just with invented numbers. When you're done, **Settings** has options to clear everything out.
+You don't need real statements to look around. `PDF Examples (Sanitized)/` holds a fictional customer's — a year of UOB account and card statements plus smaller DBS and OCBC sets, ~300 transactions, the same data behind every screenshot here. Two of the DBS files are real statements run through the sanitizer, so a live layout is in the mix. Select the folder, upload it in one go, and **Settings** clears it out afterwards.
 
 ### The everyday routine
 
@@ -76,31 +74,29 @@ The app has a built-in **User Guide** in the sidebar that walks through each scr
 
 ## Optional: let AI sort out the leftovers
 
-**Off by default.** If you turn it on under **Settings**, then after each upload the transactions the rules couldn't figure out get sent to an AI model, which suggests a category, a tidy merchant name, and a rule you could save for next time. Nothing is applied behind your back — the suggestions simply show up pre-filled in the review screen for you to accept, edit, or reject. You can close the review screen and come back later; the suggestions will be waiting. If a pass is taking too long, a **Terminate** button appears after 15 seconds and leaves everything exactly as the rules left it.
+**Off by default.** Turn it on under **Settings** and the transactions the rules couldn't place get sent to an AI model, which suggests a category, a tidy merchant name, and a rule to save. The suggestions land pre-filled in the review screen for you to accept, edit, or reject — nothing is applied on its own. Close the review screen and they wait for you. An unreachable model shows a warning instead of hanging the upload; a slow pass gets a **Terminate** button after 15 seconds.
 
-You choose which model it talks to:
+Three model choices:
 
-- **Local (Ollama)** — the default, and the only option where nothing leaves your computer. It uses a model you're running yourself.
-- **OpenAI-compatible** — OpenAI, OpenRouter, Groq, together.ai, or anything else speaking the same format.
+- **Local (Ollama)** — the default, and the only one where nothing leaves your computer.
+- **OpenAI-compatible** — OpenAI, OpenRouter, Groq, together.ai, anything speaking that format.
 - **Anthropic (Claude)**.
 
-Picking either of the last two means your transaction descriptions and amounts are sent to that company, which is a real privacy trade-off — so the Settings page won't let you save it until you tick a box confirming you understand. The sidebar indicator and the in-app guide always reflect what's actually switched on. Any API key you enter is stored in a local settings file and is never shown back to you in full.
-
-If the model isn't reachable, the app tells you with a warning instead of leaving an upload stuck.
+The last two send your descriptions and amounts to that company. Settings won't save either until you tick a box confirming you understand, and any API key you enter is kept in a local file and never shown back in full.
 
 ## Questions
 
-**How do I back up my data, or move it to another computer?** **Settings → Download Backup** gives you a single `.zip` with your database, your settings, and a plain-text note explaining how to put them back. Install the app on the other computer, start it once so it creates its folder, quit it, and copy the two files from the zip in. (Your AI provider key is deliberately left out — a backup tends to end up in cloud storage or an email, and a key that leaks is one someone else can spend. Re-enter it after restoring.)
+**How do I back up or move my data?** **Settings → Download Backup** gives a `.zip` with your database, settings, and a note on restoring. On the other computer, start the app once to create its folder, quit, and copy the two files in. Your AI key is left out on purpose — re-enter it after restoring.
 
-**Where is my data kept?** In a single database file at `~/.spendtrack/data.db` — **Settings** shows the exact path. (An install from before the app was renamed keeps using its original `~/.sg-expenditure-tracker` folder rather than having its database moved out from under it.) **Settings → Change Database Path** lets you move it — pointing it at a Dropbox or OneDrive folder is an easy way to get continuous backups and access from another computer. It's an ordinary SQLite file, so you can also open it in any SQLite browser if you ever want your data out of this app entirely.
+**Where is my data kept?** One SQLite file at `~/.spendtrack/data.db`; **Settings** shows the path. **Settings → Change Database Path** moves it — point it at a Dropbox or OneDrive folder for continuous backups. (An install from before the rename keeps its old `~/.sg-expenditure-tracker` folder.)
 
-**Does it need my bank login?** No. It only reads statement PDFs you've already downloaded yourself, and never connects to your bank.
+**Does it need my bank login?** No. It reads statement PDFs you downloaded yourself and never connects to your bank.
 
-**My statement won't upload.** Make sure it's the e-statement PDF downloaded from the bank, not a scan, a photo, or a printed-then-re-saved copy — the app reads the text inside the file, which those versions don't have. Also check the bank is one that reads today — **Settings → Region** lists which banks parse. If it's a DBS or OCBC statement that reads as "did not reconcile", that's the parser refusing to import figures it can't check against the statement's own totals rather than guessing; [please report it](https://github.com/syoopie/spend-track/issues/new?template=bank-support.yml).
+**My statement won't upload.** Use the e-statement PDF from the bank, not a scan or a photo — the app reads the text inside the file. Check the bank parses today under **Settings → Region**. A "did not reconcile" message is the parser refusing figures it can't check against the statement's own totals; [please report it](https://github.com/syoopie/spend-track/issues/new?template=bank-support.yml).
 
-**My browser didn't open.** The small window the app opens shows its address (`http://127.0.0.1:8123` by default) — type that into your browser yourself.
+**My browser didn't open.** The app window shows its address (`http://127.0.0.1:8123` by default) — open that yourself.
 
-**I want to start over.** Settings has buttons to delete your transactions, rules, or contacts individually, or everything at once.
+**I want to start over.** Settings deletes your transactions, rules, or contacts, individually or all at once.
 
 ## A closer look
 

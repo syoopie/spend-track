@@ -85,3 +85,23 @@ def test_encrypted_pdf_with_correct_password_decrypts():
     result = detect_and_parse(pdf.pages)
     pdf.close()
     assert len(result.accounts[0].transactions) == 39
+
+
+def test_encrypted_pdf_with_empty_user_password_opens_without_one():
+    """DBS's consolidated eStatement is owner-locked against editing but has an
+    empty user password - it opens with no password at all. The app must not
+    demand one that does not exist."""
+    with open(ACCOUNT_SAMPLE, "rb") as f:
+        data = f.read()
+    reader = pypdf.PdfReader(io.BytesIO(data))
+    writer = pypdf.PdfWriter()
+    for p in reader.pages:
+        writer.add_page(p)
+    writer.encrypt(user_password="", owner_password="owner-only")
+    buf = io.BytesIO()
+    writer.write(buf)
+
+    pdf = open_pdf(buf.getvalue())  # no password argument
+    result = detect_and_parse(pdf.pages)
+    pdf.close()
+    assert result.bank_name == "UOB"

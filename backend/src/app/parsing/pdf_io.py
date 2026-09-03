@@ -21,10 +21,14 @@ def open_pdf(data: bytes, password: str | None = None) -> pdfplumber.PDF:
     """
     reader = pypdf.PdfReader(io.BytesIO(data))
     if reader.is_encrypted:
-        if not password:
-            raise EncryptedPdfError()
-        if reader.decrypt(password) == 0:
-            raise IncorrectPasswordError()
+        # DBS's consolidated eStatement is encrypted with an *empty* user
+        # password - owner-locked against editing, but readable with no
+        # password at all. Try the empty string before giving up, so those
+        # statements open without the app demanding a password that does not
+        # exist. A statement with a real user password still lands in the
+        # branches below.
+        if reader.decrypt(password or "") == 0:
+            raise IncorrectPasswordError() if password else EncryptedPdfError()
         writer = pypdf.PdfWriter()
         for page in reader.pages:
             writer.add_page(page)

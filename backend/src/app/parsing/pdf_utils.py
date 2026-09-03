@@ -17,6 +17,7 @@ class Word:
     x1: float
     top: float
     bottom: float
+    upright: bool = True
 
 
 @dataclass(frozen=True)
@@ -38,7 +39,7 @@ class Line:
 
 def extract_words(page) -> list[Word]:
     return [
-        Word(w["text"], w["x0"], w["x1"], w["top"], w["bottom"])
+        Word(w["text"], w["x0"], w["x1"], w["top"], w["bottom"], w.get("upright", True))
         for w in page.extract_words(use_text_flow=False, keep_blank_chars=False)
     ]
 
@@ -141,10 +142,33 @@ def columns_from_header(
         # The first column reaches to the page's left edge and the last to its
         # right, so a date printed a shade left of its header, or an amount
         # right-aligned past the page's last header, still lands in-column.
-        lo = 0.0 if i == 0 else x0
-        hi = page_width if i == len(found) - 1 else found[i + 1][1]
+        lo = 0.0 if i == 0 else _left_bound(found[i - 1], found[i])
+        hi = page_width if i == len(found) - 1 else _left_bound(found[i], found[i + 1])
         columns.append(Column(column.name, lo, hi, align=column.align))
     return columns
+
+
+def _left_bound(left: tuple[HeaderColumn, float, float], right: tuple[HeaderColumn, float, float]) -> float:
+    """The x that divides two adjacent columns.
+
+    For a right-aligned column (an amount) the divider is that column's own
+    header left edge: an amount right-aligned under "WITHDRAWAL" never starts
+    before the "W", while the left-aligned description beside it legitimately
+    runs on past the midpoint of the header gap - anchoring on the header's
+    left edge is what stops a long "... PTE LTD" being read as a withdrawal.
+
+    For a left-aligned column the opposite holds: its content can begin a hair
+    left of its header word (font hinting, a slightly wider glyph), so the
+    divider sits in the middle of the empty gap between the two header words
+    instead. A DBS row's "Advice ..." description starts at the exact same x
+    as the "Description" header, and floating-point equality is not a boundary
+    to bet a parse on.
+    """
+    right_column, right_x0, _ = right
+    if right_column.align == "right":
+        return right_x0
+    _, _, left_x1 = left
+    return (left_x1 + right_x0) / 2
 
 
 def _find_header_words(words: list[Word], keywords: tuple[str, ...], search_from: int) -> tuple[int, int] | None:
