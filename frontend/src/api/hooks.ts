@@ -56,6 +56,19 @@ export function useAccounts() {
   return useQuery({ queryKey: ['accounts'], queryFn: () => api.get<Account[]>('/accounts') })
 }
 
+export function useDeleteAccount() {
+  const qc = useQueryClient()
+  const toast = useToast()
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/accounts/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['accounts'] })
+      toast.success('Account deleted.')
+    },
+    onError: (err) => toast.error(errMsg(err, "Couldn't delete the account.")),
+  })
+}
+
 // --- transactions ---------------------------------------------------------
 
 export function useTransactions(params: {
@@ -100,6 +113,7 @@ export function useDeleteTransaction() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['transactions'] })
       qc.invalidateQueries({ queryKey: ['dashboard-summary'] })
+      qc.invalidateQueries({ queryKey: ['accounts'] })
     },
     onError: (err) => toast.error(errMsg(err, "Couldn't delete the transaction.")),
   })
@@ -118,6 +132,9 @@ export function useDeleteTransactionsByFile() {
       qc.invalidateQueries({ queryKey: ['transactions'] })
       qc.invalidateQueries({ queryKey: ['dashboard-summary'] })
       qc.invalidateQueries({ queryKey: ['source-files'] })
+      // The account keeps its row but its transaction_count drops - the
+      // Settings "Accounts" card gates its delete button on that number.
+      qc.invalidateQueries({ queryKey: ['accounts'] })
       toast.success(`Deleted ${data.deleted_count} transaction${data.deleted_count === 1 ? '' : 's'} from "${filename}".`)
     },
     onError: (err) => toast.error(errMsg(err, "Couldn't delete those transactions.")),

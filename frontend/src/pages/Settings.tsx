@@ -1,9 +1,11 @@
-import { Download, FileX2, FolderOpen, Loader2, Settings as SettingsIcon, Trash2 } from 'lucide-react'
+import { Download, FileX2, FolderOpen, Landmark, Loader2, Settings as SettingsIcon, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
+  useAccounts,
   useCheckPath,
   useContacts,
+  useDeleteAccount,
   useDeleteAllContacts,
   useDeleteAllRules,
   useDeleteAllTransactions,
@@ -16,6 +18,7 @@ import {
   useSourceFiles,
   useTransactions,
 } from '../api/hooks'
+import type { Account } from '../api/types'
 import { AiSection } from '../components/AiSection'
 import { AppearanceSection } from '../components/AppearanceSection'
 import { Button } from '../components/Button'
@@ -235,6 +238,43 @@ function DeleteFileModal({
   )
 }
 
+// An account only reaches this modal with zero transactions (the list's
+// delete button is disabled otherwise), so there is nothing to lose and no
+// typed-DELETE step - re-uploading any statement for it recreates the row.
+function DeleteAccountModal({ account, onClose }: { account: Account; onClose: () => void }) {
+  const deleteAccount = useDeleteAccount()
+
+  async function handleConfirm() {
+    try {
+      await deleteAccount.mutateAsync(account.id)
+      onClose()
+    } catch {
+      // swallow - deleteAccount.isError below renders the failure, modal stays open so the user can retry
+    }
+  }
+
+  return (
+    <Modal onClose={onClose} width={440} title={<span className="text-danger-text">Delete Account</span>}>
+      <div className="text-md text-muted leading-relaxed mb-4.5">
+        This removes{' '}
+        <strong className="text-text">
+          {account.bank_name} {account.account_number_masked}
+        </strong>{' '}
+        from your account list. It has no transactions. Uploading a statement for it again brings it back.
+      </div>
+      {deleteAccount.isError && (
+        <div className="text-xs text-danger-text mb-3">Could not complete the deletion. Please try again.</div>
+      )}
+      <div className="flex justify-end gap-2.5">
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="danger" onClick={handleConfirm} disabled={deleteAccount.isPending}>
+          Delete Account
+        </Button>
+      </div>
+    </Modal>
+  )
+}
+
 function NuclearResetModal({ onClose }: { onClose: () => void }) {
   const reset = useResetDb()
   const navigate = useNavigate()
@@ -292,11 +332,13 @@ export function Settings() {
   const [resetOpen, setResetOpen] = useState(false)
   const [deleteScope, setDeleteScope] = useState<DeleteScope>(null)
   const [deleteFileTarget, setDeleteFileTarget] = useState<{ filename: string; count: number } | null>(null)
+  const [deleteAccountTarget, setDeleteAccountTarget] = useState<Account | null>(null)
 
   const deleteRules = useDeleteAllRules()
   const deleteContacts = useDeleteAllContacts()
   const deleteTransactions = useDeleteAllTransactions()
   const sourceFilesQ = useSourceFiles()
+  const accountsQ = useAccounts()
   const revealDbFolder = useRevealDbFolder()
 
   // Live counts for the Danger Zone (SET-3) - "This deletes 23 rules" beats
@@ -405,6 +447,50 @@ export function Settings() {
         </div>
       </Card>
 
+      {(accountsQ.data?.length ?? 0) > 0 && (
+        <Card className="mb-4">
+          <div className="text-md font-semibold font-display mb-1">Accounts</div>
+          <div className="text-xs text-muted mb-3.5">
+            Every account a statement has been uploaded for. Deleting a statement clears its transactions but keeps
+            the account — remove one here once it has no transactions left.
+          </div>
+          <div className="flex flex-col gap-2">
+            {(accountsQ.data ?? []).map((a) => {
+              const empty = a.transaction_count === 0
+              return (
+                <div
+                  key={a.id}
+                  className="flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-lg border border-border bg-input"
+                >
+                  <div className="min-w-0 flex items-center gap-2">
+                    <Landmark size={14} className="text-muted-2 shrink-0" />
+                    <span className="text-md truncate" title={`${a.bank_name} ${a.account_number_masked}`}>
+                      {a.bank_name} <span className="font-mono">{a.account_number_masked}</span>
+                    </span>
+                    <span className="text-xs text-muted-2 shrink-0 truncate">· {a.account_type}</span>
+                    <span className="text-xs text-muted-2 shrink-0">
+                      · {a.transaction_count} transaction{a.transaction_count === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setDeleteAccountTarget(a)}
+                    disabled={!empty}
+                    title={
+                      empty
+                        ? `Delete ${a.bank_name} ${a.account_number_masked}`
+                        : 'Delete this account’s transactions first'
+                    }
+                    className="shrink-0 border-none bg-transparent p-1 text-muted-2 enabled:cursor-pointer enabled:hover:text-danger-text disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        </Card>
+      )}
+
       {(sourceFilesQ.data?.length ?? 0) > 0 && (
         <Card className="mb-4">
           <div className="text-md font-semibold font-display mb-1">Uploaded Files</div>
@@ -473,6 +559,9 @@ export function Settings() {
           count={deleteFileTarget.count}
           onClose={() => setDeleteFileTarget(null)}
         />
+      )}
+      {deleteAccountTarget && (
+        <DeleteAccountModal account={deleteAccountTarget} onClose={() => setDeleteAccountTarget(null)} />
       )}
       {deleteScope === 'rules' && (
         <SimpleConfirmModal

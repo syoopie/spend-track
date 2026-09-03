@@ -104,6 +104,65 @@ def test_a_user_category_matching_a_new_default_is_restyled_not_duplicated(clien
 # --- accounts + transactions -------------------------------------------
 
 
+def _seed_account(account_id="acc-1", *, transactions=0, source_filename=None):
+    """Insert an account and `transactions` rows against it directly, no PDF
+    needed - the account-delete tests only care about the row count."""
+    from app.db import get_conn
+
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO accounts (id, bank_name, account_number_masked, account_type, is_card) VALUES (?, ?, ?, ?, 0)",
+            (account_id, "UOB", "••7890", "Savings"),
+        )
+        for i in range(transactions):
+            conn.execute(
+                "INSERT INTO transactions (fingerprint, account_id, transaction_date, raw_description, amount, source_filename) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (f"{account_id}-fp-{i}", account_id, "2024-01-15", f"MERCHANT {i}", -1.0 * (i + 1), source_filename),
+            )
+
+
+def test_accounts_list_reports_transaction_count(client):
+    _seed_account("acc-1", transactions=3)
+    _seed_account("acc-2", transactions=0)
+
+    by_id = {a["id"]: a for a in client.get("/api/accounts").json()}
+    assert by_id["acc-1"]["transaction_count"] == 3
+    assert by_id["acc-2"]["transaction_count"] == 0
+
+
+def test_delete_account_refused_while_it_has_transactions(client):
+    _seed_account("acc-1", transactions=2)
+
+    resp = client.delete("/api/accounts/acc-1")
+    assert resp.status_code == 409
+    assert resp.json()["detail"]["code"] == "ACCOUNT_HAS_TRANSACTIONS"
+    assert len(client.get("/api/accounts").json()) == 1
+
+
+def test_delete_empty_account(client):
+    _seed_account("acc-1", transactions=0)
+
+    assert client.delete("/api/accounts/acc-1").status_code == 204
+    assert client.get("/api/accounts").json() == []
+
+
+def test_delete_missing_account_is_404(client):
+    resp = client.delete("/api/accounts/nope")
+    assert resp.status_code == 404
+    assert resp.json()["detail"]["code"] == "ACCOUNT_NOT_FOUND"
+
+
+def test_deleting_a_statement_leaves_an_account_that_can_then_be_deleted(client):
+    _seed_account("acc-1", transactions=4, source_filename="jan.pdf")
+
+    client.delete("/api/transactions/by-file", params={"filename": "jan.pdf"})
+
+    (account,) = client.get("/api/accounts").json()
+    assert account["transaction_count"] == 0
+    assert client.delete("/api/accounts/acc-1").status_code == 204
+
+
 def test_accounts_and_transactions_after_commit(client):
     _upload_and_commit(client)
 

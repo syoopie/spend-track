@@ -124,6 +124,7 @@ export interface Account {
   bank_name: string
   account_number_masked: string
   account_type: string
+  transaction_count: number
 }
 
 export interface Transaction {

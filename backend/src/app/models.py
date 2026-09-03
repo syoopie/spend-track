@@ -189,6 +189,9 @@ class AccountOut(BaseModel):
     account_number_masked: str
     account_type: str
     is_card: bool
+    # Drives the Settings "Accounts" card: an account can only be deleted
+    # (DELETE /api/accounts/{id}) once this reaches zero.
+    transaction_count: int
 
 
 class TransactionOut(BaseModel):
