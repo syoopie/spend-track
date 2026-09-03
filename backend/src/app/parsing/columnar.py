@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from datetime import date as _date
 
 from app.parsing.base import ParsedAccount, ParsedStatement, ParsedTransaction, UnparseableStatementError
 from app.parsing.pdf_utils import HeaderColumn, Line, bucket_line, columns_from_header, extract_words, group_into_lines
@@ -67,12 +68,20 @@ def parse_money(text: str) -> float | None:
     Strictness is the point: a description that overflows its column and
     spills into an amount column must be rejected here rather than
     contributing a garbage figure.
+
+    Accounting parentheses mean a negative figure. An OCBC credit card
+    statement prints a bill payment or a rebate as "(1,133.96)" where DBS and
+    UOB would suffix "CR".
     """
-    match = MONEY_RE.match(text.strip())
+    text = text.strip()
+    bracketed = text.startswith("(") and text.endswith(")")
+    if bracketed:
+        text = text[1:-1].strip()
+    match = MONEY_RE.match(text)
     if not match:
         return None
     value = float(match.group("value").replace(",", ""))
-    if match.group("sign") or (match.group("polarity") or "").upper() == "DR":
+    if match.group("sign") or bracketed or (match.group("polarity") or "").upper() == "DR":
         value = -value
     return value
 
@@ -123,6 +132,33 @@ class YearResolver:
         return f"{year:04d}-{month:02d}-{day:02d}"
 
 
+def _today() -> _date:
+    """A seam so a test can pin `RecentDateResolver` to a fixed day."""
+    return _date.today()
+
+
+@dataclass(frozen=True)
+class RecentDateResolver:
+    """Year resolution for a statement that prints no date anywhere.
+
+    An OCBC credit card statement shows its statement date only in the summary
+    box at the top of page one, and a privacy-conscious contributor redacts
+    that whole box (statement date, credit limit, available credit, minimum
+    due) before sharing the file. With no anchor to resolve against, place each
+    year-less transaction date at its most recent occurrence not in the future.
+    That is correct for any statement imported within a year of being issued,
+    which a credit card statement almost always is.
+    """
+
+    today: _date
+
+    def iso(self, day: int, month: int) -> str:
+        year = self.today.year
+        if (month, day) > (self.today.month, self.today.day):
+            year -= 1
+        return f"{year:04d}-{month:02d}-{day:02d}"
+
+
 @dataclass(frozen=True)
 class AccountSpec:
     """How to recognize an account/card section heading above a table header.
@@ -135,6 +171,11 @@ class AccountSpec:
     number_pattern: re.Pattern[str]
     name_stopwords: tuple[str, ...] = ()
     fallback_name: str = "Account"
+    #: Some statements print the account/card heading *below* the table header,
+    #: between it and the first row, rather than above it. An OCBC credit card
+    #: statement does this: the header, then the card product name, then the
+    #: (often masked or absent) card number, then "LAST MONTH'S BALANCE".
+    identity_below_header: bool = False
 
 
 @dataclass(frozen=True)
@@ -154,8 +195,16 @@ class TableSpec:
     #: Description prefix of the row carrying the statement's closing balance,
     #: used by the reconciliation check.
     closing_balance_prefix: str | None = None
+    #: Description prefix of the row carrying the carried-in balance a credit
+    #: card statement opens with ("LAST MONTH'S BALANCE"). With this and
+    #: `closing_balance_prefix` both set, `_reconcile` checks that the opening
+    #: balance plus charges less credits equals the closing balance.
+    opening_balance_prefix: str | None = None
     #: Description prefix of the row carrying the withdrawal/deposit totals.
     totals_prefix: str | None = None
+    #: Accept a statement that prints no date anywhere, resolving transaction
+    #: years against today instead of a statement date (`RecentDateResolver`).
+    allow_dateless: bool = False
     is_card: bool = False
     #: Text below this y-coordinate is page footer, dropped before grouping
     #: words into lines - see CLAUDE.md on UOB's bilingual disclaimer, which
@@ -171,6 +220,7 @@ class _Section:
     transactions: list[ParsedTransaction] = field(default_factory=list)
     current: ParsedTransaction | None = None
     closing_balance: float | None = None
+    opening_balance: float | None = None
     printed_withdrawals: float | None = None
     printed_deposits: float | None = None
 
@@ -211,13 +261,13 @@ def parse_table(pages, spec: TableSpec) -> ParsedStatement:
             if identity is None and current is None:
                 continue  # a table we can't attribute to an account is not importable
             if identity is not None:
-                number, name = identity
-                if number not in sections:
-                    sections[number] = _Section(account=_new_account(number, name, spec))
-                    order.append(number)
-                if current is not None and current is not sections[number]:
+                key, name, masked = identity
+                if key not in sections:
+                    sections[key] = _Section(account=_new_account(key, name, masked, spec))
+                    order.append(key)
+                if current is not None and current is not sections[key]:
                     current.close()
-                current = sections[number]
+                current = sections[key]
 
             assert current is not None
             for line in lines[header_idx + 1 : _section_end(lines, headers, position, spec)]:
@@ -253,18 +303,17 @@ def parse_table(pages, spec: TableSpec) -> ParsedStatement:
     return ParsedStatement(bank_name=spec.bank_name, accounts=accounts)
 
 
-def _new_account(number: str, name: str, spec: TableSpec) -> ParsedAccount:
-    digits = re.sub(r"\D", "", number)
+def _new_account(key: str, name: str, masked: str, spec: TableSpec) -> ParsedAccount:
     return ParsedAccount(
         bank_name=spec.bank_name,
-        account_number=number,
-        account_number_masked="••" + digits[-4:],
+        account_number=key,
+        account_number_masked=masked,
         account_type=name,
         is_card=spec.is_card,
     )
 
 
-def _statement_date(pages, spec: TableSpec) -> YearResolver:
+def _statement_date(pages, spec: TableSpec) -> YearResolver | RecentDateResolver:
     for page in pages[:2]:  # the anchor is always on the cover or first table page
         match = spec.statement_date_pattern.search(page.extract_text() or "")
         if not match:
@@ -273,6 +322,8 @@ def _statement_date(pages, spec: TableSpec) -> YearResolver:
         month = MONTHS.get(month_text.upper()) if not month_text.isdigit() else int(month_text)
         if month:
             return YearResolver(statement_year=int(year), statement_month=month)
+    if spec.allow_dateless:
+        return RecentDateResolver(today=_today())
     raise UnparseableStatementError(
         f"Recognized a {spec.bank_name} statement but could not find its statement date, "
         "which every transaction's year is derived from (transaction rows print no year)."
@@ -325,25 +376,84 @@ def _identity_line_index(lines: list[Line], header_idx: int, spec: TableSpec) ->
     return None
 
 
-def _account_identity(lines: list[Line], header_idx: int, spec: TableSpec) -> tuple[str, str] | None:
-    """Find the account/card number and name in the lines above the table header."""
+def _account_identity(lines: list[Line], header_idx: int, spec: TableSpec) -> tuple[str, str, str] | None:
+    """Resolve the section's (key, display name, masked number).
+
+    `key` is what `derive_account_id` hashes, so re-uploading a statement for
+    the same account lands on the same row. It is the account number where the
+    statement prints one, and the card product name where it does not - an OCBC
+    card statement routinely masks or omits the number entirely, so keying on
+    it would split one card into a new account per statement.
+    """
+    if spec.account.identity_below_header:
+        return _identity_below_header(lines, header_idx, spec)
     back = _identity_line_index(lines, header_idx, spec)
-    if back is not None:
-        text = lines[back].text()
-        match = spec.account.number_pattern.search(text)
-        assert match is not None
-        number = match.group(1)
-        name = text[: match.start()].strip(" :-•")
-        # A real DBS heading is one line: "DBS Multiplier Account Account No.
-        # 120-752744-8" - strip the trailing "Account No." label so the name
-        # is just the account type.
-        name = LABEL_SUFFIX_RE.sub("", name).strip(" :-•")
-        if not name or LABEL_ONLY_RE.match(name):
-            # The number's own line reads "Account No. 123-456789-0" - a label,
-            # not a name. The account's name is the heading printed above it.
-            name = _name_above(lines, back, spec)
-        return number, name or spec.account.fallback_name
-    return None
+    if back is None:
+        return None
+    text = lines[back].text()
+    match = spec.account.number_pattern.search(text)
+    assert match is not None
+    number = match.group(1)
+    name = text[: match.start()].strip(" :-•")
+    # A real DBS heading is one line: "DBS Multiplier Account Account No.
+    # 120-752744-8" - strip the trailing "Account No." label so the name is
+    # just the account type.
+    name = LABEL_SUFFIX_RE.sub("", name).strip(" :-•")
+    if not name or LABEL_ONLY_RE.match(name):
+        # The number's own line reads "Account No. 123-456789-0" - a label,
+        # not a name. The account's name is the heading printed above it.
+        name = _name_above(lines, back, spec)
+    name = name or spec.account.fallback_name
+    return number, name, _masked(number)
+
+
+def _identity_below_header(lines: list[Line], header_idx: int, spec: TableSpec) -> tuple[str, str, str] | None:
+    """Read a heading printed between the table header and its first row.
+
+    Scan forward from the header to the first line that carries a transaction
+    date or a skip-prefix furniture label ("LAST MONTH'S BALANCE"), and take
+    the heading from the lines before it: the product name, then the card
+    number if the statement prints an unredacted one.
+    """
+    candidates: list[str] = []
+    for line in lines[header_idx + 1 : header_idx + 8]:
+        text = line.text().strip()
+        if not text:
+            continue
+        first_cell = line.words[0].text if line.words else ""
+        if parse_row_date(first_cell) is not None:
+            break
+        if any(text.upper().startswith(p.upper()) for p in spec.skip_prefixes):
+            break
+        candidates.append(text)
+    if not candidates:
+        return None
+
+    number = None
+    for text in candidates:
+        found = spec.account.number_pattern.search(text)
+        if found:
+            number = found.group(1)
+            break
+
+    name = next(
+        (
+            text
+            for text in candidates
+            if not spec.account.number_pattern.fullmatch(text)
+            and not any(stop.lower() in text.lower() for stop in spec.account.name_stopwords)
+        ),
+        candidates[0],
+    )
+    if number and number in name:  # "TAMMY YUEN 5413-8301-0062-9906" -> "TAMMY YUEN"
+        name = name.replace(number, "").strip(" :-•")
+    name = name or spec.account.fallback_name
+    return name, name, _masked(number)
+
+
+def _masked(number: str | None) -> str:
+    digits = re.sub(r"\D", "", number or "")
+    return "••" + digits[-4:] if digits else "••••"
 
 
 def _name_above(lines: list[Line], idx: int, spec: TableSpec) -> str:
@@ -359,7 +469,9 @@ def _name_above(lines: list[Line], idx: int, spec: TableSpec) -> str:
     return ""
 
 
-def _consume_row(line: Line, columns, spec: TableSpec, resolver: YearResolver, section: _Section) -> None:
+def _consume_row(
+    line: Line, columns, spec: TableSpec, resolver: YearResolver | RecentDateResolver, section: _Section
+) -> None:
     row = bucket_line(line, columns)
     description = row.get("description", "").strip()
     date_text = row.get("date", "").strip()
@@ -393,12 +505,15 @@ def _consume_row(line: Line, columns, spec: TableSpec, resolver: YearResolver, s
 def _row_amount(row: dict[str, str]) -> float:
     """Signed amount for one row: negative is money out, positive is money in."""
     if "amount" in row:
-        # Card statements print one column; a credit is suffixed CR.
-        value = parse_money(row["amount"])
+        # Card statements print one column. A credit (bill payment, refund,
+        # rebate) is money coming back: DBS and UOB suffix "CR", OCBC brackets
+        # it. Everything else is a charge.
+        text = row["amount"].strip()
+        value = parse_money(text)
         if value is None:
             return 0.0
-        text = row["amount"].strip().upper()
-        return value if text.endswith("CR") else -abs(value)
+        is_credit = text.upper().endswith("CR") or (text.startswith("(") and text.endswith(")"))
+        return abs(value) if is_credit else -abs(value)
     withdrawal = parse_money(row.get("withdrawal", ""))
     deposit = parse_money(row.get("deposit", ""))
     if withdrawal is not None:
@@ -409,10 +524,15 @@ def _row_amount(row: dict[str, str]) -> float:
 def _capture_printed_totals(description: str, row: dict[str, str], spec: TableSpec, section: _Section) -> None:
     """Remember the figures the statement prints for itself, for `_reconcile`."""
     upper = description.upper()
+    figure = parse_money(row.get("balance") or row.get("amount") or "")
+    if spec.opening_balance_prefix and upper.startswith(spec.opening_balance_prefix.upper()):
+        # "LAST MONTH'S BALANCE" - the running balance a card statement opens
+        # with, in its amount column.
+        section.opening_balance = figure
     if spec.closing_balance_prefix and upper.startswith(spec.closing_balance_prefix.upper()):
         # A closing-balance row prints its figure in the balance column on
         # deposit statements and in the amount column on card statements.
-        section.closing_balance = parse_money(row.get("balance", "")) or parse_money(row.get("amount", ""))
+        section.closing_balance = figure
     if spec.totals_prefix and upper.startswith(spec.totals_prefix.upper()):
         section.printed_withdrawals = parse_money(row.get("withdrawal", ""))
         section.printed_deposits = parse_money(row.get("deposit", ""))
@@ -444,6 +564,21 @@ def _reconcile(section: _Section, spec: TableSpec) -> None:
             f"{section.printed_deposits:,.2f} but the transactions read from it sum to {deposits:,.2f}. "
             "Refusing to import rather than risk wrong figures - please report this statement's layout."
         )
+
+    if section.opening_balance is not None and section.closing_balance is not None:
+        # A credit card statement: opening running balance, plus this month's
+        # charges, less this month's payments and credits, is the closing
+        # running balance it prints on its SUBTOTAL row. (Card rows carry no
+        # per-row balance, so the check below never fires for one.)
+        expected = round(section.opening_balance + withdrawals - deposits, 2)
+        if abs(expected - section.closing_balance) > 0.01:
+            raise StatementReconciliationError(
+                f"{spec.bank_name} statement did not reconcile: opening balance "
+                f"{section.opening_balance:,.2f} plus charges {withdrawals:,.2f} less credits "
+                f"{deposits:,.2f} is {expected:,.2f}, but the statement's closing balance is "
+                f"{section.closing_balance:,.2f}. Refusing to import rather than risk wrong "
+                "figures - please report this statement's layout."
+            )
 
     final_balance = transactions[-1].balance
     if section.closing_balance is not None and final_balance is not None:

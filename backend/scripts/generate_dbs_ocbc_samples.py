@@ -354,16 +354,11 @@ DBS_CARD = CardLayout(
     new_balance_row="NEW BALANCE",
 )
 
-OCBC_CARD = CardLayout(
-    bank="OCBC",
-    legal_name="Oversea-Chinese Banking Corporation Limited",
-    card_name="OCBC SAMPLE CARD",
-    date_header=["TRANSACTION", "DATE"],
-    description_header="DESCRIPTION",
-    amount_header="AMOUNT (S$)",
-    previous_balance_row="LAST MONTH'S BALANCE",
-    new_balance_row="NEW BALANCE",
-)
+#: OCBC's credit card statement is not generated here. Its fixtures
+#: (`PDF Examples (Sanitized)/OCBC/Card Statements/`) are sanitized from real
+#: statements - the real layout puts the card heading below the table header,
+#: brackets credits, and prints its statement date only in a summary box a
+#: contributor redacts, none of which a synthetic guess would have captured.
 
 
 def generate_card_statement(
@@ -651,28 +646,8 @@ def main():
         ],
     )
 
-    # --- OCBC credit card ------------------------------------------------
-    # Dates are numeric and year-less here ("02/03"), unlike DBS's "05 MAR" -
-    # the one place the two card layouts genuinely differ.
-    generate_card_statement(
-        ocbc_dir / "Card Statements" / "SampleCardStatement_Mar2024.pdf",
-        OCBC_CARD,
-        statement_date="15-03-2024",
-        cards=[
-            CardSection(
-                name="OCBC SAMPLE CARD",
-                number="0000-4444-5555-6666",
-                previous_balance=204.18,
-                txns=[
-                    card_payment("18/02", "PAYMENT BY INTERNET", 204.18),
-                    charge("20/02", "FOODIE EXPRESS SINGAPORE SG", 36.25),
-                    charge("24/02", "URBAN TRANSIT CO. SINGAPORE SG", 1.38),
-                    charge("01/03", "NTUC FAIRPRICE SINGAPORE SG", 82.60),
-                    charge("07/03", "CIRCLES.LIFE SINGAPORE SG", 28.00),
-                ],
-            )
-        ],
-    )
+    # OCBC's credit card fixtures are sanitized from real statements, not
+    # generated - see the note by the (now removed) OCBC_CARD layout.
 
     print("Generated DBS sample PDFs in", dbs_dir)
     print("Generated OCBC sample PDFs in", ocbc_dir)
