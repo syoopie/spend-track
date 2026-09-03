@@ -11,17 +11,21 @@ body:
         bank you use.
 
         **Never attach a real statement**: it has your account number and
-        transaction history in it. Attach a sanitized one instead — from a
-        clone, run:
+        transaction history in it. Attach a sanitized one instead.
+
+        **The app makes one for you.** Open SpendTrack, click **Help add your
+        bank** at the bottom of the sidebar, and pick your statement. It
+        rebuilds the PDF keeping the layout and the amounts and dropping the
+        identifiers, shows you everything that survived, and gives you a file
+        to download. Nothing is uploaded; you attach it here yourself.
+
+        From a clone, the same thing on the command line:
 
         ```
         uv run python scripts/sanitize_statement.py statement.pdf --redact "YOUR NAME"
         ```
 
-        That rebuilds the PDF keeping the layout and amounts and dropping the
-        identifiers, and writes a `.review.txt` listing every word that
-        survived. Read that file before attaching anything. See
-        [docs/adding-a-bank.md](https://github.com/syoopie/spend-track/blob/main/docs/adding-a-bank.md).
+        See [docs/adding-a-bank.md](https://github.com/syoopie/spend-track/blob/main/docs/adding-a-bank.md).
   - type: input
     id: bank
     attributes:
@@ -42,8 +46,8 @@ body:
       label: Can you help test?
       description: Nothing is uploaded anywhere — testing means running the parser on your own machine against your own files.
       options:
+        - Yes, I can attach a sanitized sample (the app's "Help add your bank" makes one)
         - Yes, I can run a build locally and report what breaks
-        - Yes, I can attach a sample sanitized with scripts/sanitize_statement.py
         - "No, I'm just registering interest"
     validations:
       required: true

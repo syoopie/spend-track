@@ -14,6 +14,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { useSettings } from '../api/hooks'
 import { Card } from '../components/Card'
 import { PageShell } from '../components/PageShell'
 
@@ -165,6 +166,10 @@ function NeedsReviewBadge() {
 }
 
 export function Guide() {
+  // Never a retyped list. This paragraph claimed DBS and OCBC were unsupported
+  // for as long as they have been supported, which is what a hand-maintained
+  // copy of `parsing_implemented` does to you.
+  const supportedBanks = useSettings().data?.supported_banks ?? []
   return (
     <PageShell
       title="User Guide"
@@ -218,10 +223,12 @@ export function Guide() {
                 term: "What's supported",
                 children: (
                   <>
-                    UOB account and credit card e-statements parse today. DBS and OCBC statements are recognized
-                    and reported as "detected, but not supported yet" — their parsers are planned, not missing by
-                    design. Anything else is reported as an unrecognized format rather than silently misparsed.
-                    The current list is on the <strong className="text-text">Settings</strong> page, under Region.
+                    {supportedBanks.length > 0 ? `${supportedBanks.join(', ')} ` : 'The banks listed under Region '}
+                    e-statements parse today, account and credit card alike. Anything else is reported as an
+                    unrecognized format rather than silently misparsed. If yours is missing,{' '}
+                    <strong className="text-text">Help add your bank</strong> at the bottom of the sidebar turns one
+                    of your own statements into a sample a parser can be written against, with your details taken
+                    out first.
                   </>
                 ),
               },

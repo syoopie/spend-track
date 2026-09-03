@@ -6,6 +6,7 @@ import { Sidebar } from './components/Sidebar'
 import { UploadProvider } from './components/UploadProvider'
 import { Dashboard } from './pages/Dashboard'
 import { Contacts } from './pages/Contacts'
+import { Contribute } from './pages/Contribute'
 import { Rules } from './pages/Rules'
 import { DefaultRules } from './pages/DefaultRules'
 import { Guide } from './pages/Guide'
@@ -55,6 +56,7 @@ export default function App() {
           <Route path="/rules" element={<Rules />} />
           <Route path="/default-rules" element={<DefaultRules />} />
           <Route path="/guide" element={<Guide />} />
+          <Route path="/contribute" element={<Contribute />} />
           <Route path="/settings" element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

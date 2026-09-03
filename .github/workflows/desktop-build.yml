@@ -124,6 +124,16 @@ jobs:
           curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8123/api/nope | grep -q 404 || fail "an unmatched /api path did not 404"
           echo "Unmatched API paths still 404"
 
+          # reportlab is reached only through the Contribute page's sanitizer,
+          # and only at runtime. Nothing else in this job would notice
+          # PyInstaller having missed it or one of its font-data hooks.
+          sample="../PDF Examples (Sanitized)/UOB/Account Statements/SampleAccountStatement_Feb2024.pdf"
+          [ -f "$sample" ] || fail "the sanitizer smoke fixture is missing from the checkout"
+          curl -sf -X POST http://127.0.0.1:8123/api/contribute/sanitize \
+            -F "file=@$sample" -F "bank=UOB" \
+            | grep -q '"pdf_base64": *"' || fail "the sanitizer returned no file - reportlab is probably not bundled"
+          echo "The sanitizer runs inside the bundle"
+
           kill $pid 2>/dev/null || true
 
       - name: Zip the macOS app bundle

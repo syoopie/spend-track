@@ -1,4 +1,4 @@
-import { BookOpen, LayoutGrid, ListChecks, Pin, PinOff, Settings as SettingsIcon, SlidersHorizontal, Upload, Users } from 'lucide-react'
+import { BookOpen, HeartHandshake, LayoutGrid, ListChecks, Pin, PinOff, Settings as SettingsIcon, SlidersHorizontal, Upload, Users } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useSettings } from '../api/hooks'
@@ -194,7 +194,26 @@ export function Sidebar() {
         ))}
 
         <div className="flex-1" />
-        <div className="flex items-start text-2xs text-muted-2 pt-2.5 border-t border-border">
+        {/* Deliberately not a NAV_ITEMS row. The six above are things you do
+            weekly; this is a thing you do once, if ever. It keeps the w-9
+            icon slot so the collapsed rail still lines up, but drops the
+            accent bar and the tinted active background that make those six
+            read as destinations. */}
+        <NavLink
+          to="/contribute"
+          title="Help add your bank"
+          className={({ isActive }) =>
+            `flex items-start text-2xs pt-2.5 pb-2 border-t border-border ${isActive ? 'text-text' : 'text-muted-2 hover:text-text'}`
+          }
+        >
+          <div className="w-9 h-4 flex items-center justify-center shrink-0">
+            <HeartHandshake size={13} className="shrink-0" />
+          </div>
+          <div className={`overflow-hidden shrink-0 ${expanded ? 'w-auto' : 'w-0'}`}>
+            <div className="w-[160px] leading-snug">Help add your bank</div>
+          </div>
+        </NavLink>
+        <div className="flex items-start text-2xs text-muted-2">
           <div className="w-9 h-4 flex items-center justify-center shrink-0">
             <span className={`w-1.5 h-1.5 rounded-full ${usingCloudAi ? 'bg-accent' : 'bg-success'}`} />
           </div>

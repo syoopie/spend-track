@@ -21,6 +21,11 @@
   --color-danger-fg: #fff;
   --color-danger-text: oklch(72% 0.16 25);
   --color-danger-border: oklch(45% 0.15 25);
+  /* Danger was the one semantic state missing the -surface half of the
+     pair docs/ui-conventions.md says all four have. Guide.tsx's danger Note
+     has been asking for it (and silently rendering no background) since it
+     was written. */
+  --color-danger-surface: oklch(22% 0.05 25);
   --color-danger-surface-border: oklch(40% 0.08 25);
   --color-danger-badge-bg: oklch(28% 0.06 25);
   --color-danger-badge-fg: oklch(76% 0.15 25);
