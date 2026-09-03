@@ -6,6 +6,7 @@ import './index.css'
 import App from './App.tsx'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { ToastProvider } from './components/Toast'
+import { UndoableDeleteProvider } from './components/UndoableDeleteProvider'
 import { applyAccentColor, loadStoredAccentColor } from './lib/accentColor'
 
 applyAccentColor(loadStoredAccentColor())
@@ -27,11 +28,13 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
-        <BrowserRouter>
-          <ErrorBoundary>
-            <App />
-          </ErrorBoundary>
-        </BrowserRouter>
+        <UndoableDeleteProvider>
+          <BrowserRouter>
+            <ErrorBoundary>
+              <App />
+            </ErrorBoundary>
+          </BrowserRouter>
+        </UndoableDeleteProvider>
       </ToastProvider>
     </QueryClientProvider>
   </StrictMode>,
