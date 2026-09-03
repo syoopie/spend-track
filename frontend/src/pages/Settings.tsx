@@ -17,6 +17,7 @@ import {
   useSettings,
   useSourceFiles,
   useTransactions,
+  useVersion,
 } from '../api/hooks'
 import type { Account } from '../api/types'
 import { AiSection } from '../components/AiSection'
@@ -328,6 +329,7 @@ function fileManagerName(): string {
 
 export function Settings() {
   const settingsQ = useSettings()
+  const versionQ = useVersion()
   const [relocateOpen, setRelocateOpen] = useState(false)
   const [resetOpen, setResetOpen] = useState(false)
   const [deleteScope, setDeleteScope] = useState<DeleteScope>(null)
@@ -357,6 +359,40 @@ export function Settings() {
 
   return (
     <PageShell title="Settings & Storage" icon={SettingsIcon} maxWidth="max-w-4xl">
+      <Card className="mb-4">
+        <div className="text-md font-semibold font-display mb-3.5">About</div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-3">
+          <div>
+            <div className="text-xs text-muted">Version</div>
+            <div className="text-md font-mono">{versionQ.data?.current ?? '—'}</div>
+          </div>
+        </div>
+        {versionQ.data?.update_available && versionQ.data.latest ? (
+          <div className="text-xs text-warning-text mb-1">
+            SpendTrack {versionQ.data.latest} is available.{' '}
+            <a
+              href={versionQ.data.release_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-inherit font-semibold underline underline-offset-2"
+            >
+              Download
+            </a>
+          </div>
+        ) : versionQ.data?.latest ? (
+          <div className="text-xs text-muted mb-1">You&apos;re on the latest release.</div>
+        ) : versionQ.data ? (
+          // Only once the answer is in - while the query is in flight there
+          // is nothing to report, and "couldn't check" would be a lie for
+          // the first moment of every page load.
+          <div className="text-xs text-muted mb-1">Couldn&apos;t check for updates.</div>
+        ) : null}
+        <div className="text-2xs text-muted-2">
+          SpendTrack checks GitHub for a newer release once when it starts. It&apos;s an anonymous request to a public
+          API — nothing from your data is sent.
+        </div>
+      </Card>
+
       <AppearanceSection />
 
       <AiSection settings={settingsQ.data} />

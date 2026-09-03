@@ -3,6 +3,7 @@ import { useAiStatus, useSettings } from './api/hooks'
 import { NarrowWindowNotice } from './components/NarrowWindowNotice'
 import { PendingReviewBanner } from './components/PendingReviewBanner'
 import { Sidebar } from './components/Sidebar'
+import { UpdateAvailableNotice } from './components/UpdateAvailableNotice'
 import { UploadProvider } from './components/UploadProvider'
 import { Dashboard } from './pages/Dashboard'
 import { Contacts } from './pages/Contacts'
@@ -26,6 +27,7 @@ function MainLayout() {
   return (
     <div className="flex flex-col h-screen w-full overflow-hidden">
       <NarrowWindowNotice />
+      <UpdateAvailableNotice />
       <div className="flex flex-1 min-h-0 w-full overflow-hidden">
         <Sidebar />
         {/* PendingReviewBanner sits in its own non-scrolling row above the

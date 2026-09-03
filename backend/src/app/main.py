@@ -18,6 +18,7 @@ from app.routers import (
     settings,
     statements,
     transactions,
+    version,
 )
 
 
@@ -48,6 +49,7 @@ app.include_router(ai_settings.router)
 app.include_router(data_lifecycle.router)
 app.include_router(dashboard.router)
 app.include_router(contribute.router)
+app.include_router(version.router)
 
 
 @app.get("/api/health")

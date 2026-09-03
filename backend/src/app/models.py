@@ -404,6 +404,15 @@ class SettingsOut(BaseModel):
     anthropic_api_key_last4: str | None
 
 
+class VersionOut(BaseModel):
+    current: str
+    #: The newest release on GitHub, or None when the check hasn't completed,
+    #: failed, or found no release at all. Not an error the UI has to report.
+    latest: str | None
+    update_available: bool
+    release_url: str
+
+
 class AiSettingsOut(BaseModel):
     ai_enabled: bool
     ai_provider: AiProviderKind

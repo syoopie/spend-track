@@ -52,6 +52,8 @@ No installers, no accounts, no command line. Grab the file for your computer fro
 
 A small window opens showing where your data is stored and the address the app is running at, and your browser opens on the dashboard. **Closing that window closes the app.** Your data is saved as you go.
 
+When it starts, the app asks GitHub once whether there's a newer release, and shows a banner if there is. That's an anonymous request to the same public releases page linked above — no account, no identifier, and nothing about your transactions. The current version and that explanation are in **Settings → About**.
+
 <details>
 <summary>Why does my computer warn me about it?</summary>
 

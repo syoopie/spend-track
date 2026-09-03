@@ -13,7 +13,7 @@
 import sys
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules, copy_metadata
 
 ROOT = Path(SPECPATH).resolve().parents[1]  # backend/packaging -> repo root
 BACKEND = ROOT / "backend"
@@ -36,6 +36,9 @@ datas = [
 # pdfminer ships character-map tables as package data; without them
 # pdfplumber raises on the first CJK-ish glyph it meets in a statement.
 datas += collect_data_files("pdfminer")
+# importlib.metadata.version("spendtrack") reads this at runtime for the
+# update check; without the .dist-info it raises PackageNotFoundError.
+datas += copy_metadata("spendtrack")
 
 hiddenimports = collect_submodules("uvicorn")
 

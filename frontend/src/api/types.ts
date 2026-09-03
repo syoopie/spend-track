@@ -340,6 +340,14 @@ export interface RevealResult {
   error: string | null
 }
 
+export interface VersionStatus {
+  current: string
+  /** null when the check hasn't completed, failed, or found no release. */
+  latest: string | null
+  update_available: boolean
+  release_url: string
+}
+
 export interface PathCheckResult {
   valid: boolean
   resolved_path: string

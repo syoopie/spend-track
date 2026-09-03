@@ -39,6 +39,7 @@ import type {
   Transaction,
   TransactionUpdateRequest,
   Category,
+  VersionStatus,
 } from './types'
 
 // Every mutation below that fires a user-visible toast falls back to this
@@ -614,6 +615,18 @@ export function useCategories(includeHidden = false) {
 
 export function useSettings() {
   return useQuery({ queryKey: ['settings'], queryFn: () => api.get<Settings>('/settings') })
+}
+
+// The one outbound check in the app - see backend app/updates.py. Fetched
+// once on load (staleTime Infinity, no retry); the backend caches the
+// GitHub call for the process lifetime anyway.
+export function useVersion() {
+  return useQuery({
+    queryKey: ['version'],
+    queryFn: () => api.get<VersionStatus>('/version'),
+    staleTime: Infinity,
+    retry: false,
+  })
 }
 
 // AI provider configuration lives under its own /api/ai prefix, not nested
