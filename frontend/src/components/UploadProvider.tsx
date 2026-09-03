@@ -1,5 +1,5 @@
 import { FileUp } from 'lucide-react'
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useCurrentStagingBatch, useUploadStatement } from '../api/hooks'
 import { ApiError } from '../api/client'
 import { Button } from './Button'
@@ -11,6 +11,12 @@ interface UploadContextValue {
   openDialog: () => void
   openReview: () => void
   hasPendingBatch: boolean
+  // A screen with its own drop target (Contribute) has to be able to switch
+  // the app-wide one off, or dropping a PDF there would start a real import
+  // into the user's history instead. The window listeners keep running and
+  // keep calling preventDefault - they just stop claiming the file - because
+  // without that the browser navigates away from the app to the dropped PDF.
+  setGlobalDropSuspended: (suspended: boolean) => void
 }
 
 const UploadContext = createContext<UploadContextValue | null>(null)
@@ -130,27 +136,45 @@ export function UploadProvider({ children }: { children: ReactNode }) {
   handleFilesRef.current = handleFiles
   const hasPendingBatchRef = useRef(hasPendingBatch)
   hasPendingBatchRef.current = hasPendingBatch
+  const globalDropSuspendedRef = useRef(false)
+  const setGlobalDropSuspended = useCallback((suspended: boolean) => {
+    globalDropSuspendedRef.current = suspended
+    if (suspended) {
+      dragCounter.current = 0
+      setDragActive(false)
+    }
+  }, [])
 
   useEffect(() => {
+    // preventDefault runs before every early return below, not after: a drag
+    // the app declines to handle still has to be cancelled, or the browser
+    // does its own default and navigates the tab to the dropped PDF, losing
+    // whatever was on screen.
+    function ignoring() {
+      return globalDropSuspendedRef.current || hasPendingBatchRef.current
+    }
     function onDragEnter(e: DragEvent) {
-      if (!hasFiles(e) || hasPendingBatchRef.current) return
+      if (!hasFiles(e)) return
       e.preventDefault()
+      if (ignoring()) return
       dragCounter.current++
       setDragActive(true)
     }
     function onDragOver(e: DragEvent) {
-      if (!hasFiles(e) || hasPendingBatchRef.current) return
+      if (!hasFiles(e)) return
       e.preventDefault()
     }
     function onDragLeave(e: DragEvent) {
       if (!hasFiles(e)) return
       e.preventDefault()
+      if (ignoring()) return
       dragCounter.current = Math.max(0, dragCounter.current - 1)
       if (dragCounter.current === 0) setDragActive(false)
     }
     function onDrop(e: DragEvent) {
-      if (!hasFiles(e) || hasPendingBatchRef.current) return
+      if (!hasFiles(e)) return
       e.preventDefault()
+      if (ignoring()) return
       dragCounter.current = 0
       setDragActive(false)
       const files = Array.from(e.dataTransfer?.files ?? [])
@@ -178,6 +202,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
         },
         openReview: () => setReviewOpen(true),
         hasPendingBatch,
+        setGlobalDropSuspended,
       }}
     >
       {children}

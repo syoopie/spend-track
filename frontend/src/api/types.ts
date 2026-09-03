@@ -365,6 +365,39 @@ export interface DeleteScopeResult {
   deleted_count: number
 }
 
+// --- contribute (sanitize a statement for sharing) ------------------------
+
+export interface ParsedAccountSummary {
+  account_type: string
+  transaction_count: number
+}
+
+export type SanitizeParseStatus = 'parsed' | 'unsupported' | 'error'
+
+export interface SanitizeResult {
+  problems: string[]
+  kept_words: string[]
+  oddities: string[]
+  page_count: number
+  word_count: number
+  parse_status: SanitizeParseStatus
+  parse_detail: string
+  detected_bank: string | null
+  account_summaries: ParsedAccountSummary[]
+  suggested_filename: string
+  pdf_base64: string | null
+  refusal_reason: 'no_text' | null
+}
+
+export interface SanitizeRequest {
+  /** Read once from the picked File - see Contribute.tsx on why not the File. */
+  bytes: Blob
+  bank: string
+  password: string
+  redact: string[]
+  redactAmounts: boolean
+}
+
 export interface MetricCards {
   net_expenditure: number
   total_inflow: number

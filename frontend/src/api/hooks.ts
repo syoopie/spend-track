@@ -30,6 +30,8 @@ import type {
   RuleQuickCreateRequest,
   RuleRerunRowSnapshot,
   RuleUpdateRequest,
+  SanitizeRequest,
+  SanitizeResult,
   Settings,
   SourceFileSummary,
   StagingBatch,
@@ -725,6 +727,31 @@ export function useDeleteAllTransactions() {
     onSuccess: (data) => {
       qc.invalidateQueries()
       toast.success(`${data.deleted_count} transaction${data.deleted_count === 1 ? '' : 's'} deleted.`)
+    },
+  })
+}
+
+// --- contribute -------------------------------------------------------------
+
+// The name the bytes travel under. The name the user picked off their own
+// disk identifies them as much as the contents do, so it never leaves the
+// page - not to the server, not into the response, not into the download.
+const SANITIZE_UPLOAD_FILENAME = 'statement.pdf'
+
+// No cache invalidation: sanitizing reads a file the user picked and writes
+// nothing the rest of the app can see. No toast either - Contribute.tsx
+// renders the whole result inline, and a corner toast saying "done" over a
+// screen whose entire job is showing what happened would be noise.
+export function useSanitizeStatement() {
+  return useMutation({
+    mutationFn: ({ bytes, bank, password, redact, redactAmounts }: SanitizeRequest) => {
+      const fields: [string, string][] = [
+        ['bank', bank],
+        ['redact_amounts', redactAmounts ? 'true' : 'false'],
+      ]
+      if (password) fields.push(['password', password])
+      for (const word of redact) fields.push(['redact', word])
+      return api.uploadFields<SanitizeResult>('/contribute/sanitize', bytes, SANITIZE_UPLOAD_FILENAME, fields)
     },
   })
 }
