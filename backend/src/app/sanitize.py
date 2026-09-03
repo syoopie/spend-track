@@ -346,9 +346,10 @@ def read_pages(data: bytes, password: str | None = None) -> list[Page]:
     """Every page as (width, height, words, dropped), decrypting in memory.
 
     Propagates `EncryptedPdfError` / `IncorrectPasswordError` rather than
-    turning them into a message. A `SystemExit` here would be a `BaseException`
-    raised inside an anyio worker thread, which walks straight past Starlette's
-    exception middleware; the CLI is the only caller entitled to exit.
+    turning them into a message. Exiting the process here would raise a
+    `BaseException` inside an anyio worker thread, which walks straight past
+    Starlette's exception middleware; only the CLI is entitled to exit, and a
+    test asserts that nothing in this module can.
     """
     pdf = open_pdf(data, password)
 
@@ -508,7 +509,9 @@ def verify(
     for literal in literals:
         for part in literal.split():
             if len(part) >= 3 and part.lower() in output_name.lower():
-                problems.append(f'the output file name "{output_name}" contains "{part}" - pass --output to rename it')
+                # Phrased without naming a flag: this same sentence is read by
+                # someone who clicked a button and has no --output to pass.
+                problems.append(f'the output file name "{output_name}" contains "{part}" - rename it')
     return problems
 
 
