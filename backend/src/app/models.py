@@ -149,6 +149,40 @@ class CommitResult(BaseModel):
     refund_pairs_created: int
 
 
+class ParsedAccountSummary(BaseModel):
+    account_type: str
+    transaction_count: int
+
+
+class SanitizeResultOut(BaseModel):
+    """What the Contribute page shows about one sanitizing run.
+
+    `problems` being non-empty does not empty `pdf_base64`: the page warns and
+    still offers the download (see routers/contribute.py). The one case that
+    withholds the file is `refusal_reason` - a PDF with no extractable text
+    sanitizes to a blank page that passes every check vacuously, and handing
+    that over reads as "it worked".
+
+    `parse_detail` may quote the contributor's real figures, because a
+    reconciliation failure prints both the statement's printed total and the
+    sum the parser read. It is for the screen only. `account_summaries` and
+    `detected_bank` come from parser output and are safe anywhere.
+    """
+
+    problems: list[str]
+    kept_words: list[str]
+    oddities: list[str]
+    page_count: int
+    word_count: int
+    parse_status: Literal["parsed", "unsupported", "error"]
+    parse_detail: str
+    detected_bank: str | None
+    account_summaries: list[ParsedAccountSummary]
+    suggested_filename: str
+    pdf_base64: str | None
+    refusal_reason: Literal["no_text"] | None
+
+
 class AccountOut(BaseModel):
     id: str
     bank_name: str

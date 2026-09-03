@@ -21,6 +21,11 @@ dependencies = [
     # 48.x is the last release with a universal2 wheel. Lift this once upstream
     # ships x86_64/universal2 wheels again, or once the Intel build is dropped.
     "cryptography<49",
+    # Used at runtime by app/sanitize.py, which draws the sanitized statement
+    # a contributor downloads from the Contribute page - not just by the
+    # sample generators under scripts/. Dev-only would leave the packaged
+    # desktop build unable to run the feature at all.
+    "reportlab>=4.0",
 ]
 
 [project.scripts]
@@ -36,7 +41,6 @@ module-name = "app"
 [dependency-groups]
 dev = [
     "pytest>=8.3",
-    "reportlab>=4.0",
 ]
 # Only needed to produce the double-clickable download (scripts/build_desktop.py);
 # kept out of `dev` so an ordinary `uv sync` doesn't pull a build toolchain.

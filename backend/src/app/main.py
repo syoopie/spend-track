@@ -11,6 +11,7 @@ from app.routers import (
     ai_settings,
     categories,
     contacts,
+    contribute,
     dashboard,
     data_lifecycle,
     rules,
@@ -46,6 +47,7 @@ app.include_router(settings.router)
 app.include_router(ai_settings.router)
 app.include_router(data_lifecycle.router)
 app.include_router(dashboard.router)
+app.include_router(contribute.router)
 
 
 @app.get("/api/health")
