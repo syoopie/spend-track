@@ -3,16 +3,17 @@
 
 Two kinds of fixture live there now:
 
-* `SampleConsolidatedStatement_{Dec2023,Nov2024}.pdf` are **sanitized from
-  real DBS consolidated eStatements** - `scripts/sanitize_statement.py`
-  rebuilt each PDF keeping the geometry, the bank's own wording and the
-  figures, and replacing every name, address, account number and counterparty
-  with its shape. They prove the parser reads the layout DBS actually prints.
+* **Sanitized from real statements** - `scripts/sanitize_statement.py` rebuilt
+  each PDF keeping the geometry, the bank's own wording and the figures, and
+  replacing every name, address, account number and counterparty with its
+  shape. They prove the parser reads the layout the bank actually prints. DBS's
+  `SampleConsolidatedStatement_{Dec2023,Nov2024}.pdf` and OCBC's
+  `Card Statements/SampleCardStatement_{Jul,Aug}2026.pdf` are these.
 * Everything else is **synthetic**, drawn by `scripts/generate_dbs_ocbc_samples.py`.
-  OCBC has no real sample yet, so its fixtures still only show the parser works
-  on the layout it was written from - read that script's docstring for what
-  that does and doesn't buy. The DBS synthetic fixtures were updated to the
-  real layout once the real statements arrived.
+  OCBC's deposit-account fixture is still layout-only - no real sample yet - so
+  it only shows the parser works on the layout it was written from. The DBS
+  synthetic fixtures, and the OCBC card parser, were rebuilt to the real layout
+  once real statements arrived.
 
 The reconciliation tests are the ones that would survive being pointed at any
 real statement, which is why the parsers refuse to return figures that don't
@@ -200,19 +201,73 @@ def test_ocbc_account_statement_excludes_balance_bf_and_cf():
         assert "BALANCE C/F" not in txn.raw_description
 
 
-def test_ocbc_card_statement_reads_numeric_year_less_dates():
-    """OCBC card rows date as "02/03", not DBS and UOB's "05 MAR"."""
-    result = _parse(f"{OCBC_DIR}/Card Statements/SampleCardStatement_Mar2024.pdf")
+OCBC_CARD_DIR = f"{OCBC_DIR}/Card Statements"
+
+
+@pytest.fixture
+def _ocbc_card_today(monkeypatch):
+    """The OCBC card fixtures are sanitized from real statements whose summary
+    box - the only place the statement date is printed - the contributor
+    redacted. The parser falls back to resolving each year-less date against
+    today, so the test pins today to just after the August statement."""
+    import datetime as _dt
+
+    monkeypatch.setattr("app.parsing.columnar._today", lambda: _dt.date(2026, 9, 4))
+
+
+def test_ocbc_card_statement_reads_the_real_layout(_ocbc_card_today):
+    """Real OCBC card layout: the card heading sits below the table header,
+    dates are numeric and year-less ("19/06"), and a credit is bracketed
+    rather than "CR"-suffixed."""
+    result = _parse(f"{OCBC_CARD_DIR}/SampleCardStatement_Jul2026.pdf")
+    assert result.bank_name == "OCBC"
     (acc,) = result.accounts
     assert acc.is_card is True
-    assert acc.account_number == "0000-4444-5555-6666"
-    assert len(acc.transactions) == 5
+    assert acc.account_type == "OCBC INFINITY CASHBACK"
+    assert acc.account_number_masked == "••3009"
+    assert len(acc.transactions) == 44
 
-    dates = {t.raw_description: t.transaction_date for t in acc.transactions}
-    assert dates["NTUC FAIRPRICE SINGAPORE SG"] == "2024-03-01"
-    assert dates["FOODIE EXPRESS SINGAPORE SG"] == "2024-02-20"
+    payment = acc.transactions[0]
+    assert payment.raw_description.startswith("PAYMENT BY")
+    assert payment.amount == 1133.96  # bracketed on the statement -> money in
+    assert payment.transaction_date == "2026-07-05"
+
+    assert acc.transactions[1].transaction_date == "2026-06-19"  # "19/06", resolved to 2026
+    assert min(t.amount for t in acc.transactions) == -1004.00  # the biggest single charge
+
     for txn in acc.transactions:
         assert "LAST MONTH" not in txn.raw_description.upper()
+        assert not txn.raw_description.upper().startswith("SUBTOTAL")
+
+    # The `CCY CONVERSION FEE` / `FOR: 20.98 SGD` two-line row is kept whole.
+    ccy = next(t for t in acc.transactions if t.raw_description.endswith("FOR: 20.98 SGD"))
+    assert ccy.amount == -0.21
+
+
+def test_ocbc_card_statement_reconciles_against_last_months_balance(_ocbc_card_today):
+    """The parse only returns because opening balance + charges - credits
+    equalled the SUBTOTAL each statement prints (`columnar._reconcile`); these
+    pin the sums that satisfied it."""
+    for name, opening, charges, credits, subtotal in [
+        ("SampleCardStatement_Jul2026.pdf", 1133.96, 1530.39, 1146.46, 1517.89),
+        ("SampleCardStatement_Aug2026.pdf", 1517.89, 4659.54, 1603.99, 4573.44),
+    ]:
+        (acc,) = _parse(f"{OCBC_CARD_DIR}/{name}").accounts
+        out = round(sum(-t.amount for t in acc.transactions if t.amount < 0), 2)
+        into = round(sum(t.amount for t in acc.transactions if t.amount > 0), 2)
+        assert (out, into) == (charges, credits)
+        assert round(opening + out - into, 2) == subtotal
+
+
+def test_ocbc_card_identity_survives_a_redacted_card_number(_ocbc_card_today):
+    """July prints the full card number, August has it redacted out. Both must
+    resolve to the same account, so the key is the card product name, not the
+    number."""
+    jul = _parse(f"{OCBC_CARD_DIR}/SampleCardStatement_Jul2026.pdf").accounts[0]
+    aug = _parse(f"{OCBC_CARD_DIR}/SampleCardStatement_Aug2026.pdf").accounts[0]
+    assert jul.account_number == aug.account_number == "OCBC INFINITY CASHBACK"
+    assert jul.account_number_masked == "••3009"
+    assert aug.account_number_masked == "••••"
 
 
 # --- the reconciliation guard itself --------------------------------------
@@ -317,4 +372,6 @@ def test_every_card_statement_parses_a_card_with_transactions(path):
     for acc in result.accounts:
         assert acc.is_card is True
         assert acc.transactions
-        assert acc.account_number.startswith("0000-")  # placeholder card numbers only
+        # No real name or number: a synthetic fixture's card number is a
+        # "0000-" placeholder, a sanitized real one keys on the card product.
+        assert acc.account_number.startswith("0000-") or "OCBC" in acc.account_number

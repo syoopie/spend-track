@@ -120,7 +120,7 @@ CHROME_VOCABULARY = frozenset(
     withdrawal withdrawals balance balances credit debit card cards
     transaction transactions details detail description descriptions
     date dates period from to as at value posting post trans effective
-    total totals subtotal sub grand previous new opening closing
+    total totals subtotal sub grand previous new opening closing last month months
     brought carried forward b/f c/f bf cf
     minimum payment due paid amount amounts limit available outstanding
     currency singapore dollar sgd usd myr eur gbp cr dr db
