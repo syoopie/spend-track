@@ -192,6 +192,11 @@ def _shape_of(original: str) -> str:
     return "".join("X" if c.isupper() else "x" if c.isalpha() else c for c in original)
 
 
+#: Punctuation that sits at the edge of a word without belonging to it, and
+#: that a round trip through the PDF is free to move between tokens.
+EDGE_PUNCTUATION = "(),.:;/-"
+
+
 def is_chrome(text: str) -> bool:
     """Is this word part of the bank's template rather than the customer's data?
 
@@ -201,7 +206,7 @@ def is_chrome(text: str) -> bool:
     second form reduces "Card(s)" to the "cards" in the vocabulary.
     """
     lowered = text.lower()
-    if lowered.strip("(),.:;/-") in CHROME_VOCABULARY:
+    if lowered.strip(EDGE_PUNCTUATION) in CHROME_VOCABULARY:
         return True
     return "".join(c for c in lowered if c.isalnum()) in CHROME_VOCABULARY
 
@@ -487,12 +492,23 @@ def verify(
         tokens = [w["text"] for page in doc.pages for w in page.extract_words()]
         text = "\n".join(page.extract_text() or "" for page in doc.pages).lower()
 
+    # Membership in `written` is checked against the token's edges stripped as
+    # well as whole. A word's boundaries do not survive the round trip intact:
+    # punctuation that redact_line passes through verbatim (it has no
+    # alphanumeric character, so there is nothing to replace) is drawn as its
+    # own token, and the gap back to the replacement beside it is routinely
+    # under the 3pt threshold pdfplumber falls back to, so the two re-read as
+    # one. Every real DBS statement hit this - the footer's URL came back as
+    # "xxxx://xx.xxx.xxx/xx-xxxxxxxxxx." and was reported as a leak, on a file
+    # in which nothing had leaked. Only the edges are forgiven, so no
+    # alphanumeric character can ever be excused by it.
     survivors = sorted(
         {
             token
             for token in tokens
             if any(c.isalnum() for c in token)
             and token not in written
+            and token.strip(EDGE_PUNCTUATION) not in written
             and not is_money(token)
             and not keeps(token, keep)
         }

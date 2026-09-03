@@ -34,9 +34,9 @@ from app.models import ParsedAccountSummary, SanitizeResultOut
 router = APIRouter(prefix="/api/contribute", tags=["contribute"])
 
 #: A statement is a few hundred KB. The cap exists so a mistaken pick (a video,
-#: a disk image) fails with a sentence instead of spooling to disk and timing
-#: out - upload_statement has no equivalent, but it also does not base64 the
-#: file back into a JSON body.
+#: a disk image) fails with a sentence rather than being read, rebuilt and
+#: base64'd back into a JSON body - upload_statement has no equivalent because
+#: it hands nothing back.
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 
 

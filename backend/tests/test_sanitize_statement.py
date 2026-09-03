@@ -161,6 +161,40 @@ def test_the_verifier_refuses_a_file_with_an_unaccounted_word(tmp_path):
     assert not any("BALANCE" in p or "1,234.56" in p for p in problems)
 
 
+def test_the_verifier_forgives_punctuation_the_round_trip_moved(tmp_path):
+    """A replacement can come back with a neighbouring full stop glued on.
+
+    redact_line passes a bare "." through verbatim - there is no alphanumeric
+    character in it to replace - and render_pdf draws no space between two
+    words whose boxes touch, so the two re-read as one token that is not in
+    `written` by exact match. Every real DBS statement hit this on the footer's
+    URL and reported a leak on a file in which nothing had leaked, which is the
+    worst possible failure for a check whose whole value is being believed.
+    """
+    replacement = "xxxx://xx.xxx.xxx/xx-xxxxxxxx"
+    joined = tmp_path / "joined.pdf"
+    c = canvas.Canvas(str(joined))
+    c.drawString(36, 800, f"{replacement}.")
+    c.save()
+    assert sanitize.verify(joined.read_bytes(), frozenset(), [], "s.pdf", written={replacement}) == []
+
+
+def test_the_verifier_still_refuses_a_replacement_with_real_text_attached(tmp_path):
+    """The forgiveness above covers the token's edges and nothing else.
+
+    Only leading and trailing punctuation is stripped before the `written`
+    lookup, so no alphanumeric character can ride in on a replacement it
+    happens to sit beside.
+    """
+    replacement = "xxxx://xx.xxx.xxx/xx-xxxxxxxx"
+    leaky = tmp_path / "leaky.pdf"
+    c = canvas.Canvas(str(leaky))
+    c.drawString(36, 800, f"{replacement}Kamala")
+    c.save()
+    problems = sanitize.verify(leaky.read_bytes(), frozenset(), [], "s.pdf", written={replacement})
+    assert any("Kamala" in p for p in problems)
+
+
 def test_a_file_name_carrying_the_contributors_name_fails_verification(tmp_path):
     """The file name travels with the file. "JaneWong-Jan2024.pdf" identifies
     its owner as well as anything inside it does."""
