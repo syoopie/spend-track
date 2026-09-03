@@ -1,13 +1,22 @@
-"""Regression tests for the DBS and OCBC parsers, against the synthetic
-fixtures in `PDF Examples (Sanitized)/{DBS,OCBC}/`.
+"""Regression tests for the DBS and OCBC parsers, against the fixtures in
+`PDF Examples (Sanitized)/{DBS,OCBC}/`.
 
-Read `scripts/generate_dbs_ocbc_samples.py`'s module docstring for what these
-fixtures can and can't prove: they were drawn from the same understanding of
-the layout the parsers were written from, so they show the parsers work on
-that layout - they do not show that layout is what DBS and OCBC actually
-print. The reconciliation tests below are the part that would survive being
-pointed at a real statement, which is why the parsers refuse to return figures
-that don't reconcile at all (see `parsing/columnar.py`).
+Two kinds of fixture live there now:
+
+* `SampleConsolidatedStatement_{Dec2023,Nov2024}.pdf` are **sanitized from
+  real DBS consolidated eStatements** - `scripts/sanitize_statement.py`
+  rebuilt each PDF keeping the geometry, the bank's own wording and the
+  figures, and replacing every name, address, account number and counterparty
+  with its shape. They prove the parser reads the layout DBS actually prints.
+* Everything else is **synthetic**, drawn by `scripts/generate_dbs_ocbc_samples.py`.
+  OCBC has no real sample yet, so its fixtures still only show the parser works
+  on the layout it was written from - read that script's docstring for what
+  that does and doesn't buy. The DBS synthetic fixtures were updated to the
+  real layout once the real statements arrived.
+
+The reconciliation tests are the ones that would survive being pointed at any
+real statement, which is why the parsers refuse to return figures that don't
+reconcile against a total the statement prints for itself (`parsing/columnar.py`).
 """
 
 import glob
@@ -110,6 +119,36 @@ def test_dbs_consolidated_statement_splits_two_accounts_on_one_page():
     assert all(t.amount != 200.00 for t in multiplier.transactions)
 
 
+def test_dbs_real_consolidated_statement_parses_and_reconciles():
+    """`SampleConsolidatedStatement_{Dec2023,Nov2024}.pdf` are sanitized from
+    real DBS consolidated eStatements (see the module docstring). They cover
+    what the synthetic fixtures cannot: a statement spanning several pages, a
+    per-page `Balance Brought/Carried Forward SGD` pair that is not a
+    transaction, a dormant SRS section with an empty table, and the real
+    `Total Balance Carried Forward in SGD:` row the reconciliation reads."""
+    result = _parse(f"{DBS_DIR}/Account Statements/SampleConsolidatedStatement_Dec2023.pdf")
+    assert result.bank_name == "DBS"
+    (acc,) = result.accounts  # the empty SRS section is dropped
+    assert acc.account_type == "DBS Multiplier Account"
+    assert acc.is_card is False
+    assert len(acc.transactions) == 50
+
+    # Real transaction rows carry the year ("01/12/2023"), so it is read
+    # straight off the row rather than resolved from the statement date.
+    assert acc.transactions[0].transaction_date == "2023-12-01"
+    assert acc.transactions[-1].transaction_date == "2023-12-31"
+
+    withdrawals = round(sum(-t.amount for t in acc.transactions if t.amount < 0), 2)
+    deposits = round(sum(t.amount for t in acc.transactions if t.amount > 0), 2)
+    assert (withdrawals, deposits) == (1851.78, 2554.86)
+    assert acc.transactions[-1].balance == 5264.65
+
+    nov = _parse(f"{DBS_DIR}/Account Statements/SampleConsolidatedStatement_Nov2024.pdf")
+    (nov_acc,) = nov.accounts
+    assert len(nov_acc.transactions) == 38
+    assert nov_acc.transactions[-1].balance == 8500.38
+
+
 def test_dbs_card_statement_reads_credits_and_charges():
     result = _parse(f"{DBS_DIR}/Card Statements/SampleCardStatement_Mar2024.pdf")
     (acc,) = result.accounts
@@ -193,19 +232,20 @@ def test_a_statement_whose_rows_do_not_match_its_printed_total_is_refused():
     c.drawString(36, 760, "Details as at 31 Mar 2024")
     c.drawString(36, 730, "DBS Multiplier Account")
     c.drawString(36, 715, "Account No. 123-456789-0")
-    c.drawString(50, 690, "DATE")
-    c.drawString(145, 690, "DESCRIPTION")
-    c.drawRightString(405, 690, "WITHDRAWAL")
-    c.drawRightString(478, 690, "DEPOSIT")
-    c.drawRightString(550, 690, "BALANCE")
-    c.drawString(50, 670, "03 Mar")
+    c.drawString(50, 690, "Date")
+    c.drawString(145, 690, "Description")
+    c.drawRightString(405, 690, "Withdrawal (-)")
+    c.drawRightString(478, 690, "Deposit (+)")
+    c.drawRightString(550, 690, "Balance")
+    c.drawString(50, 670, "03/03/2024")
     c.drawString(145, 670, "SAMPLE MERCHANT")
     c.drawRightString(405, 670, "10.00")
     c.drawRightString(550, 670, "990.00")
-    c.drawString(145, 650, "Total")
+    c.drawString(145, 650, "Total Balance Carried Forward in SGD:")
     # The statement claims 99.00 of withdrawals; only 10.00 is on the table.
     c.drawRightString(405, 650, "99.00")
     c.drawRightString(478, 650, "0.00")
+    c.drawRightString(550, 650, "990.00")
     c.save()
 
     with pytest.raises(StatementReconciliationError) as excinfo:

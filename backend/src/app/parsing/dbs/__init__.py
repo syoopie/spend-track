@@ -35,8 +35,20 @@ class DBSParser(BankParser):
     def detect(self, pages: list) -> bool:
         if not pages:
             return False
-        text = pages[0].extract_text() or ""
-        return "DBS Bank" in text or "POSB" in text
+        text = "\n".join(page.extract_text() or "" for page in pages[:2])
+        # A real DBS consolidated eStatement never prints "DBS Bank" on the
+        # cover, and a sanitized sample keeps only the words a parser reads -
+        # so identity rests on "DBS" plus a furniture row DBS phrases its own
+        # way ("Balance Brought/Carried Forward", where UOB and OCBC say
+        # "BALANCE B/F"). "DBS Bank" and "POSB" still catch the card
+        # statements; "PDS_MMCON" is the document code on a real one's footer.
+        if "DBS Bank" in text or "POSB" in text or "PDS_MMCON" in text:
+            return True
+        return "DBS" in text and (
+            "Balance Brought Forward" in text
+            or "Balance Carried Forward" in text
+            or "Statement of Account" in text
+        )
 
     def parse(self, pages: list) -> ParsedStatement:
         text = "\n".join(page.extract_text() or "" for page in pages[:2])

@@ -3,21 +3,22 @@
 Why these are synthetic, and what that does and doesn't buy:
 
 No bank publishes a specimen statement, and a real one carries a name, a home
-address and an account number, so there was no DBS or OCBC PDF to build the
-parsers against (see docs/adding-a-bank.md). What *is* public is the layout -
-which columns each statement prints, under which headings, in which order,
-with which not-a-transaction rows opening and closing the table. These
-fixtures encode that layout, and they are drawn to be genuinely parseable, so
-`tests/test_dbs_ocbc_sample_parsers.py` exercises the real parsers rather than
-a mock.
+address and an account number, so the DBS and OCBC parsers were first built
+against their published layouts alone (see docs/adding-a-bank.md). What *is*
+public is the layout - which columns each statement prints, under which
+headings, in which order, with which not-a-transaction rows opening and
+closing the table. These fixtures encode that layout, and they are drawn to be
+genuinely parseable, so `tests/test_dbs_ocbc_sample_parsers.py` exercises the
+real parsers rather than a mock.
 
-What they cannot do is prove the parsers work on a real statement, because
-they were drawn from the same understanding of the layout the parsers were
+The DBS fixtures here have since been corrected against two real statements
+sanitized with `scripts/sanitize_statement.py` (committed alongside them as
+`SampleConsolidatedStatement_{Dec2023,Nov2024}.pdf`). The OCBC ones are still
+layout-only: they cannot prove the parser works on a real statement, because
+they were drawn from the same understanding of the layout the parser was
 written from - if that understanding is wrong, fixture and parser are wrong
-together. That gap is what `scripts/sanitize_statement.py` exists to close:
-it turns a contributor's real statement into a shareable one that keeps the
-layout and drops the PII. The two deliberate differences from the UOB
-fixtures both come from this:
+together. That gap is what the sanitizer exists to close for OCBC too. The two
+deliberate differences from the UOB fixtures both come from this:
 
 * Every column position here is drawn at a plausible-but-arbitrary x, because
   no real statement was measured. The parsers read their column ranges off
@@ -103,7 +104,7 @@ class Txn:
     or GIRO detail printed with the date column left empty, which is the case
     the parsers' description-accumulation branch exists for."""
 
-    date: str  # "03 Mar"
+    date: str  # DBS prints "03/03/2024" in full; OCBC prints "03 Mar"
     lines: list[str]
     withdrawal: float | None = None
     deposit: float | None = None
@@ -158,6 +159,11 @@ class AccountLayout:
     opening_row: str
     closing_row: str
     totals_row: str
+    #: DBS's section-closing row carries the running balance as a third figure
+    #: after the withdrawal and deposit totals; OCBC's "Total" row has only the
+    #: two. See `dbs/account_statement.py` on why the parser reads its closing
+    #: balance from this row rather than the per-page "Balance Carried Forward".
+    totals_row_has_balance: bool = False
     date_x: float = 50.0
     value_date_x: float = 95.0
     description_x: float = 145.0
@@ -170,15 +176,16 @@ DBS_ACCOUNT = AccountLayout(
     bank="DBS",
     legal_name="DBS Bank Ltd",
     heading="DBS Multiplier Account",
-    date_header="DATE",
+    date_header="Date",
     value_date_header=None,
-    description_header="DESCRIPTION",
-    withdrawal_header="WITHDRAWAL",
-    deposit_header="DEPOSIT",
-    balance_header="BALANCE",
+    description_header="Description",
+    withdrawal_header="Withdrawal (-)",
+    deposit_header="Deposit (+)",
+    balance_header="Balance",
     opening_row="Balance Brought Forward",
     closing_row="Balance Carried Forward",
-    totals_row="Total",
+    totals_row="Total Balance Carried Forward in SGD:",
+    totals_row_has_balance=True,
 )
 
 OCBC_ACCOUNT = AccountLayout(
@@ -201,7 +208,7 @@ def generate_account_statement(
     path: Path,
     layout: AccountLayout,
     statement_date: str,  # "31 Mar 2024"
-    period_start: str,  # "01 Mar"
+    period_start: str,  # the opening row's date, in the layout's own format
     sections: list[AccountSection],
 ):
     doc = Doc(path, _footer(layout.bank, layout.legal_name))
@@ -285,6 +292,8 @@ def generate_account_statement(
         doc.text(layout.description_x, top, layout.totals_row)
         doc.text_right(layout.withdrawal_right, top, f"{section.total_withdrawals:,.2f}")
         doc.text_right(layout.deposit_right, top, f"{section.total_deposits:,.2f}")
+        if layout.totals_row_has_balance:
+            doc.text_right(layout.balance_right, top, f"{section.closing_balance:,.2f}")
         top += 34
 
     doc.save()
@@ -519,23 +528,23 @@ def main():
         dbs_dir / "Account Statements" / "SampleAccountStatement_Mar2024.pdf",
         DBS_ACCOUNT,
         statement_date="31 Mar 2024",
-        period_start="01 Mar",
+        period_start="01/03/2024",
         sections=[
             AccountSection(
                 name="DBS Multiplier Account",
                 number="123-456789-0",
                 opening_balance=4200.00,
                 txns=[
-                    dbs_salary("01 Mar", 3200.00),
-                    dbs_card_purchase("03 Mar", "FAIRPRICE FINEST", 86.40),
-                    dbs_paynow_out("05 Mar", "SAMPLE HOUSEMATE", 450.00),
-                    dbs_giro("07 Mar", "SP SERVICES LTD", 128.90),
-                    dbs_card_purchase("11 Mar", "KOPITIAM", 12.60),
-                    dbs_paynow_in("14 Mar", "SAMPLE FRIEND", "1234567", 45.00),
-                    dbs_card_purchase("18 Mar", "GUARDIAN HEALTH", 32.15),
-                    dbs_giro("22 Mar", "SINGTEL MOBILE", 45.00),
-                    dbs_paynow_out("26 Mar", "SAMPLE TUTOR", 160.00),
-                    dbs_card_purchase("29 Mar", "SHENG SIONG", 54.25),
+                    dbs_salary("01/03/2024", 3200.00),
+                    dbs_card_purchase("03/03/2024", "FAIRPRICE FINEST", 86.40),
+                    dbs_paynow_out("05/03/2024", "SAMPLE HOUSEMATE", 450.00),
+                    dbs_giro("07/03/2024", "SP SERVICES LTD", 128.90),
+                    dbs_card_purchase("11/03/2024", "KOPITIAM", 12.60),
+                    dbs_paynow_in("14/03/2024", "SAMPLE FRIEND", "1234567", 45.00),
+                    dbs_card_purchase("18/03/2024", "GUARDIAN HEALTH", 32.15),
+                    dbs_giro("22/03/2024", "SINGTEL MOBILE", 45.00),
+                    dbs_paynow_out("26/03/2024", "SAMPLE TUTOR", 160.00),
+                    dbs_card_purchase("29/03/2024", "SHENG SIONG", 54.25),
                 ],
             )
         ],
@@ -550,16 +559,16 @@ def main():
         dbs_dir / "Account Statements" / "SampleConsolidatedStatement_May2024.pdf",
         DBS_ACCOUNT,
         statement_date="31 May 2024",
-        period_start="01 May",
+        period_start="01/05/2024",
         sections=[
             AccountSection(
                 name="DBS Multiplier Account",
                 number="123-456789-0",
                 opening_balance=8000.00,
                 txns=[
-                    dbs_salary("01 May", 3200.00),
-                    dbs_paynow_out("06 May", "SAMPLE HOUSEMATE", 450.00),
-                    dbs_card_purchase("15 May", "FAIRPRICE FINEST", 91.20),
+                    dbs_salary("01/05/2024", 3200.00),
+                    dbs_paynow_out("06/05/2024", "SAMPLE HOUSEMATE", 450.00),
+                    dbs_card_purchase("15/05/2024", "FAIRPRICE FINEST", 91.20),
                 ],
             ),
             AccountSection(
@@ -567,9 +576,9 @@ def main():
                 number="987-654321-0",
                 opening_balance=1500.00,
                 txns=[
-                    dbs_card_purchase("08 May", "BUS/MRT TOP-UP", 30.00),
-                    dbs_paynow_in("19 May", "SAMPLE PARENT", "2468013", 200.00),
-                    dbs_card_purchase("27 May", "WATSONS", 18.40),
+                    dbs_card_purchase("08/05/2024", "BUS/MRT TOP-UP", 30.00),
+                    dbs_paynow_in("19/05/2024", "SAMPLE PARENT", "2468013", 200.00),
+                    dbs_card_purchase("27/05/2024", "WATSONS", 18.40),
                 ],
             ),
         ],

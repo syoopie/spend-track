@@ -40,8 +40,12 @@ MONTHS = {
 DAY_MONTH_RE = re.compile(r"^(\d{1,2})\s+([A-Za-z]{3})$")
 #: "02/07" - day and month as numbers, no year (OCBC card statements).
 DAY_MONTH_NUMERIC_RE = re.compile(r"^(\d{1,2})/(\d{1,2})$")
+#: "01/12/2023" - a fully-specified date (DBS deposit statements print the year).
+DAY_MONTH_YEAR_RE = re.compile(r"^(\d{1,2})/(\d{1,2})/(\d{4})$")
 #: Text that labels an account number rather than naming the account.
 LABEL_ONLY_RE = re.compile(r"^(account|card|a/c)\s*(no\.?|number)?\s*[:.]?$", re.I)
+#: A trailing "... Account No." label on an inline heading, to strip off the name.
+LABEL_SUFFIX_RE = re.compile(r"\s*(account|card|a/c)\s*(no\.?|number)?\s*[:.]?\s*$", re.I)
 #: A bare money figure, optionally thousands-separated, optionally CR/DR-suffixed.
 MONEY_RE = re.compile(r"^(?P<sign>-)?(?P<value>\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)\s*(?P<polarity>CR|DR)?$", re.I)
 
@@ -83,6 +87,22 @@ def parse_day_month(text: str) -> tuple[int, int] | None:
         day, month = (int(g) for g in match.groups())
         return (day, month) if 1 <= month <= 12 else None
     return None
+
+
+def parse_row_date(text: str) -> tuple[int, int, int | None] | None:
+    """Parse a transaction row's date into (day, month, year-or-None).
+
+    A year of None means the row printed none and it must be resolved from the
+    statement date (`YearResolver`) - the UOB and OCBC case. DBS deposit rows
+    print the year in full ("01/12/2023"), so it is carried through directly
+    and the statement date is not consulted for that row.
+    """
+    text = text.strip()
+    if match := DAY_MONTH_YEAR_RE.match(text):
+        day, month, year = (int(g) for g in match.groups())
+        return (day, month, year) if 1 <= month <= 12 else None
+    day_month = parse_day_month(text)
+    return (day_month[0], day_month[1], None) if day_month is not None else None
 
 
 @dataclass(frozen=True)
@@ -169,7 +189,15 @@ def parse_table(pages, spec: TableSpec) -> ParsedStatement:
     current: _Section | None = None
 
     for page in pages:
-        words = [w for w in extract_words(page) if w.top < spec.footer_top_cutoff]
+        words = [
+            w
+            for w in extract_words(page)
+            # Rotated text (a DBS consolidated statement prints its legal-entity
+            # block as a vertical strip down the left margin) shares `top`
+            # coordinates with the transaction rows and would otherwise merge
+            # into them. It is never table data.
+            if w.upright and w.top < spec.footer_top_cutoff
+        ]
         lines = group_into_lines(words)
 
         # A page can carry more than one table: a DBS consolidated statement
@@ -208,8 +236,20 @@ def parse_table(pages, spec: TableSpec) -> ParsedStatement:
     for number in order:
         section = sections[number]
         _reconcile(section, spec)
+        if not section.transactions:
+            # A consolidated DBS statement lists every account you hold, and a
+            # dormant one (a $1 SRS account, say) prints its heading and an
+            # empty table. There is nothing to import from it, and emitting a
+            # transaction-less account would just be clutter downstream.
+            continue
         section.account.transactions = section.transactions
         accounts.append(section.account)
+
+    if not accounts:
+        raise UnparseableStatementError(
+            f"Recognized a {spec.bank_name} statement but found no transactions in any "
+            "of its account sections."
+        )
     return ParsedStatement(bank_name=spec.bank_name, accounts=accounts)
 
 
@@ -294,6 +334,10 @@ def _account_identity(lines: list[Line], header_idx: int, spec: TableSpec) -> tu
         assert match is not None
         number = match.group(1)
         name = text[: match.start()].strip(" :-•")
+        # A real DBS heading is one line: "DBS Multiplier Account Account No.
+        # 120-752744-8" - strip the trailing "Account No." label so the name
+        # is just the account type.
+        name = LABEL_SUFFIX_RE.sub("", name).strip(" :-•")
         if not name or LABEL_ONLY_RE.match(name):
             # The number's own line reads "Account No. 123-456789-0" - a label,
             # not a name. The account's name is the heading printed above it.
@@ -329,12 +373,13 @@ def _consume_row(line: Line, columns, spec: TableSpec, resolver: YearResolver, s
             _capture_printed_totals(description, row, spec, section)
             return
 
-    parsed_date = parse_day_month(date_text) if date_text else None
+    parsed_date = parse_row_date(date_text) if date_text else None
     if parsed_date is not None:
         section.close()
-        day, month = parsed_date
+        day, month, year = parsed_date
+        iso = f"{year:04d}-{month:02d}-{day:02d}" if year is not None else resolver.iso(day, month)
         section.current = ParsedTransaction(
-            transaction_date=resolver.iso(day, month),
+            transaction_date=iso,
             raw_description=description,
             amount=_row_amount(row),
             balance=parse_money(row.get("balance", "")),

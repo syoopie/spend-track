@@ -596,7 +596,7 @@ def test_reset_wipes_data_and_reinitializes_schema(client):
     assert client.get("/api/transactions").json() == []
     assert client.get("/api/accounts").json() == []
     cats = client.get("/api/categories").json()
-    assert len(cats) == 17  # default categories re-seeded (Others/Other Income are hidden)
+    assert len(cats) == 18  # default categories re-seeded (Others/Other Income are hidden)
 
 
 def test_delete_rules_requires_confirmation_and_only_removes_user_rules(client):
