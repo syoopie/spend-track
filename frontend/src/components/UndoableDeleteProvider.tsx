@@ -5,7 +5,7 @@ import { useToast } from './Toast'
 // actually reaches the backend (X-2 in UI Review.dc.html) - matches the
 // toast's own duration so the undo option and the row's disappearance stay
 // in sync.
-export const DELETE_UNDO_MS = 6000
+const DELETE_UNDO_MS = 6000
 
 type Commit = (id: number, options: { onError: () => void }) => void
 
@@ -41,6 +41,9 @@ export function UndoableDeleteProvider({ children }: { children: ReactNode }) {
   // screens' ids can't collide and so touching one screen's set leaves the
   // others' references (and their memoised list filters) untouched.
   const [pending, setPending] = useState<Record<string, Set<number>>>({})
+  // No unmount cleanup for these timers, unlike the per-page hook this replaced:
+  // the provider wraps the whole app and unmounts only on teardown, and a timer
+  // outliving the page its row was on is the entire point.
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
 
   const forget = useCallback((noun: string, id: number) => {

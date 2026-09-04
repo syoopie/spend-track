@@ -11,7 +11,19 @@ import {
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ApiError } from '../api/client'
 import { useSanitizeStatement, useSettings } from '../api/hooks'
-import type { SanitizeParseStatus, SanitizeResult } from '../api/types'
+import {
+  NO_OPTIONS,
+  PARSE_BODY,
+  PARSE_HEADLINE,
+  formatSize,
+  githubIssueUrl,
+  isPdf,
+  pdfBlobFromBase64,
+  sameOptions,
+  type Options,
+  type ReviewResult,
+  type Step,
+} from '../lib/contribute'
 import { Button } from '../components/Button'
 import { Card } from '../components/Card'
 import { Checkbox } from '../components/Checkbox'
@@ -20,88 +32,6 @@ import { Field, Input } from '../components/Field'
 import { Modal } from '../components/Modal'
 import { PageShell } from '../components/PageShell'
 import { useUploadDialog } from '../components/UploadProvider'
-
-const GITHUB_NEW_ISSUE = 'https://github.com/syoopie/spend-track/issues/new'
-
-// A result on the review step always carries a file. The two reasons it
-// might not - a scan with no text, and an outright failure - are their own
-// steps, so nothing downstream of here has to re-check for a null PDF.
-type ReviewResult = SanitizeResult & { pdf_base64: string }
-
-type Step =
-  | { step: 'pick' }
-  | { step: 'password'; error: string | null }
-  | { step: 'working' }
-  | { step: 'review'; result: ReviewResult }
-  | { step: 'no-text' }
-  | { step: 'failed'; message: string }
-
-// What the last run was given, and what the user has clicked toward since.
-// Every edit on the review screen writes to the draft and nothing re-runs
-// until the one button is pressed: the work is not cancellable, so two runs
-// in flight can finish out of order and paint a preview that is missing the
-// redaction the screen already shows as applied.
-interface Options {
-  redact: string[]
-  redactAmounts: boolean
-}
-
-const NO_OPTIONS: Options = { redact: [], redactAmounts: false }
-
-function sameOptions(a: Options, b: Options): boolean {
-  if (a.redactAmounts !== b.redactAmounts) return false
-  if (a.redact.length !== b.redact.length) return false
-  return a.redact.every((w) => b.redact.includes(w))
-}
-
-function pdfBlobFromBase64(base64: string): Blob {
-  const binary = atob(base64)
-  const bytes = new Uint8Array(binary.length)
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-  return new Blob([bytes], { type: 'application/pdf' })
-}
-
-function isPdf(file: File): boolean {
-  return file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
-}
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} bytes`
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
-const PARSE_HEADLINE: Record<SanitizeParseStatus, string> = {
-  parsed: 'The app can already read this statement',
-  unsupported: 'The app cannot read this statement yet',
-  error: 'The app knows this bank but could not finish reading the statement',
-}
-
-const PARSE_BODY: Record<SanitizeParseStatus, string> = {
-  parsed:
-    'That is not a problem. A sample of a format that already works is still worth having, because it is what proves a future change did not quietly break it.',
-  unsupported: 'This is exactly the case the sample is for. Nothing is wrong with your file.',
-  error: 'This is worth sending. It points at a real gap in a parser that already half works.',
-}
-
-// Only what the user typed and facts with a fixed, closed set of values.
-// This URL is the one thing on this page that leaves the machine, and the
-// omnibox, browser history and any corporate proxy see it before the user
-// has even read the form it opens. Nothing derived from the file's contents
-// or its name belongs in it.
-function githubIssueUrl(bank: string, result: SanitizeResult): string {
-  const notes = [
-    'Sanitized with the in-app "Help add your bank" page.',
-    `Pages: ${result.page_count}`,
-    PARSE_HEADLINE[result.parse_status] + '.',
-  ].join('\n')
-  const params = new URLSearchParams({
-    template: 'bank-support.yml',
-    bank: bank.trim(),
-    notes,
-  })
-  return `${GITHUB_NEW_ISSUE}?${params.toString()}`
-}
 
 const NOTE_TONES = {
   info: { bg: 'var(--color-input)', border: 'var(--color-border)', fg: 'var(--color-text-2)' },
@@ -238,23 +168,18 @@ export function Contribute() {
   const { setGlobalDropSuspended } = useUploadDialog()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // `draft`, `bank`, `password` and `file` are what the user is editing now.
+  // Everything about the *last run* - the options it used, the bank name at
+  // that point, whether its warning has been read - lives inside the `review`
+  // step, so one `setState` moves all of it atomically and a stale value from
+  // a previous run can never leak into the current one. (The work is not
+  // cancellable, so an out-of-order finish is a real possibility.)
   const [state, setState] = useState<Step>({ step: 'pick' })
   const [bank, setBank] = useState('')
   const [file, setFile] = useState<PickedFile | null>(null)
   const [pickError, setPickError] = useState<string | null>(null)
   const [password, setPassword] = useState('')
-  const [applied, setApplied] = useState<Options>(NO_OPTIONS)
   const [draft, setDraft] = useState<Options>(NO_OPTIONS)
-  // The server derives the download's filename from the typed bank, so a
-  // bank edited after a run leaves a result whose filename disagrees with
-  // what the GitHub link says. Tracked here so that edit counts as a change
-  // the re-check has to pick up, like any other.
-  const [appliedBank, setAppliedBank] = useState('')
-  // Which result's warning has been read, rather than a boolean that a
-  // re-run would have to remember to reset. A re-check can surface a
-  // different problem, and an acknowledgement carried over from the previous
-  // file would hand out the GitHub button for a warning nobody saw.
-  const [warningReadFor, setWarningReadFor] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
 
@@ -308,9 +233,7 @@ export function Contribute() {
         redact: options.redact,
         redactAmounts: options.redactAmounts,
       })
-      setApplied(options)
       setDraft(options)
-      setAppliedBank(bank.trim())
       setPassword(withPassword)
       if (result.refusal_reason === 'no_text') {
         setState({ step: 'no-text' })
@@ -320,7 +243,13 @@ export function Contribute() {
         setState({ step: 'failed', message: 'The app finished but produced no file. That is a bug worth reporting.' })
         return
       }
-      setState({ step: 'review', result: { ...result, pdf_base64: result.pdf_base64 } })
+      setState({
+        step: 'review',
+        result: { ...result, pdf_base64: result.pdf_base64 },
+        applied: options,
+        appliedBank: bank.trim(),
+        warningRead: false,
+      })
     } catch (e) {
       if (e instanceof ApiError) {
         if (e.code === 'ENCRYPTED_PDF_PASSWORD_REQUIRED') {
@@ -343,7 +272,6 @@ export function Contribute() {
     setFile(null)
     setPickError(null)
     setPassword('')
-    setApplied(NO_OPTIONS)
     setDraft(NO_OPTIONS)
   }
 
@@ -526,8 +454,8 @@ export function Contribute() {
                 <ReviewSection
                   result={state.result}
                   draft={draft}
-                  applied={applied}
-                  dirty={!sameOptions(draft, applied) || bank.trim() !== appliedBank}
+                  applied={state.applied}
+                  dirty={!sameOptions(draft, state.applied) || bank.trim() !== state.appliedBank}
                   previewUrl={previewUrl}
                   onToggleWord={toggleWord}
                   onToggleAmounts={(v) => setDraft((prev) => ({ ...prev, redactAmounts: v }))}
@@ -536,8 +464,8 @@ export function Contribute() {
                 <ShareSection
                   bank={bank}
                   result={state.result}
-                  acknowledged={warningReadFor === state.result.pdf_base64}
-                  onAcknowledge={() => setWarningReadFor(state.result.pdf_base64)}
+                  acknowledged={state.warningRead}
+                  onAcknowledge={() => setState({ ...state, warningRead: true })}
                   onDownload={() => download(state.result)}
                   previewReady={!!previewUrl}
                 />

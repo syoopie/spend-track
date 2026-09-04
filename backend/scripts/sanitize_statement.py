@@ -81,30 +81,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from app.parsing.pdf_io import EncryptedPdfError, IncorrectPasswordError  # noqa: E402
-from app.sanitize import (  # noqa: E402
-    ParseCheck,
-    Word,
-    _literal_matches,
-    check_parse,
-    group_lines,
-    redact_line,
-    sanitize,
-    verify,
-)
+from app.sanitize import ParseCheck, check_parse, sanitize  # noqa: E402
 
-#: Re-exported so `import sanitize_statement` still reaches the redaction rules
-#: it used to own - the tests exercise them through this name.
-__all__ = [
-    "ParseCheck",
-    "Word",
-    "_literal_matches",
-    "check_parse",
-    "group_lines",
-    "main",
-    "redact_line",
-    "sanitize",
-    "verify",
-]
+# The redaction rules live in `app.sanitize` and the tests reach them there
+# directly; this module is only the CLI (argument handling, file paths, output).
 
 
 def write_review(path: Path, kept: list[str], source_name: str) -> None:

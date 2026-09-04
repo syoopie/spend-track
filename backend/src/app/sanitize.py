@@ -66,7 +66,9 @@ __all__ = [
     "DATE_RE",
     "EncryptedPdfError",
     "IncorrectPasswordError",
+    "LinedPage",
     "MONEY_RE",
+    "Page",
     "ParseCheck",
     "SAMPLE_NOTICE",
     "SanitizeResult",
@@ -154,11 +156,26 @@ class Word:
     bold: bool
 
 
-#: One page as read: width, height, its words, and how many rotated words were
-#: dropped. `render_pdf`, `kept_words` and `surviving_oddities` take the same
-#: shape after `group_lines` has nested the words into lines.
-Page = tuple[float, float, list[Word], int]
-LinedPage = tuple[float, float, list[list[Word]], int]
+@dataclass(frozen=True)
+class Page:
+    """One page as read: its size, its words, and how many rotated words were
+    dropped (a DBS consolidated statement's vertical legal-entity strip)."""
+
+    width: float
+    height: float
+    words: list[Word]
+    rotated_dropped: int
+
+
+@dataclass(frozen=True)
+class LinedPage:
+    """A `Page` after `group_lines` has nested its words into physical lines.
+    `render_pdf`, `kept_words` and `surviving_oddities` all consume this shape."""
+
+    width: float
+    height: float
+    lines: list[list[Word]]
+    rotated_dropped: int
 
 
 def _pseudonym_digits(original: str) -> str:
@@ -348,7 +365,7 @@ def redact_line(
 
 
 def read_pages(data: bytes, password: str | None = None) -> list[Page]:
-    """Every page as (width, height, words, dropped), decrypting in memory.
+    """Every page as a `Page`, decrypting in memory.
 
     Propagates `EncryptedPdfError` / `IncorrectPasswordError` rather than
     turning them into a message. Exiting the process here would raise a
@@ -383,7 +400,7 @@ def read_pages(data: bytes, password: str | None = None) -> list[Page]:
                         bold="bold" in str(w.get("fontname", "")).lower(),
                     )
                 )
-            pages.append((float(page.width), float(page.height), words, rotated))
+            pages.append(Page(float(page.width), float(page.height), words, rotated))
     return pages
 
 
@@ -398,15 +415,15 @@ def render_pdf(pages: Sequence[LinedPage], notice: str, *, invariant: bool = Tru
     contributor can re-run and diff.
     """
     buf = io.BytesIO()
-    c = canvas.Canvas(buf, invariant=1 if invariant else 0)
+    c = canvas.Canvas(buf, invariant=int(invariant))
     c.setTitle("Sanitized bank statement sample")
     c.setAuthor("SpendTrack")
     c.setSubject(notice)
     c.setCreator("SpendTrack statement sanitizer")
 
-    for width, height, lines, _dropped in pages:
-        c.setPageSize((width, height))
-        for line in lines:
+    for page in pages:
+        c.setPageSize((page.width, page.height))
+        for line in page.lines:
             for index, word in enumerate(line):
                 if not word.text.strip():
                     continue
@@ -415,7 +432,7 @@ def render_pdf(pages: Sequence[LinedPage], notice: str, *, invariant: bool = Tru
                 # pdfplumber measures `bottom` from the top of the page;
                 # reportlab measures y from the bottom, and draws from the
                 # baseline, which sits a descender above the box's lower edge.
-                y = height - word.bottom + size * 0.21
+                y = page.height - word.bottom + size * 0.21
                 _draw_fitted(c, word.text, font, size, word.x0, word.x1, y)
 
                 # Then a space glyph spanning the gap to the next word.
@@ -545,8 +562,8 @@ def kept_words(pages: Sequence[LinedPage], written: set[str]) -> list[str]:
     return sorted(
         {
             word.text
-            for _w, _h, lines, _d in pages
-            for line in lines
+            for page in pages
+            for line in page.lines
             for word in line
             if any(c.isalpha() for c in word.text) and word.text not in written
         }
@@ -564,8 +581,8 @@ def surviving_oddities(pages: Sequence[LinedPage], written: set[str]) -> list[st
     return sorted(
         {
             word.text
-            for _w, _h, lines, _d in pages
-            for line in lines
+            for page in pages
+            for line in page.lines
             for word in line
             if word.text not in written
             and any(c.isalnum() for c in word.text)
@@ -659,14 +676,14 @@ def sanitize(
     normalized_keep = normalize_keep(keep)
     pages = read_pages(data, password)
     written: set[str] = set()
-    sanitized: list[LinedPage] = [
-        (
-            width,
-            height,
-            [redact_line(line, redact, normalized_keep, redact_amounts, written) for line in group_lines(words)],
-            dropped,
+    sanitized = [
+        LinedPage(
+            page.width,
+            page.height,
+            [redact_line(line, redact, normalized_keep, redact_amounts, written) for line in group_lines(page.words)],
+            page.rotated_dropped,
         )
-        for width, height, words, dropped in pages
+        for page in pages
     ]
 
     pdf = render_pdf(sanitized, SAMPLE_NOTICE)
@@ -676,6 +693,6 @@ def sanitize(
         kept=kept_words(sanitized, written),
         oddities=surviving_oddities(sanitized, written),
         page_count=len(pages),
-        word_count=sum(len(words) for _w, _h, words, _d in pages),
-        rotated_dropped=sum(dropped for _w, _h, _words, dropped in pages),
+        word_count=sum(len(page.words) for page in pages),
+        rotated_dropped=sum(page.rotated_dropped for page in pages),
     )
