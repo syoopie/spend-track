@@ -30,6 +30,7 @@ from reportlab.pdfgen import canvas
 
 import sanitize_statement as sanitize
 from app.parsing.registry import detect_and_parse
+from app.sanitize import Word, _literal_matches, redact_line, verify
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "sanitize_statement.py"
 COMMITTED_FIXTURES = sorted(glob.glob("../PDF Examples (Sanitized)/*/*/*.pdf"))
@@ -105,12 +106,12 @@ def _run(pdf_path: Path, *args: str) -> Path:
     return pdf_path.with_name(pdf_path.stem + ".sanitized.pdf")
 
 
-def _words(texts: list[str]) -> list[sanitize.Word]:
+def _words(texts: list[str]) -> list[Word]:
     """Words laid out the way a PDF prints one grouped number: a space apart."""
     words, x = [], 100.0
     for token in texts:
         width = len(token) * 5.0
-        words.append(sanitize.Word(text=token, x0=x, x1=x + width, top=0, bottom=9, size=9, bold=False))
+        words.append(Word(text=token, x0=x, x1=x + width, top=0, bottom=9, size=9, bold=False))
         x += width + 2.5
     return words
 
@@ -155,7 +156,7 @@ def test_the_verifier_refuses_a_file_with_an_unaccounted_word(tmp_path):
     c = canvas.Canvas(str(leaky))
     c.drawString(36, 800, "BALANCE Kamala 1,234.56")
     c.save()
-    problems = sanitize.verify(leaky.read_bytes(), frozenset(), [], "leaky.pdf", written=set())
+    problems = verify(leaky.read_bytes(), frozenset(), [], "leaky.pdf", written=set())
     assert any("Kamala" in p for p in problems)
     # ...and does not cry wolf over the template word or the figure beside it.
     assert not any("BALANCE" in p or "1,234.56" in p for p in problems)
@@ -176,7 +177,7 @@ def test_the_verifier_forgives_punctuation_the_round_trip_moved(tmp_path):
     c = canvas.Canvas(str(joined))
     c.drawString(36, 800, f"{replacement}.")
     c.save()
-    assert sanitize.verify(joined.read_bytes(), frozenset(), [], "s.pdf", written={replacement}) == []
+    assert verify(joined.read_bytes(), frozenset(), [], "s.pdf", written={replacement}) == []
 
 
 def test_the_verifier_still_refuses_a_replacement_with_real_text_attached(tmp_path):
@@ -191,7 +192,7 @@ def test_the_verifier_still_refuses_a_replacement_with_real_text_attached(tmp_pa
     c = canvas.Canvas(str(leaky))
     c.drawString(36, 800, f"{replacement}Kamala")
     c.save()
-    problems = sanitize.verify(leaky.read_bytes(), frozenset(), [], "s.pdf", written={replacement})
+    problems = verify(leaky.read_bytes(), frozenset(), [], "s.pdf", written={replacement})
     assert any("Kamala" in p for p in problems)
 
 
@@ -224,7 +225,7 @@ def test_the_process_exits_non_zero_when_a_check_fails(tmp_path):
 def test_identifiers_split_across_words_are_replaced(tokens, digits):
     """A statement printing an identifier in groups defeats any per-word digit
     threshold, because no single group reaches it. Common, and invisible."""
-    result = sanitize.redact_line(_words(tokens))
+    result = redact_line(_words(tokens))
     assert [w.text for w in result] != tokens
     assert [len(w.text) for w in result] == [len(t) for t in tokens], "each group keeps its width"
     assert sum(c.isdigit() for w in result for c in w.text) == digits
@@ -233,7 +234,7 @@ def test_identifiers_split_across_words_are_replaced(tokens, digits):
 def test_a_letter_prefixed_reference_has_its_digits_replaced_too():
     """Shaping alone maps only letters, so "PIB0000123456789012" came out as
     "XXX0000123456789012" - the whole reference intact behind a masked prefix."""
-    (result,) = sanitize.redact_line(_words(["PIB0000123456789012"]))
+    (result,) = redact_line(_words(["PIB0000123456789012"]))
     assert "0000123456789012" not in result.text
     assert result.text.startswith("XXX")
 
@@ -241,15 +242,15 @@ def test_a_letter_prefixed_reference_has_its_digits_replaced_too():
 def test_a_name_that_is_also_a_template_word_can_be_named_explicitly():
     """The one case default-deny cannot cover on its own: somebody called May,
     a merchant called Trust. is_chrome keeps them, so --redact must remove them."""
-    assert sanitize.redact_line(_words(["May", "Lim"]))[0].text == "May"
-    assert sanitize.redact_line(_words(["May", "Lim"]), ["May Lim"])[0].text != "May"
+    assert redact_line(_words(["May", "Lim"]))[0].text == "May"
+    assert redact_line(_words(["May", "Lim"]), ["May Lim"])[0].text != "May"
 
 
 @pytest.mark.parametrize("printed,typed", [(["Anne", "Marie"], "Anne-Marie"), (["Anne-Marie"], "Anne Marie")])
 def test_redact_matches_however_the_statement_split_the_name(printed, typed):
     """A contributor types their name the way they know it, and cannot be
     expected to guess how the PDF broke it into words."""
-    assert sanitize._literal_matches(_words(printed), [typed]) == set(range(len(printed)))
+    assert _literal_matches(_words(printed), [typed]) == set(range(len(printed)))
 
 
 @pytest.mark.parametrize("word", ["STANDARD", "INSTANT", "TANGERINE"])
@@ -257,7 +258,7 @@ def test_redact_never_matches_a_substring(word):
     """Substring matching would make --redact "TAN" gut every merchant with
     those letters in it. Over-redaction is not free - what survives is the
     entire reason to share the file."""
-    assert sanitize._literal_matches(_words([word]), ["TAN"]) == set()
+    assert _literal_matches(_words([word]), ["TAN"]) == set()
 
 
 # --- the fidelity half ----------------------------------------------------
@@ -331,9 +332,9 @@ def test_a_bare_year_is_kept():
     digit-bearing word is replaced with no length threshold. Left unguarded
     that moved every transaction in the fixture set to the year 6557 -
     silently, since the dates still looked like dates."""
-    assert sanitize.redact_line(_words(["2024"]))[0].text == "2024"
+    assert redact_line(_words(["2024"]))[0].text == "2024"
     # ...but a four-digit card group is not a year and must still go.
-    assert sanitize.redact_line(_words(["4111"]))[0].text != "4111"
+    assert redact_line(_words(["4111"]))[0].text != "4111"
 
 
 def test_amounts_can_be_removed_on_request(tmp_path):

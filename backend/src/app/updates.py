@@ -14,6 +14,8 @@ from importlib.metadata import PackageNotFoundError, version as _installed_versi
 
 import httpx
 
+from app.models import VersionOut
+
 REPO = "syoopie/spend-track"
 RELEASES_API = f"https://api.github.com/repos/{REPO}/releases/latest"
 RELEASES_PAGE = f"https://github.com/{REPO}/releases/latest"
@@ -51,6 +53,9 @@ def _fetch_latest() -> str | None:
 
 
 def _parse(v: str) -> tuple[int, ...]:
+    # A hand-rolled compare rather than `packaging.version` on purpose: this
+    # only ever compares this app's own tags, which are always `vX.Y.Z`, and a
+    # new dependency for that is not worth it. Non-numeric parts are dropped.
     return tuple(int(p) for p in v.split(".") if p.isdigit())
 
 
@@ -67,7 +72,7 @@ def _is_newer(latest: str, current: str) -> bool:
     return a > b
 
 
-def get_version_status() -> dict:
+def get_version_status() -> VersionOut:
     global _checked, _latest
     with _lock:
         if not _checked:
@@ -75,12 +80,12 @@ def get_version_status() -> dict:
             _checked = True
         latest = _latest
     current = current_version()
-    return {
-        "current": current,
-        "latest": latest,
-        "update_available": bool(latest and _is_newer(latest, current)),
-        "release_url": RELEASES_PAGE,
-    }
+    return VersionOut(
+        current=current,
+        latest=latest,
+        update_available=bool(latest and _is_newer(latest, current)),
+        release_url=RELEASES_PAGE,
+    )
 
 
 def reset_cache() -> None:
